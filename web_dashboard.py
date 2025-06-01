@@ -83,3 +83,16 @@ BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
 BLOFIN_API_KEY = os.environ.get("BLOFIN_API_KEY")
 BLOFIN_API_SECRET = os.environ.get("BLOFIN_API_SECRET")
 BLOFIN_API_PASSPHRASE = os.environ.get("BLOFIN_API_PASSPHRASE")
+
+
+# === BYBIT GUTHABEN ===
+try:
+    balance_raw = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+    bybit_total = 0.0
+    for item in balance_raw:
+        for coin in item["coin"]:
+            if coin["coin"] == "USDT":
+                bybit_total += float(coin["walletBalance"])
+    bybit_total_str = f"{bybit_total:.2f} USDT"
+except Exception as e:
+    bybit_total_str = f"Fehler: {str(e)}"
