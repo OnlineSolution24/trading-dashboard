@@ -49,7 +49,10 @@ def dashboard():
             api_secret=os.environ.get("BLOFIN_API_SECRET"),
             passphrase=os.environ.get("BLOFIN_API_PASSPHRASE")
         )
-        balances = blofin_client.account.get_balance(account_type="futures")["data"]
+        response = blofin_client.account.get_balance(account_type="futures")
+print(response)  # Nur für Debug – in HTML kannst du das ersetzen
+balances = response["data"]
+
         blofin_data = [f"{b['currency']}: {b['available']} verfügbar" for b in balances]
     except Exception as e:
         blofin_data = [f"Fehler bei Blofin: {str(e)}"]
