@@ -44,3 +44,16 @@ if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+
+import os
+from pybit.unified_trading import HTTP
+from blofin import BloFinClient
+
+# API-Zugangsdaten aus Umgebungsvariablen
+BYBIT_API_KEY = os.environ.get("BYBIT_API_KEY")
+BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
+
+BLOFIN_API_KEY = os.environ.get("BLOFIN_API_KEY")
+BLOFIN_API_SECRET = os.environ.get("BLOFIN_API_SECRET")
+BLOFIN_API_PASSPHRASE = os.environ.get("BLOFIN_API_PASSPHRASE")
