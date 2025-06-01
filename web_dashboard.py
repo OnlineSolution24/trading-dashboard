@@ -96,3 +96,12 @@ try:
     bybit_total_str = f"{bybit_total:.2f} USDT"
 except Exception as e:
     bybit_total_str = f"Fehler: {str(e)}"
+
+
+return render_template(
+    'dashboard.html',
+    bybit_data=bybit_data,
+    blofin_data=blofin_data,
+    bybit_total=bybit_total_str,
+    blofin_total=blofin_total_str
+)
