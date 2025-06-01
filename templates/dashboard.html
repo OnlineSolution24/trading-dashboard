@@ -4,12 +4,18 @@
 <body>
   <h2>Trading Dashboard</h2>
   <a href="/logout">Abmelden</a>
-  <h3>Bybit Positionen:</h3>
-  <ul>
-    {% for pos in bybit_data %}
+<h3>Bybit Positionen:</h3>
+<ul>
+  {% for pos in bybit_data %}
+    {% if 'PnL: ' in pos %}
+      {% set pnl = pos.split('PnL: ')[1]|float %}
+      <li style="color: {% if pnl > 0 %}green{% elif pnl < 0 %}red{% else %}black{% endif %};">{{ pos }}</li>
+    {% else %}
       <li>{{ pos }}</li>
-    {% endfor %}
-  </ul>
+    {% endif %}
+  {% endfor %}
+</ul>
+
 
   <h3>Blofin Kontostände:</h3>
   <ul>
