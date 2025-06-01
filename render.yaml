@@ -4,3 +4,4 @@ services:
     env: python
     buildCommand: ""
     startCommand: python web_dashboard.py
+    plan: free
