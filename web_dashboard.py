@@ -28,11 +28,34 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    # Beispielausgabe – hier würdest du deine echten Daten reinladen
-    bybit_data = ["BTCUSDT | Größe: 0.1 | PnL: 5.2"]
-    blofin_data = ["USDT: 250.00"]
+    # === BYBIT LIVE-DATEN ===
+    try:
+        bybit_session = HTTP(
+            api_key=os.environ.get("BYBIT_API_KEY"),
+            api_secret=os.environ.get("BYBIT_API_SECRET")
+        )
+        positions = bybit_session.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+        bybit_data = [
+            f"{p['symbol']} | Größe: {p['size']} | PnL: {p['unrealisedPnl']}"
+            for p in positions if float(p['size']) != 0
+        ]
+    except Exception as e:
+        bybit_data = [f"Fehler bei Bybit: {str(e)}"]
+
+    # === BLOFIN LIVE-DATEN ===
+    try:
+        blofin_client = BloFinClient(
+            api_key=os.environ.get("BLOFIN_API_KEY"),
+            api_secret=os.environ.get("BLOFIN_API_SECRET"),
+            passphrase=os.environ.get("BLOFIN_API_PASSPHRASE")
+        )
+        balances = blofin_client.account.get_balance(account_type="futures")["data"]
+        blofin_data = [f"{b['currency']}: {b['available']} verfügbar" for b in balances]
+    except Exception as e:
+        blofin_data = [f"Fehler bei Blofin: {str(e)}"]
 
     return render_template('dashboard.html', bybit_data=bybit_data, blofin_data=blofin_data)
+
 
 @app.route('/logout')
 def logout():
