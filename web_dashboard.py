@@ -30,8 +30,9 @@ def dashboard():
         bybit_data = [f"Fehler bei Bybit: {str(e)}"]
         bybit_total_str = "Fehler"
 
-    return render_template(
-        'dashboard.html',
-        bybit_data=bybit_data,
-        bybit_total=bybit_total_str
-    )
+return render_template(
+    'dashboard.html',
+    bybit_data=bybit_data,
+    bybit_total=bybit_total_str  # ← das hier MUSS dabei sein
+)
+
