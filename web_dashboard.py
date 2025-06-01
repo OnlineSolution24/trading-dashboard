@@ -10,14 +10,14 @@ def dashboard():
             api_secret=os.environ.get("BYBIT_API_SECRET")
         )
 
-        # Positionen laden (optional farbige Anzeige)
+        # Positionen laden
         positions = bybit_session.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
         bybit_data = [
             f"{p['symbol']} | Größe: {p['size']} | PnL: {p['unrealisedPnl']}"
             for p in positions if float(p['size']) != 0
         ]
 
-        # GUTHABEN laden
+        # 💰 Guthaben laden → HIER ist deine Stelle:
         wallet_data = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
         bybit_total = 0.0
         for acc in wallet_data:
@@ -30,9 +30,10 @@ def dashboard():
         bybit_data = [f"Fehler bei Bybit: {str(e)}"]
         bybit_total_str = "Fehler"
 
-return render_template(
-    'dashboard.html',
-    bybit_data=bybit_data,
-    bybit_total=bybit_total_str  # ← das hier MUSS dabei sein
-)
+    return render_template(
+        'dashboard.html',
+        bybit_data=bybit_data,
+        bybit_total=bybit_total_str  # <- ganz wichtig!
+    )
+
 
