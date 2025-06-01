@@ -2,16 +2,13 @@
 <html>
 <head><title>Dashboard</title></head>
 <body>
-  <h2>Trading Dashboard</h2>
-  <a href="/logout">Abmelden</a>
-  
-<h2>Guthaben Übersicht</h2>
-<ul>
-  <li>🔹 <strong>BYBIT:</strong> {{ bybit_total }}</li>
-  <li>🔹 <strong>BLOFIN:</strong> {{ blofin_total }}</li>
-</ul>
-  
-<h3>Bybit Positionen:</h3>
+<h2>📊 Trading Dashboard</h2>
+<p><a href="/logout">Abmelden</a></p>
+
+<h3>💰 BYBIT GESAMTGUTHABEN</h3>
+<p><strong>{{ bybit_total }}</strong></p>
+
+<h3>📈 Bybit Positionen</h3>
 <ul>
   {% for pos in bybit_data %}
     {% if 'PnL: ' in pos %}
