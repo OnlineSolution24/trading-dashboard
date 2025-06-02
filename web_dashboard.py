@@ -36,11 +36,24 @@ def dashboard():
     subaccounts = []
     total_balance = 0.0
 
+# 🔖 Benutzerdefinierte Namen für Bybit Subaccounts
+BYBIT_ACCOUNT_NAMES = {
+    1: "Corestrategies",
+    2: "Btcstrategies",
+    3: "Solstrategies",
+    4: "Altsstrategies",
+    5: "Ethapestrategies",
+    6: "Memestrategies",
+    7: "Incubatorzone",
+    8: "2k->10k Projekt",
+    9: "1k->5k Projekt"
+}
+
     # === 9 BYBIT SUBACCOUNTS ===
     for i in range(1, BYBIT_ACCOUNTS + 1):
         api_key = os.environ.get(f"BYBIT_API_KEY_{i}")
         api_secret = os.environ.get(f"BYBIT_API_SECRET_{i}")
-        account_name = f"Bybit #{i}"
+        account_name = BYBIT_ACCOUNT_NAMES.get(i, f"Bybit #{i}")
 
         try:
             session_obj = HTTP(api_key=api_key, api_secret=api_secret)
