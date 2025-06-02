@@ -1,5 +1,6 @@
 flask
 pybit
 blofin
-werkzeug
+gspread
+oauth2client
 matplotlib
