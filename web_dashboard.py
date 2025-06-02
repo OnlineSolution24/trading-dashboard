@@ -3,6 +3,9 @@ from pybit.unified_trading import HTTP
 from blofin import BloFinClient
 from werkzeug.security import check_password_hash, generate_password_hash
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -14,7 +17,10 @@ users = {
     "husky125": generate_password_hash("Ideal250!")
 }
 
-START_CAPITAL = float(os.environ.get("START_CAPITAL", 12237.37))
+START_CAPITAL = 12237.37
+SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
+SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+SHEET_TAB_NAME = "DailyBalances"
 
 BYBIT_ACCOUNT_NAMES = {
     1: "Corestrategies",
@@ -27,6 +33,42 @@ BYBIT_ACCOUNT_NAMES = {
     8: "2k->10k Projekt",
     9: "1k->5k Projekt"
 }
+
+INITIALS = {
+    "Corestrategies": 2000.56,
+    "Btcstrategies": 1923.00,
+    "Solstrategies": 1713.81,
+    "Altsstrategies": 1200.00,
+    "Ethapestrategies": 1200.00,
+    "Memestrategies": 800.00,
+    "Incubatorzone": 400.00,
+    "2k->10k Projekt": 2000.00,
+    "1k->5k Projekt": 1000.00,
+    "Blofin (Top_7_Tage_Performer)": 1492.00
+}
+
+def save_to_google_sheet(date_str, value):
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(SHEET_TAB_NAME)
+        worksheet.append_row([date_str, value])
+    except Exception as e:
+        print("Fehler beim Google Sheets Export:", str(e))
+
+def read_last_days(days=7):
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SHEET_ID)
+        worksheet = sheet.worksheet(SHEET_TAB_NAME)
+        data = worksheet.get_all_records()
+        return [float(row["Gesamtwert ($)"]) for row in data][-days:]
+    except:
+        return []
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -73,7 +115,7 @@ def dashboard():
 
             subaccounts.append({
                 "name": account_name,
-                "balance": f"{account_value:.2f}",
+                "balance": f"${account_value:,.2f}",
                 "positions": positions
             })
 
@@ -81,7 +123,7 @@ def dashboard():
             subaccounts.append({
                 "name": account_name,
                 "balance": f"Fehler ({str(e)})",
-                "positions": [{"symbol": "Fehler", "size": "-", "pnl": 0.0}]
+                "positions": []
             })
 
     try:
@@ -97,7 +139,7 @@ def dashboard():
 
         subaccounts.append({
             "name": "Blofin (Top_7_Tage_Performer)",
-            "balance": f"{blofin_balance:.2f}",
+            "balance": f"${blofin_balance:,.2f}",
             "positions": []
         })
 
@@ -105,55 +147,54 @@ def dashboard():
         subaccounts.append({
             "name": "Blofin",
             "balance": f"Fehler ({str(e)})",
-            "positions": [{"symbol": "Fehler", "size": "-", "pnl": 0.0}]
+            "positions": []
         })
 
-    profit_loss = total_balance - START_CAPITAL
+    # Charts
+    chart_labels = []
+    chart_values = []
+    chart_dollar = []
 
-    # Chart vorbereiten
-    initial_balances = {
-        "Corestrategies": 2000.56,
-        "Btcstrategies": 1923.00,
-        "Solstrategies": 1713.81,
-        "Altsstrategies": 1200.00,
-        "Ethapestrategies": 1200.00,
-        "Memestrategies": 800.00,
-        "Incubatorzone": 400.00,
-        "2k->10k Projekt": 2000.00,
-        "1k->5k Projekt": 1000.00,
-        "Blofin (Top_7_Tage_Performer)": 1492.00
-    }
-
-    pnl_percent = []
-    account_labels = []
     for name, current in current_balances.items():
-        if name in initial_balances:
-            initial = initial_balances[name]
-            change = ((current - initial) / initial) * 100
-            pnl_percent.append(change)
-            account_labels.append(name)
+        if name in INITIALS:
+            start = INITIALS[name]
+            pnl = (current - start) / start * 100
+            chart_labels.append(name)
+            chart_values.append(pnl)
+            chart_dollar.append(current - start)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    bars = ax.bar(account_labels, pnl_percent, color=['green' if v >= 0 else 'red' for v in pnl_percent])
-    ax.set_ylabel("PnL in %")
-    ax.set_title("📈 Pro-Konto Gewinn/Verlust (in USD)")
-    ax.axhline(0, color='black', linewidth=0.8)
+    fig, ax = plt.subplots(figsize=(12, 5))
+    bars = ax.bar(chart_labels, chart_values, color=["green" if x >= 0 else "red" for x in chart_values])
+    ax.axhline(0, color="gray")
+    ax.set_title("PnL in % (mit $)")
+    ax.set_ylabel("Veränderung in %")
     plt.xticks(rotation=45, ha="right")
+    for i, bar in enumerate(bars):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f"{chart_values[i]:+.1f}%
+(${chart_dollar[i]:+.0f})", 
+                ha='center', va='bottom' if chart_values[i] >= 0 else 'top', fontsize=8)
     plt.tight_layout()
-
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    plt.savefig(buf, format="png")
     buf.seek(0)
     chart_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    buf.close()
     chart_url = f"data:image/png;base64,{chart_base64}"
 
-    return render_template(
-        'dashboard.html',
+    today = datetime.now().strftime("%Y-%m-%d")
+    save_to_google_sheet(today, round(total_balance, 2))
+    last_7 = read_last_days(7)
+    last_30 = read_last_days(30)
+
+    perf_7 = f"{(total_balance - last_7[0]) / last_7[0] * 100:.2f}%" if len(last_7) >= 2 else "?"
+    perf_30 = f"{(total_balance - last_30[0]) / last_30[0] * 100:.2f}%" if len(last_30) >= 2 else "?"
+
+    return render_template("dashboard.html",
         subaccounts=subaccounts,
-        total_balance=f"{total_balance:.2f}",
-        profit_loss=profit_loss,
-        pnl_chart=chart_url
+        total_balance=f"${total_balance:,.2f}",
+        profit_loss=f"${total_balance - START_CAPITAL:,.2f}",
+        pnl_chart=chart_url,
+        perf_7=perf_7,
+        perf_30=perf_30
     )
 
 @app.route('/logout')
