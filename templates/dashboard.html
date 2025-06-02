@@ -5,21 +5,8 @@
   <title>📊 Trading Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #121212;
-      color: #f1f1f1;
-    }
-    .card {
-      background-color: #1e1e1e;
-      border: none;
-      margin-bottom: 1rem;
-    }
-    .card-header {
-      font-weight: bold;
-      font-size: 1.1rem;
-    }
-    .positive { color: #00ff88; }
-    .negative { color: #ff4444; }
+    .positive { color: green; }
+    .negative { color: red; }
   </style>
 </head>
 <body>
@@ -27,31 +14,31 @@
 
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>📊 Trading Dashboard</h2>
-    <a href="/logout" class="btn btn-outline-light">🚪 Abmelden</a>
+    <a href="/logout" class="btn btn-outline-dark">🚪 Abmelden</a>
   </div>
 
   <div class="row text-center mb-4">
     <div class="col-md-4">
-      <div class="card text-white">
-        <div class="card-header">💰 Gesamtguthaben</div>
+      <div class="card border-dark mb-3">
+        <div class="card-header bg-light fw-bold">💰 Gesamtguthaben</div>
         <div class="card-body fs-4">{{ total_balance }}</div>
       </div>
     </div>
     <div class="col-md-4">
-      <div class="card text-white">
-        <div class="card-header">📈 PnL seit Start</div>
+      <div class="card border-dark mb-3">
+        <div class="card-header bg-light fw-bold">📈 PnL seit Start</div>
         <div class="card-body fs-4">{{ profit_loss }}</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="card text-white">
-        <div class="card-header">⏳ 7 Tage</div>
+      <div class="card border-dark mb-3">
+        <div class="card-header bg-light fw-bold">⏳ 7 Tage</div>
         <div class="card-body fs-5">{{ perf_7 }}</div>
       </div>
     </div>
     <div class="col-md-2">
-      <div class="card text-white">
-        <div class="card-header">📅 30 Tage</div>
+      <div class="card border-dark mb-3">
+        <div class="card-header bg-light fw-bold">📅 30 Tage</div>
         <div class="card-body fs-5">{{ perf_30 }}</div>
       </div>
     </div>
@@ -62,15 +49,15 @@
   </div>
 
   {% for acc in subaccounts %}
-    <div class="card">
-      <div class="card-header">
+    <div class="card border-dark mb-3">
+      <div class="card-header fw-bold">
         {{ acc.name }} – Guthaben: <strong>{{ acc.balance }}</strong>
       </div>
       <div class="card-body">
         {% if acc.positions %}
           <ul class="list-group list-group-flush">
             {% for pos in acc.positions %}
-              <li class="list-group-item bg-dark text-white">
+              <li class="list-group-item">
                 <strong>{{ pos.symbol }}</strong> – Größe: {{ pos.size }} –
                 PnL: 
                 <span class="{% if pos.pnl > 0 %}positive{% elif pos.pnl < 0 %}negative{% endif %}">
