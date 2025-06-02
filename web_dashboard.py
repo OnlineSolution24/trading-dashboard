@@ -170,16 +170,7 @@ def dashboard():
     ax.set_ylabel("Veränderung in %")
     plt.xticks(rotation=45, ha="right")
     for i, bar in enumerate(bars):
-        ax.text(
-    bar.get_x() + bar.get_width() / 2,
-    bar.get_height(),
-    f"{chart_values[i]:+.1f}%\n(${chart_dollar[i]:+.0f})",
-    ha='center',
-    va='bottom' if chart_values[i] >= 0 else 'top',
-    fontsize=8
-)
-
-(${chart_dollar[i]:+.0f})", 
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f"{chart_values[i]:+.1f}%\n(${chart_dollar[i]:+.0f})", 
                 ha='center', va='bottom' if chart_values[i] >= 0 else 'top', fontsize=8)
     plt.tight_layout()
     buf = io.BytesIO()
