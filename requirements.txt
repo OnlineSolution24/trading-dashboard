@@ -2,3 +2,4 @@ flask
 pybit
 blofin
 werkzeug
+matplotlib
