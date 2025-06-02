@@ -1,31 +1,44 @@
 <!DOCTYPE html>
 <html>
-<head><title>Dashboard</title></head>
-<body>
-<h2>📊 Trading Dashboard</h2>
-<p><a href="/logout">Abmelden</a></p>
+<head>
+  <title>Dashboard</title>
+  <meta http-equiv="refresh" content="30">  <!-- Auto-Refresh alle 30 Sek. -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>📊 Trading Dashboard</h2>
+    <a href="/logout" class="btn btn-danger">Abmelden</a>
+  </div>
 
-<h3>💰 BYBIT GESAMTGUTHABEN</h3>
-<p><strong>{{ bybit_total }}</strong></p>
+  <div class="card p-3 mb-3">
+    <h4>💰 Gesamtübersicht</h4>
+    <ul>
+      <li><strong>Gesamtwert aller Subaccounts:</strong> {{ total_balance }} USDT</li>
+      <li><strong>Startkapital:</strong> 12,237.37 USDT</li>
+      <li><strong>Gewinn/Verlust:</strong>
+        <span style="color: {% if profit_loss >= 0 %}green{% else %}red{% endif %};">
+          {{ profit_loss | round(2) }} USDT
+        </span>
+      </li>
+    </ul>
+  </div>
 
-<h3>📈 Bybit Positionen</h3>
-<ul>
-  {% for pos in bybit_data %}
-    {% if 'PnL: ' in pos %}
-      {% set pnl = pos.split('PnL: ')[1]|float %}
-      <li style="color: {% if pnl > 0 %}green{% elif pnl < 0 %}red{% else %}black{% endif %};">{{ pos }}</li>
-    {% else %}
-      <li>{{ pos }}</li>
-    {% endif %}
+  {% for account in subaccounts %}
+    <div class="card mb-3 p-3">
+      <h5>📄 Account {{ account.name }}</h5>
+      <p><strong>Guthaben:</strong> {{ account.balance }} USDT</p>
+
+      <h6>Offene Positionen:</h6>
+      <ul>
+        {% for pos in account.positions %}
+          <li style="color: {% if pos.pnl > 0 %}green{% elif pos.pnl < 0 %}red{% else %}black{% endif %};">
+            {{ pos.symbol }} | Größe: {{ pos.size }} | PnL: {{ pos.pnl }}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
   {% endfor %}
-</ul>
-
-
-  <h3>Blofin Kontostände:</h3>
-  <ul>
-    {% for item in blofin_data %}
-      <li>{{ item }}</li>
-    {% endfor %}
-  </ul>
 </body>
+
 </html>
