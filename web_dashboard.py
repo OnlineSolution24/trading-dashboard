@@ -55,6 +55,106 @@ def login():
     return render_template("login.html")
 
 @app.route("/dashboard")
+
+    subaccounts = [
+        {
+            "name": "Corestrategies",
+            "api_key": os.environ.get("BYBIT_CORE_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_CORE_API_SECRET")
+        },
+        {
+            "name": "Btcstrategies",
+            "api_key": os.environ.get("BYBIT_BTC_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_BTC_API_SECRET")
+        },
+        {
+            "name": "Solstrategies",
+            "api_key": os.environ.get("BYBIT_SOL_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_SOL_API_SECRET")
+        },
+        {
+            "name": "Altstrategies",
+            "api_key": os.environ.get("BYBIT_ALT_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_ALT_API_SECRET")
+        },
+        {
+            "name": "Ethapestrategies",
+            "api_key": os.environ.get("BYBIT_ETH_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_ETH_API_SECRET")
+        },
+        {
+            "name": "Memestrategies",
+            "api_key": os.environ.get("BYBIT_MEME_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_MEME_API_SECRET")
+        },
+        {
+            "name": "Incubatorzone",
+            "api_key": os.environ.get("BYBIT_INCUBATOR_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_INCUBATOR_API_SECRET")
+        },
+        {
+            "name": "2k->10k Projekt",
+            "api_key": os.environ.get("BYBIT_2K10K_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_2K10K_API_SECRET")
+        },
+        {
+            "name": "1k->5k Projekt",
+            "api_key": os.environ.get("BYBIT_1K5K_API_KEY"),
+            "api_secret": os.environ.get("BYBIT_1K5K_API_SECRET")
+        },
+        {
+            "name": "Blofin (Top 1-3 Performer)",
+            "api_key": os.environ.get("BLOFIN_API_KEY"),
+            "api_secret": os.environ.get("BLOFIN_API_SECRET"),
+            "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")
+        }
+    ]
+
+    account_data = []
+    for acc in subaccounts:
+        acc_result = {
+            "name": acc["name"],
+            "balance": None,
+            "error": None
+        }
+        try:
+            if "blofin" in acc["name"].lower():
+                from blofin import BloFinClient
+                blofin_client = BloFinClient(api_key=acc["api_key"], api_secret=acc["api_secret"], passphrase=acc["passphrase"])
+                result = blofin_client.account.get_balance(account_type="futures")
+                total = sum(float(item["available"]) for item in result["data"] if item["currency"] == "USDT")
+                acc_result["balance"] = round(total, 2)
+            else:
+                session = HTTP(api_key=acc["api_key"], api_secret=acc["api_secret"])
+                response = session.get_wallet_balance(accountType="UNIFIED")
+                total = 0
+                for item in response["result"]["list"]:
+                    for coin in item["coin"]:
+                        if coin["coin"] == "USDT":
+                            total += float(coin["walletBalance"])
+                acc_result["balance"] = round(total, 2)
+        except Exception as e:
+            acc_result["error"] = str(e)
+
+        acc_result["coins"] = []
+        if "blofin" in acc["name"].lower():
+            for item in result["data"]:
+                if item["currency"] == "USDT":
+                    acc_result["coins"].append({
+                        "coin": "USDT",
+                        "amount": float(item["available"])
+                    })
+        else:
+            for item in response["result"]["list"]:
+                for coin in item["coin"]:
+                    if coin["coin"] in ["USDT", "BTC", "ETH", "SOL"]:
+                        acc_result["coins"].append({
+                            "coin": coin["coin"],
+                            "amount": float(coin["walletBalance"])
+                        })
+        account_data.append(acc_result)
+
+
 def dashboard():
     if "user" not in session:
         return redirect(url_for("login"))
@@ -66,7 +166,7 @@ def dashboard():
             api_key=os.environ.get("BYBIT_API_KEY"),
             api_secret=os.environ.get("BYBIT_API_SECRET")
         )
-        wallet_data = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        wallet_data = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"].get("list", [])
         bybit_total = 0.0
         for acc in wallet_data:
             for coin in acc["coin"]:
@@ -76,6 +176,7 @@ def dashboard():
     except Exception as e:
         bybit_total_str = f"Fehler: {str(e)}"
         bybit_total = 0.0
+        api_error = True
 
     # Google Sheet speichern
     date_str = datetime.now().strftime("%Y-%m-%d")
@@ -112,12 +213,17 @@ def dashboard():
     img.seek(0)
     chart_url = base64.b64encode(img.getvalue()).decode()
 
+    if 'api_error' in locals() and api_error:
+        chart_url = None
+
     return render_template("dashboard.html",
                            bybit_total=bybit_total_str,
                            perf_1=perf_1,
                            perf_7=perf_7,
                            perf_30=perf_30,
-                           chart_data=chart_url)
+                           chart_data=chart_url,
+                           account_data=account_data,
+                           api_error='api_error' in locals() and api_error)
 
 @app.route("/logout")
 def logout():
