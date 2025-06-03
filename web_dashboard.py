@@ -1,6 +1,7 @@
 import os
 import io
 import base64
+import json
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, session, url_for
 from pybit.unified_trading import HTTP
@@ -20,14 +21,8 @@ users = {
 # Google Sheet Setup
 def get_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    import json
-from oauth2client.service_account import ServiceAccountCredentials
-
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-client = gspread.authorize(creds)
-
+    creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open_by_key("1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g")
     return sheet.worksheet("DailyBalances")
@@ -101,9 +96,15 @@ def dashboard():
     fig, ax = plt.subplots(figsize=(8, 4))
     bars = ax.bar(["Gesamt"], [pnl_percent], color="green" if pnl_percent >= 0 else "red")
     for bar in bars:
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f"{pnl_percent:+.2f}%\n(${pnl_dollar:+,.2f})",
-                ha='center', va='bottom' if pnl_percent >= 0 else 'top')
-    ax.set_ylim(min(-100, pnl_percent * 1.3), max(100, pnl_percent * 1.3))
+        ax.text(
+            bar.get_x() + bar.get_width()/2,
+            bar.get_height() * (0.98 if pnl_percent >= 0 else 1.02),
+            f"{pnl_percent:+.2f}%\n(${pnl_dollar:+,.2f})",
+            ha='center',
+            va='top' if pnl_percent >= 0 else 'bottom',
+            fontsize=10
+        )
+    ax.set_ylim(min(-100, pnl_percent * 1.5), max(100, pnl_percent * 1.5))
     ax.set_title("Performance seit Start")
     plt.tight_layout()
     img = io.BytesIO()
