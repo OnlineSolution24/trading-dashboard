@@ -17,7 +17,8 @@ users = {
     "husky125": generate_password_hash("Ideal250!")
 }
 
-START_CAPITAL = 12237.37
+START_CAPITAL = 13729.37
+
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
 SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 SHEET_TAB_NAME = "DailyBalances"
@@ -113,10 +114,16 @@ def dashboard():
             current_balances[account_name] = account_value
             total_balance += account_value
 
+            start_cap = INITIALS.get(account_name, 0)
+            pnl_absolute = account_value - start_cap
+            pnl_percent = (pnl_absolute / start_cap * 100) if start_cap else 0
+
             subaccounts.append({
                 "name": account_name,
                 "balance": f"${account_value:,.2f}",
-                "positions": positions
+                "positions": positions,
+                "pnl_absolute": pnl_absolute,
+                "pnl_percent": pnl_percent
             })
 
         except Exception as e:
@@ -126,6 +133,7 @@ def dashboard():
                 "positions": []
             })
 
+    # Blofin-Konto
     try:
         blofin = BloFinClient(
             api_key=os.environ.get("BLOFIN_API_KEY"),
@@ -137,10 +145,16 @@ def dashboard():
         current_balances["Blofin (Top_7_Tage_Performer)"] = blofin_balance
         total_balance += blofin_balance
 
+        start_cap = INITIALS.get("Blofin (Top_7_Tage_Performer)", 0)
+        pnl_absolute = blofin_balance - start_cap
+        pnl_percent = (pnl_absolute / start_cap * 100) if start_cap else 0
+
         subaccounts.append({
             "name": "Blofin (Top_7_Tage_Performer)",
             "balance": f"${blofin_balance:,.2f}",
-            "positions": []
+            "positions": [],
+            "pnl_absolute": pnl_absolute,
+            "pnl_percent": pnl_percent
         })
 
     except Exception as e:
@@ -150,11 +164,8 @@ def dashboard():
             "positions": []
         })
 
-    # Charts
-    chart_labels = []
-    chart_values = []
-    chart_dollar = []
-
+    # CHART GENERIEREN
+    chart_labels, chart_values, chart_dollar = [], [], []
     for name, current in current_balances.items():
         if name in INITIALS:
             start = INITIALS[name]
@@ -163,15 +174,26 @@ def dashboard():
             chart_values.append(pnl)
             chart_dollar.append(current - start)
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(13, 6))
     bars = ax.bar(chart_labels, chart_values, color=["green" if x >= 0 else "red" for x in chart_values])
     ax.axhline(0, color="gray")
     ax.set_title("PnL in % (mit $)")
     ax.set_ylabel("Veränderung in %")
+    ax.set_ylim(min(-10, min(chart_values) * 1.3), max(10, max(chart_values) * 1.2))
     plt.xticks(rotation=45, ha="right")
     for i, bar in enumerate(bars):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f"{chart_values[i]:+.1f}%\n(${chart_dollar[i]:+.0f})", 
-                ha='center', va='bottom' if chart_values[i] >= 0 else 'top', fontsize=8)
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height - (5 if height > 0 else -5),
+            f"{chart_values[i]:+.1f}%\n(${chart_dollar[i]:+.0f})",
+            ha="center",
+            va="bottom" if height > 0 else "top",
+            fontsize=8,
+            color="white" if abs(height) > 15 else "black",
+            clip_on=True
+        )
+
     plt.tight_layout()
     buf = io.BytesIO()
     plt.savefig(buf, format="png")
