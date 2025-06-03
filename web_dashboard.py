@@ -107,7 +107,13 @@ def dashboard():
     date_str = datetime.now().strftime("%Y-%m-%d")
     save_to_google_sheet(date_str, round(bybit_total, 2))
 
-    last_7 = read_last_days(7)
+last_7 = read_last_days(7)
+    last_30 = read_last_days(30)
+    last_1 = read_last_days(2)
+
+    perf_1 = f"{((bybit_total - last_1[0]) / last_1[0]) * 100:.2f}%" if len(last_1) >= 2 else "n/a"
+    perf_7 = f"{((bybit_total - last_7[0]) / last_7[0]) * 100:.2f}%" if len(last_7) >= 2 else "n/a"
+    perf_30 = f"{((bybit_total - last_30[0]) / last_30[0]) * 100:.2f}%" if len(last_30) >= 2 else "n/a"
     last_30 = read_last_days(30)
 
     perf_7 = f"{((bybit_total - last_7[0]) / last_7[0]) * 100:.2f}%" if len(last_7) >= 2 else "n/a"
@@ -132,7 +138,8 @@ def dashboard():
         bybit_total=bybit_total_str,
         perf_7=perf_7,
         perf_30=perf_30,
-        chart_data=chart_url
+        chart_data=chart_url,
+        perf_1=perf_1
     )
 
 @app.route('/logout')
