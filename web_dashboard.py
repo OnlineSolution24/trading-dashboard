@@ -55,6 +55,12 @@ def login():
     return render_template("login.html")
 
 @app.route("/dashboard")
+def dashboard():
+    if "user" not in session:
+        return redirect(url_for("login"))
+
+    START_CAPITAL = 13729.37
+    api_error = False
 
     subaccounts = [
         {
@@ -110,11 +116,14 @@ def login():
         }
     ]
 
+    bybit_total = 0.0
     account_data = []
+
     for acc in subaccounts:
         acc_result = {
             "name": acc["name"],
             "balance": None,
+            "coins": [],
             "error": None
         }
         try:
@@ -122,61 +131,30 @@ def login():
                 from blofin import BloFinClient
                 blofin_client = BloFinClient(api_key=acc["api_key"], api_secret=acc["api_secret"], passphrase=acc["passphrase"])
                 result = blofin_client.account.get_balance(account_type="futures")
-                total = sum(float(item["available"]) for item in result["data"] if item["currency"] == "USDT")
+                total = 0.0
+                for item in result["data"]:
+                    if item["currency"] == "USDT":
+                        total += float(item["available"])
+                        acc_result["coins"].append({"coin": "USDT", "amount": float(item["available"])})
                 acc_result["balance"] = round(total, 2)
             else:
                 session = HTTP(api_key=acc["api_key"], api_secret=acc["api_secret"])
                 response = session.get_wallet_balance(accountType="UNIFIED")
-                total = 0
+                total = 0.0
                 for item in response["result"]["list"]:
                     for coin in item["coin"]:
-                        if coin["coin"] == "USDT":
-                            total += float(coin["walletBalance"])
+                        if coin["coin"] in ["USDT", "BTC", "ETH", "SOL"]:
+                            amount = float(coin["walletBalance"])
+                            acc_result["coins"].append({"coin": coin["coin"], "amount": amount})
+                            if coin["coin"] == "USDT":
+                                total += amount
                 acc_result["balance"] = round(total, 2)
+                bybit_total += total
         except Exception as e:
             acc_result["error"] = str(e)
+            api_error = True
 
-        acc_result["coins"] = []
-        if "blofin" in acc["name"].lower():
-            for item in result["data"]:
-                if item["currency"] == "USDT":
-                    acc_result["coins"].append({
-                        "coin": "USDT",
-                        "amount": float(item["available"])
-                    })
-        else:
-            for item in response["result"]["list"]:
-                for coin in item["coin"]:
-                    if coin["coin"] in ["USDT", "BTC", "ETH", "SOL"]:
-                        acc_result["coins"].append({
-                            "coin": coin["coin"],
-                            "amount": float(coin["walletBalance"])
-                        })
         account_data.append(acc_result)
-
-
-def dashboard():
-    if "user" not in session:
-        return redirect(url_for("login"))
-
-    START_CAPITAL = 13729.37
-
-    try:
-        bybit_session = HTTP(
-            api_key=os.environ.get("BYBIT_API_KEY"),
-            api_secret=os.environ.get("BYBIT_API_SECRET")
-        )
-        wallet_data = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"].get("list", [])
-        bybit_total = 0.0
-        for acc in wallet_data:
-            for coin in acc["coin"]:
-                if coin["coin"] == "USDT":
-                    bybit_total += float(coin["walletBalance"])
-        bybit_total_str = f"${bybit_total:,.2f}"
-    except Exception as e:
-        bybit_total_str = f"Fehler: {str(e)}"
-        bybit_total = 0.0
-        api_error = True
 
     # Google Sheet speichern
     date_str = datetime.now().strftime("%Y-%m-%d")
@@ -193,18 +171,15 @@ def dashboard():
     pnl_percent = ((bybit_total - START_CAPITAL) / START_CAPITAL) * 100
     pnl_dollar = bybit_total - START_CAPITAL
 
-    # Diagramm
     fig, ax = plt.subplots(figsize=(8, 4))
     bars = ax.bar(["Gesamt"], [pnl_percent], color="green" if pnl_percent >= 0 else "red")
     for bar in bars:
-        ax.text(
-            bar.get_x() + bar.get_width()/2,
-            bar.get_height() * (0.98 if pnl_percent >= 0 else 1.02),
-            f"{pnl_percent:+.2f}%\n(${pnl_dollar:+,.2f})",
-            ha='center',
-            va='top' if pnl_percent >= 0 else 'bottom',
-            fontsize=10
-        )
+        ax.text(bar.get_x() + bar.get_width()/2,
+                bar.get_height() * (0.98 if pnl_percent >= 0 else 1.02),
+                f"{pnl_percent:+.2f}%\n(${pnl_dollar:+,.2f})",
+                ha='center',
+                va='top' if pnl_percent >= 0 else 'bottom',
+                fontsize=10)
     ax.set_ylim(min(-100, pnl_percent * 1.5), max(100, pnl_percent * 1.5))
     ax.set_title("Performance seit Start")
     plt.tight_layout()
@@ -213,17 +188,14 @@ def dashboard():
     img.seek(0)
     chart_url = base64.b64encode(img.getvalue()).decode()
 
-    if 'api_error' in locals() and api_error:
-        chart_url = None
-
     return render_template("dashboard.html",
-                           bybit_total=bybit_total_str,
+                           bybit_total=f"${bybit_total:,.2f}",
                            perf_1=perf_1,
                            perf_7=perf_7,
                            perf_30=perf_30,
                            chart_data=chart_url,
                            account_data=account_data,
-                           api_error='api_error' in locals() and api_error)
+                           api_error=api_error)
 
 @app.route("/logout")
 def logout():
