@@ -20,7 +20,14 @@ users = {
 # Google Sheet Setup
 def get_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("google_service_account.json", scope)
+    import json
+from oauth2client.service_account import ServiceAccountCredentials
+
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+client = gspread.authorize(creds)
+
     client = gspread.authorize(creds)
     sheet = client.open_by_key("1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g")
     return sheet.worksheet("DailyBalances")
