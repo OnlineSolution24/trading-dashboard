@@ -1,97 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Trading Dashboard</title>
-  <meta http-equiv="refresh" content="120">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-  <style>
-    body {
-      background-color: #f8f9fa;
-    }
-    .stat-box {
-      border-radius: 0.5rem;
-      padding: 1rem;
-      color: white;
-      text-align: center;
-      font-size: 1.1rem;
-      margin-bottom: 1rem;
-    }
-    .positive { background-color: #198754; }
-    .negative { background-color: #dc3545; }
-    .neutral { background-color: #6c757d; }
-    .chart-container {
-      text-align: center;
-      margin-top: 2rem;
-    }
-    .chart-container img {
-      max-width: 100%;
-      height: auto;
-    }
-    .alert {
-      font-size: 1.1rem;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Trading Dashboard</title>
+    <meta http-equiv="refresh" content="300"> <!-- Auto-Refresh alle 5 Min -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .box {
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .gain { color: green; }
+        .loss { color: red; }
+    </style>
 </head>
-<body>
-  <div class="container mt-4">
-    <h2 class="text-center mb-4">📊 Trading Dashboard</h2>
+<body class="container py-4">
 
-    {% if api_error %}
-    <div class="alert alert-danger text-center">
-      ❌ Die API-Verbindung ist fehlgeschlagen. Bitte prüfe deine Zugangsdaten.
+    <div class="d-flex justify-content-between mb-4">
+        <h2>📊 Trading Dashboard</h2>
+        <a href="/logout" class="btn btn-secondary">Abmelden</a>
     </div>
-    {% endif %}
 
-    <div class="row text-white">
-      <div class="col-md-4">
-        <div class="stat-box {{ 'positive' if perf_1|float >= 0 else 'negative' }}">
-          <strong>1-Tages Performance:</strong><br>{{ perf_1 }}
+    <div class="row text-center mb-4">
+        <div class="col-md-3 box">
+            <h5>Gesamtwert</h5>
+            <p><strong>${{ total_balance | round(2) }}</strong></p>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="stat-box {{ 'positive' if perf_7|float >= 0 else 'negative' }}">
-          <strong>7-Tages Performance:</strong><br>{{ perf_7 }}
+        <div class="col-md-3 box">
+            <h5>📅 1-Tages Performance</h5>
+            <p class="{{ 'gain' if perf_1d[0] >= 0 else 'loss' }}">
+                {{ perf_1d[0]|round(2) }} $ ({{ perf_1d[1]|round(2) }} %)
+            </p>
         </div>
-      </div>
-      <div class="col-md-4">
-        <div class="stat-box {{ 'positive' if perf_30|float >= 0 else 'negative' }}">
-          <strong>30-Tages Performance:</strong><br>{{ perf_30 }}
+        <div class="col-md-3 box">
+            <h5>7-Tage Performance</h5>
+            <p class="{{ 'gain' if perf_7d[0] >= 0 else 'loss' }}">
+                {{ perf_7d[0]|round(2) }} $ ({{ perf_7d[1]|round(2) }} %)
+            </p>
         </div>
-      </div>
+        <div class="col-md-3 box">
+            <h5>30-Tage Performance</h5>
+            <p class="{{ 'gain' if perf_30d[0] >= 0 else 'loss' }}">
+                {{ perf_30d[0]|round(2) }} $ ({{ perf_30d[1]|round(2) }} %)
+            </p>
+        </div>
     </div>
 
-    <div class="text-center mt-4 mb-4">
-      <h4>💰 Gesamtguthaben:</h4>
-      <h3>{{ bybit_total }}</h3>
+    <div class="box text-center">
+        <h5>Performance Diagramm</h5>
+        <img src="/static/pnl_chart.png" class="img-fluid mt-3" alt="Performance Chart">
     </div>
 
-    {% if chart_data %}
-    <div class="chart-container">
-      <h5>📈 Performance seit Start</h5>
-      <img src="data:image/png;base64,{{ chart_data }}" alt="Chart">
+    {% for acc in subaccount_results %}
+    <div class="box">
+        <h5>{{ acc.name }}</h5>
+        {% if acc.error %}
+            <p class="text-danger">⚠️ Fehler bei der API: {{ acc.error }}</p>
+        {% else %}
+            <p>
+                Guthaben: <strong>${{ acc.balance | round(2) }}</strong> —
+                PnL: <span class="{{ 'gain' if acc.pnl >= 0 else 'loss' }}">
+                    {{ acc.pnl | round(2) }} $ ({{ acc.pnl_pct | round(2) }}%)
+                </span>
+            </p>
+            <ul>
+                {% for coin in acc.coin_summary %}
+                    <li>{{ coin }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </div>
-    {% endif %}
+    {% endfor %}
 
-    <div class="mt-5">
-      <h4>📡 API-Status pro Subaccount</h4>
-      <ul class="list-group">
-        {% for acc in account_data %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <strong>{{ acc.name }}</strong>
-            {% if acc.error %}
-              <span class="badge bg-danger">❌ Fehler: {{ acc.error }}</span>
-            {% else %}
-              <span class="badge bg-success">✅ {{ acc.balance }} $</span>
-            {% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
-
-    <div class="text-center mt-5">
-      <a href="/logout" class="btn btn-outline-secondary">Abmelden</a>
-    </div>
-  </div>
 </body>
 </html>
