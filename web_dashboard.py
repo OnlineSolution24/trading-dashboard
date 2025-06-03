@@ -13,63 +13,60 @@ import base64
 app = Flask(__name__)
 app.secret_key = 'geheim123'
 
-users = {
-    "husky125": generate_password_hash("Ideal250!")
-}
-
-START_CAPITAL = 13729.37
-
-SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
-SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-SHEET_TAB_NAME = "DailyBalances"
-
-BYBIT_ACCOUNT_NAMES = {
-    1: "Corestrategies",
-    2: "Btcstrategies",
-    3: "Solstrategies",
-    4: "Altsstrategies",
-    5: "Ethapestrategies",
-    6: "Memestrategies",
-    7: "Incubatorzone",
-    8: "2k->10k Projekt",
-    9: "1k->5k Projekt"
-}
-
-INITIALS = {
-    "Corestrategies": 2000.56,
-    "Btcstrategies": 1923.00,
-    "Solstrategies": 1713.81,
-    "Altsstrategies": 1200.00,
-    "Ethapestrategies": 1200.00,
-    "Memestrategies": 800.00,
-    "Incubatorzone": 400.00,
-    "2k->10k Projekt": 2000.00,
-    "1k->5k Projekt": 1000.00,
-    "Blofin (Top_7_Tage_Performer)": 1492.00
-}
-
+# ====================
+# GOOGLE SHEETS FUNKTIONEN
+# ====================
 def save_to_google_sheet(date_str, value):
     try:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('google_service_account.json', scope)
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(SHEET_ID)
-        worksheet = sheet.worksheet(SHEET_TAB_NAME)
-        worksheet.append_row([date_str, value])
+        sheet = client.open_by_key(os.environ.get("GOOGLE_SHEET_ID"))
+        worksheet = sheet.worksheet("DailyBalances")
+
+        # Sheet ID fest setzen (wenn nicht über Umgebungsvariable)
+        os.environ['GOOGLE_SHEET_ID'] = '1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g'
+
+        existing = worksheet.col_values(1)
+        if date_str not in existing:
+            worksheet.append_row([date_str, value])
+            print(f"✅ Gespeichert: {date_str} – ${value}")
+        else:
+            print(f"ℹ️ Bereits vorhanden: {date_str}")
     except Exception as e:
-        print("Fehler beim Google Sheets Export:", str(e))
+        print("❌ Fehler beim Google Sheets Export:", str(e))
 
 def read_last_days(days=7):
     try:
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
+        scope = [
+            'https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('google_service_account.json', scope)
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(SHEET_ID)
-        worksheet = sheet.worksheet(SHEET_TAB_NAME)
-        data = worksheet.get_all_records()
-        return [float(row["Gesamtwert ($)"]) for row in data][-days:]
-    except:
+        sheet = client.open_by_key(os.environ.get("GOOGLE_SHEET_ID"))
+        worksheet = sheet.worksheet("DailyBalances")
+
+        # Sheet ID fest setzen (wenn nicht über Umgebungsvariable)
+        os.environ['GOOGLE_SHEET_ID'] = '1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g'
+
+        records = worksheet.get_all_records()
+        return [float(row["Gesamtwert ($)"]) for row in records][-days:]
+    except Exception as e:
+        print("❌ Fehler beim Lesen der Google Tabelle:", str(e))
         return []
+
+# Der Rest der App sollte hier folgen, z.B. das Dashboard-Routing, API-Aufrufe, Chart-Generierung usw.
+# Dies kann auf Wunsch jetzt hinzugefügt werden
+# Benutzer-Daten
+users = {
+    "husky125": generate_password_hash("Ideal250!")
+}
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -88,141 +85,57 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    subaccounts = []
-    total_balance = 0.0
-    current_balances = {}
+    START_CAPITAL = 13729.37
 
-    for i in range(1, 10):
-        api_key = os.environ.get(f"BYBIT_API_KEY_{i}")
-        api_secret = os.environ.get(f"BYBIT_API_SECRET_{i}")
-        account_name = BYBIT_ACCOUNT_NAMES.get(i, f"Bybit #{i}")
-
-        try:
-            session_obj = HTTP(api_key=api_key, api_secret=api_secret)
-            raw_positions = session_obj.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
-            positions = [
-                {
-                    "symbol": p["symbol"],
-                    "size": p["size"],
-                    "pnl": float(p["unrealisedPnl"])
-                }
-                for p in raw_positions if float(p["size"]) != 0
-            ]
-
-            raw_balance = session_obj.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
-            account_value = sum(float(acc["totalEquity"]) for acc in raw_balance)
-            current_balances[account_name] = account_value
-            total_balance += account_value
-
-            start_cap = INITIALS.get(account_name, 0)
-            pnl_absolute = account_value - start_cap
-            pnl_percent = (pnl_absolute / start_cap * 100) if start_cap else 0
-
-            subaccounts.append({
-                "name": account_name,
-                "balance": f"${account_value:,.2f}",
-                "positions": positions,
-                "pnl_absolute": pnl_absolute,
-                "pnl_percent": pnl_percent
-            })
-
-        except Exception as e:
-            subaccounts.append({
-                "name": account_name,
-                "balance": f"Fehler ({str(e)})",
-                "positions": []
-            })
-
-    # Blofin-Konto
     try:
-        blofin = BloFinClient(
-            api_key=os.environ.get("BLOFIN_API_KEY"),
-            api_secret=os.environ.get("BLOFIN_API_SECRET"),
-            passphrase=os.environ.get("BLOFIN_API_PASSPHRASE")
+        bybit_session = HTTP(
+            api_key=os.environ.get("BYBIT_API_KEY"),
+            api_secret=os.environ.get("BYBIT_API_SECRET")
         )
-        response = blofin.account.get_balance(account_type="futures")
-        blofin_balance = sum(float(i["balance"]) for i in response["data"] if i["currency"] == "USDT")
-        current_balances["Blofin (Top_7_Tage_Performer)"] = blofin_balance
-        total_balance += blofin_balance
-
-        start_cap = INITIALS.get("Blofin (Top_7_Tage_Performer)", 0)
-        pnl_absolute = blofin_balance - start_cap
-        pnl_percent = (pnl_absolute / start_cap * 100) if start_cap else 0
-
-        subaccounts.append({
-            "name": "Blofin (Top_7_Tage_Performer)",
-            "balance": f"${blofin_balance:,.2f}",
-            "positions": [],
-            "pnl_absolute": pnl_absolute,
-            "pnl_percent": pnl_percent
-        })
-
+        wallet_data = bybit_session.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        bybit_total = 0.0
+        for acc in wallet_data:
+            for coin in acc["coin"]:
+                if coin["coin"] == "USDT":
+                    bybit_total += float(coin["walletBalance"])
+        bybit_total_str = f"${bybit_total:,.2f}"
     except Exception as e:
-        subaccounts.append({
-            "name": "Blofin",
-            "balance": f"Fehler ({str(e)})",
-            "positions": []
-        })
+        bybit_total_str = f"Fehler: {str(e)}"
+        bybit_total = 0.0
 
-    # CHART GENERIEREN
-    chart_labels, chart_values, chart_dollar = [], [], []
-    for name, current in current_balances.items():
-        if name in INITIALS:
-            start = INITIALS[name]
-            pnl = (current - start) / start * 100
-            chart_labels.append(name)
-            chart_values.append(pnl)
-            chart_dollar.append(current - start)
+    # Speichern in Google Sheets
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    save_to_google_sheet(date_str, round(bybit_total, 2))
 
-    fig, ax = plt.subplots(figsize=(13, 6))
-    bars = ax.bar(chart_labels, chart_values, color=["green" if x >= 0 else "red" for x in chart_values])
-    ax.axhline(0, color="gray")
-    ax.set_title("PnL in % (mit $)")
-    ax.set_ylabel("Veränderung in %")
-    ax.set_ylim(min(-10, min(chart_values) * 1.3), max(10, max(chart_values) * 1.2))
-    plt.xticks(rotation=45, ha="right")
-    for i, bar in enumerate(bars):
-        height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            height - (5 if height > 0 else -5),
-            f"{chart_values[i]:+.1f}%\n(${chart_dollar[i]:+.0f})",
-            ha="center",
-            va="bottom" if height > 0 else "top",
-            fontsize=8,
-            color="white" if abs(height) > 15 else "black",
-            clip_on=True
-        )
-
-    plt.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png")
-    buf.seek(0)
-    chart_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    chart_url = f"data:image/png;base64,{chart_base64}"
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    save_to_google_sheet(today, round(total_balance, 2))
     last_7 = read_last_days(7)
     last_30 = read_last_days(30)
 
-    perf_7 = f"{(total_balance - last_7[0]) / last_7[0] * 100:.2f}%" if len(last_7) >= 2 else "?"
-    perf_30 = f"{(total_balance - last_30[0]) / last_30[0] * 100:.2f}%" if len(last_30) >= 2 else "?"
+    perf_7 = f"{((bybit_total - last_7[0]) / last_7[0]) * 100:.2f}%" if len(last_7) >= 2 else "n/a"
+    perf_30 = f"{((bybit_total - last_30[0]) / last_30[0]) * 100:.2f}%" if len(last_30) >= 2 else "n/a"
 
-    return render_template("dashboard.html",
-        subaccounts=subaccounts,
-        total_balance=f"${total_balance:,.2f}",
-        profit_loss=f"${total_balance - START_CAPITAL:,.2f}",
-        pnl_chart=chart_url,
+    # Diagramm: Performance seit Start
+    fig, ax = plt.subplots(figsize=(8, 4))
+    pnl_percent = ((bybit_total - START_CAPITAL) / START_CAPITAL) * 100
+    pnl_dollar = bybit_total - START_CAPITAL
+    ax.bar(["PnL"], [pnl_percent], color="green" if pnl_percent >= 0 else "red")
+    ax.text(0, pnl_percent, f"{pnl_percent:+.2f}%\n(${pnl_dollar:+,.2f})", ha='center', va='bottom')
+    ax.set_ylim(min(0, pnl_percent * 1.3), max(10, pnl_percent * 1.3))
+    ax.set_title("Performance seit Start")
+    img = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    chart_url = base64.b64encode(img.getvalue()).decode()
+
+    return render_template(
+        'dashboard.html',
+        bybit_total=bybit_total_str,
         perf_7=perf_7,
-        perf_30=perf_30
+        perf_30=perf_30,
+        chart_data=chart_url
     )
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
