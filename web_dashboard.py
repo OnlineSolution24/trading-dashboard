@@ -13,12 +13,10 @@ import matplotlib.pyplot as plt
 app = Flask(__name__)
 app.secret_key = 'supersecret'
 
-# Benutzer
 users = {
     "husky125": generate_password_hash("Ideal250!")
 }
 
-# Google Sheet Setup
 def get_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
@@ -63,69 +61,23 @@ def dashboard():
     api_error = False
 
     subaccounts = [
-        {
-            "name": "Corestrategies",
-            "api_key": os.environ.get("BYBIT_CORE_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_CORE_API_SECRET")
-        },
-        {
-            "name": "Btcstrategies",
-            "api_key": os.environ.get("BYBIT_BTC_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_BTC_API_SECRET")
-        },
-        {
-            "name": "Solstrategies",
-            "api_key": os.environ.get("BYBIT_SOL_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_SOL_API_SECRET")
-        },
-        {
-            "name": "Altstrategies",
-            "api_key": os.environ.get("BYBIT_ALT_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_ALT_API_SECRET")
-        },
-        {
-            "name": "Ethapestrategies",
-            "api_key": os.environ.get("BYBIT_ETH_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_ETH_API_SECRET")
-        },
-        {
-            "name": "Memestrategies",
-            "api_key": os.environ.get("BYBIT_MEME_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_MEME_API_SECRET")
-        },
-        {
-            "name": "Incubatorzone",
-            "api_key": os.environ.get("BYBIT_INCUBATOR_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_INCUBATOR_API_SECRET")
-        },
-        {
-            "name": "2k->10k Projekt",
-            "api_key": os.environ.get("BYBIT_2K10K_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_2K10K_API_SECRET")
-        },
-        {
-            "name": "1k->5k Projekt",
-            "api_key": os.environ.get("BYBIT_1K5K_API_KEY"),
-            "api_secret": os.environ.get("BYBIT_1K5K_API_SECRET")
-        },
-        {
-            "name": "Blofin (Top 1-3 Performer)",
-            "api_key": os.environ.get("BLOFIN_API_KEY"),
-            "api_secret": os.environ.get("BLOFIN_API_SECRET"),
-            "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")
-        }
+        {"name": "Corestrategies", "api_key": os.environ.get("BYBIT_CORE_API_KEY"), "api_secret": os.environ.get("BYBIT_CORE_API_SECRET")},
+        {"name": "Btcstrategies", "api_key": os.environ.get("BYBIT_BTC_API_KEY"), "api_secret": os.environ.get("BYBIT_BTC_API_SECRET")},
+        {"name": "Solstrategies", "api_key": os.environ.get("BYBIT_SOL_API_KEY"), "api_secret": os.environ.get("BYBIT_SOL_API_SECRET")},
+        {"name": "Altstrategies", "api_key": os.environ.get("BYBIT_ALT_API_KEY"), "api_secret": os.environ.get("BYBIT_ALT_API_SECRET")},
+        {"name": "Ethapestrategies", "api_key": os.environ.get("BYBIT_ETH_API_KEY"), "api_secret": os.environ.get("BYBIT_ETH_API_SECRET")},
+        {"name": "Memestrategies", "api_key": os.environ.get("BYBIT_MEME_API_KEY"), "api_secret": os.environ.get("BYBIT_MEME_API_SECRET")},
+        {"name": "Incubatorzone", "api_key": os.environ.get("BYBIT_INCUBATOR_API_KEY"), "api_secret": os.environ.get("BYBIT_INCUBATOR_API_SECRET")},
+        {"name": "2k->10k Projekt", "api_key": os.environ.get("BYBIT_2K10K_API_KEY"), "api_secret": os.environ.get("BYBIT_2K10K_API_SECRET")},
+        {"name": "1k->5k Projekt", "api_key": os.environ.get("BYBIT_1K5K_API_KEY"), "api_secret": os.environ.get("BYBIT_1K5K_API_SECRET")},
+        {"name": "Blofin (Top 1-3 Performer)", "api_key": os.environ.get("BLOFIN_API_KEY"), "api_secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
     ]
 
     bybit_total = 0.0
     account_data = []
 
     for acc in subaccounts:
-        acc_result = {
-            "name": acc["name"],
-            "balance": None,
-            "coins": [],
-            "error": None
-        }
+        acc_result = {"name": acc["name"], "balance": None, "coins": [], "error": None}
         try:
             if "blofin" in acc["name"].lower():
                 from blofin import BloFinClient
@@ -138,8 +90,8 @@ def dashboard():
                         acc_result["coins"].append({"coin": "USDT", "amount": float(item["available"])})
                 acc_result["balance"] = round(total, 2)
             else:
-                session = HTTP(api_key=acc["api_key"], api_secret=acc["api_secret"])
-                response = session.get_wallet_balance(accountType="UNIFIED")
+                session_bybit = HTTP(api_key=acc["api_key"], api_secret=acc["api_secret"])
+                response = session_bybit.get_wallet_balance(accountType="UNIFIED")
                 total = 0.0
                 for item in response["result"]["list"]:
                     for coin in item["coin"]:
@@ -153,10 +105,9 @@ def dashboard():
         except Exception as e:
             acc_result["error"] = str(e)
             api_error = True
-
         account_data.append(acc_result)
 
-    # Google Sheet speichern
+    # Save balance to Google Sheet
     date_str = datetime.now().strftime("%Y-%m-%d")
     save_to_google_sheet(date_str, round(bybit_total, 2))
 
