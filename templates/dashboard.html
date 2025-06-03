@@ -15,6 +15,7 @@
       color: white;
       text-align: center;
       font-size: 1.1rem;
+      margin-bottom: 1rem;
     }
     .positive { background-color: #198754; }
     .negative { background-color: #dc3545; }
@@ -27,13 +28,22 @@
       max-width: 100%;
       height: auto;
     }
+    .alert {
+      font-size: 1.1rem;
+    }
   </style>
 </head>
 <body>
   <div class="container mt-4">
     <h2 class="text-center mb-4">📊 Trading Dashboard</h2>
 
-    <div class="row mb-4">
+    {% if api_error %}
+    <div class="alert alert-danger text-center">
+      ❌ Die API-Verbindung ist fehlgeschlagen. Bitte prüfe deine Zugangsdaten.
+    </div>
+    {% endif %}
+
+    <div class="row text-white">
       <div class="col-md-4">
         <div class="stat-box {{ 'positive' if perf_1|float >= 0 else 'negative' }}">
           <strong>1-Tages Performance:</strong><br>{{ perf_1 }}
@@ -51,14 +61,32 @@
       </div>
     </div>
 
-    <div class="text-center mb-4">
+    <div class="text-center mt-4 mb-4">
       <h4>💰 Gesamtguthaben:</h4>
       <h3>{{ bybit_total }}</h3>
     </div>
 
+    {% if chart_data %}
     <div class="chart-container">
       <h5>📈 Performance seit Start</h5>
       <img src="data:image/png;base64,{{ chart_data }}" alt="Chart">
+    </div>
+    {% endif %}
+
+    <div class="mt-5">
+      <h4>📡 API-Status pro Subaccount</h4>
+      <ul class="list-group">
+        {% for acc in account_data %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>{{ acc.name }}</strong>
+            {% if acc.error %}
+              <span class="badge bg-danger">❌ Fehler: {{ acc.error }}</span>
+            {% else %}
+              <span class="badge bg-success">✅ {{ acc.balance }} $</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
     </div>
 
     <div class="text-center mt-5">
