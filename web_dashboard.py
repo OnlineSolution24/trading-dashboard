@@ -1,69 +1,42 @@
-import os
-import time
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from pybit.unified_trading import HTTP
-from blofin import BloFinClient
+import os
 from datetime import datetime
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import json
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_'+os.urandom(12).hex())
+app.secret_key = 'dein_sicherer_schlüssel'  # Ändere dies!
 
-# Debug-Modus
-DEBUG = os.environ.get('DEBUG', 'false').lower() == 'true'
-
-# Benutzerdaten
-users = {"husky125": generate_password_hash("Ideal250!")}
-
-starting_balances = {
-    "Incubatorzone": 400.00,
-    "Memestrategies": 800.00,
-    "Ethapestrategies": 1200.00,
-    "Altsstrategies": 1200.00,
-    "Solstrategies": 1713.81,
-    "Btcstrategies": 1923.00,
-    "Corestrategies": 2000.56,
-    "2k->10k Projekt": 2000.00,
-    "1k->5k Projekt": 1000.00,
-    "Blofin": 1492.00
+users = {
+    "admin": generate_password_hash("passwort123")
 }
 
+STARTKAPITAL = 13729.37  # Startwert in USD
+
 subaccounts = [
-    {"name": "Incubatorzone", "exchange": "bybit", "key_env": "BYBIT_INCUBATORZONE_API_KEY", "secret_env": "BYBIT_INCUBATORZONE_API_SECRET"},
-    {"name": "Memestrategies", "exchange": "bybit", "key_env": "BYBIT_MEMESTRATEGIES_API_KEY", "secret_env": "BYBIT_MEMESTRATEGIES_API_SECRET"},
-    # ... (alle anderen Konten analog)
+    {"name": "Incubatorzone", "key": os.getenv("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.getenv("BYBIT_INCUBATORZONE_API_SECRET")},
+    {"name": "Memestrategies", "key": os.getenv("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_MEMESTRATEGIES_API_SECRET")},
+    {"name": "Ethapestrategies", "key": os.getenv("BYBIT_ETHAPESTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_ETHAPESTRATEGIES_API_SECRET")},
+    {"name": "Altsstrategies", "key": os.getenv("BYBIT_ALTSSTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_ALTSSTRATEGIES_API_SECRET")},
+    {"name": "Solstrategies", "key": os.getenv("BYBIT_SOLSTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_SOLSTRATEGIES_API_SECRET")},
+    {"name": "Btcstrategies", "key": os.getenv("BYBIT_BTCSTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_BTCSTRATEGIES_API_SECRET")},
+    {"name": "Corestrategies", "key": os.getenv("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.getenv("BYBIT_CORESTRATEGIES_API_SECRET")},
+    {"name": "2k->10k Projekt", "key": os.getenv("BYBIT_2K_API_KEY"), "secret": os.getenv("BYBIT_2K_API_SECRET")},
+    {"name": "1k->5k Projekt", "key": os.getenv("BYBIT_1K_API_KEY"), "secret": os.getenv("BYBIT_1K_API_SECRET")},
 ]
-
-def get_bybit_balance(api_key, api_secret):
-    try:
-        session = HTTP(api_key=api_key, api_secret=api_secret)
-        balance = session.get_wallet_balance(accountType="UNIFIED")
-        return float(balance['result']['list'][0]['coin'][0]['availableToWithdraw'])
-    except Exception as e:
-        print(f"Bybit Fehler: {str(e)}")
-        return 0.0
-
-def get_blofin_balance(api_key, api_secret, passphrase):
-    try:
-        client = BloFinClient(api_key, api_secret, passphrase)
-        balance = client.account.get_balance(account_type="futures")
-        return float(balance['data'][0]['available'])
-    except Exception as e:
-        print(f"Blofin Fehler: {str(e)}")
-        return 0.0
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        if username in users and check_password_hash(users[username], password):
-            session['user'] = username
+        user = request.form['username']
+        pw = request.form['password']
+        if user in users and check_password_hash(users[user], pw):
+            session['user'] = user
             return redirect(url_for('dashboard'))
-        return render_template('login.html', error="Falsche Anmeldedaten")
+        else:
+            return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
 
 @app.route('/dashboard')
@@ -71,54 +44,66 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    accounts = []
-    total = 0.0
-    
+    results = []
+    total_value = 0
+
     for acc in subaccounts:
-        creds = {
-            'key': os.environ.get(acc['key_env']),
-            'secret': os.environ.get(acc['secret_env']),
-            'passphrase': os.environ.get(acc.get('passphrase_env', ''))
-        }
-        
-        if acc['exchange'] == 'bybit':
-            balance = get_bybit_balance(creds['key'], creds['secret'])
-        else:
-            balance = get_blofin_balance(creds['key'], creds['secret'], creds['passphrase'])
-        
-        start = starting_balances.get(acc['name'], 0.0)
-        pnl = balance - start
-        pnl_percent = (pnl / start) * 100 if start != 0 else 0
-        
-        accounts.append({
-            'name': acc['name'],
-            'balance': f"{balance:.2f}",
-            'pnl': f"{pnl:.2f}",
-            'pnl_percent': f"{pnl_percent:.2f}",
-            'status': 'OK' if balance > 0 else 'Error'
-        })
-        total += balance
+        try:
+            session_api = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+            balance_raw = session_api.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+            usdt = 0.0
+            for item in balance_raw:
+                for coin in item["coin"]:
+                    if coin["coin"] == "USDT":
+                        usdt = float(coin["walletBalance"])
+            pnl_abs = usdt - get_initial_value(acc["name"])
+            pnl_pct = (pnl_abs / get_initial_value(acc["name"])) * 100
+            results.append({
+                "name": acc["name"],
+                "usdt": usdt,
+                "pnl_abs": pnl_abs,
+                "pnl_pct": pnl_pct,
+                "status": "🟢"
+            })
+            total_value += usdt
+        except Exception as e:
+            results.append({
+                "name": acc["name"],
+                "usdt": 0.0,
+                "pnl_abs": 0.0,
+                "pnl_pct": 0.0,
+                "status": "🔴"
+            })
 
-    # Zeitraum-Daten (Dummy-Werte)
-    time_data = {
-        'pnl_1d': 0, 'pnl_1d_str': "N/A", 'pnl_1d_percent': 0,
-        'pnl_7d': 0, 'pnl_7d_str': "N/A", 'pnl_7d_percent': 0,
-        'pnl_30d': 0, 'pnl_30d_str': "N/A", 'pnl_30d_percent': 0
-    }
+    total_pnl = total_value - STARTKAPITAL
+    total_pnl_pct = (total_pnl / STARTKAPITAL) * 100
 
-    return render_template(
-        'dashboard.html',
-        accounts=accounts,
-        total_balance=f"{total:.2f}",
-        total_pnl=f"{(total - sum(starting_balances.values())):.2f}",
-        **time_data
-    )
+    return render_template("dashboard.html",
+                           results=results,
+                           total_value=total_value,
+                           total_pnl=total_pnl,
+                           total_pnl_pct=total_pnl_pct,
+                           start_value=STARTKAPITAL)
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=DEBUG)
+def get_initial_value(account_name):
+    initial_values = {
+        "Incubatorzone": 400,
+        "Memestrategies": 800,
+        "Ethapestrategies": 1200,
+        "Altsstrategies": 1200,
+        "Solstrategies": 1713.81,
+        "Btcstrategies": 1923,
+        "Corestrategies": 2000.56,
+        "2k->10k Projekt": 2000,
+        "1k->5k Projekt": 1000
+    }
+    return initial_values.get(account_name, 0)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
