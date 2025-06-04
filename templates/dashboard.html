@@ -167,7 +167,8 @@
     </div>
 
     <div class="timestamp">
-        Stand: {{ now().strftime('%d.%m.%Y %H:%M') }}
+        {% set current_time = now() %}
+        Stand: {{ current_time.strftime('%d.%m.%Y %H:%M') }}
     </div>
 </body>
 </html>
