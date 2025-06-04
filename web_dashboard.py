@@ -152,7 +152,9 @@ def dashboard():
                            total_start=total_start,
                            total_pnl=total_pnl,
                            total_pnl_percent=total_pnl_percent,
-                           chart_data=chart_data)
+                           chart_data=chart_data,
+                           accounts=subaccount_data,
+                           now=datetime.utcnow)
 
 
 @app.route('/logout')
