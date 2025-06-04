@@ -1,19 +1,15 @@
 import os
-import json
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from pybit.unified_trading import HTTP
 from blofin import BloFinClient
 from datetime import datetime, timedelta
+import matplotlib
+matplotlib.use('Agg')  # Wichtig für Render
 import matplotlib.pyplot as plt
-from flask_caching import Cache  # Für Caching
 
-# Flask Setup
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'sicherer_schlüssel')
-
-# Caching Setup
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'fallback_key')
 
 # Benutzer
 users = {
@@ -60,14 +56,12 @@ def login():
     return render_template('login.html')
 
 @app.route('/dashboard')
-@cache.cached(timeout=60)  # Cache für 60 Sekunden
 def dashboard():
     if "user" not in session:
         return redirect(url_for('login'))
 
     results = []
     total_current = 0
-    total_start = sum(starting_balances.values())
 
     for sub in subaccounts:
         name = sub['name']
@@ -80,35 +74,56 @@ def dashboard():
         try:
             if name == "Blofin":
                 client = BloFinClient(sub["key"], sub["secret"], sub["passphrase"])
-                resp = client.account.get_balance(account_type="futures")
-                if "data" in resp:
-                    for b in resp["data"]:
+                # Guthaben abfragen
+                balance_resp = client.account.get_balance(account_type="futures")
+                if balance_resp and "data" in balance_resp:
+                    for b in balance_resp["data"]:
                         if b["currency"] == "USDT":
                             balance = float(b["available"])
                             api_ok = True
-                            break
-            else:
-                session_bybit = HTTP(api_key=sub["key"], api_secret=sub["secret"])
+                
+                # Offene Positionen abfragen
+                positions_resp = client.account.get_positions(account_type="futures")
+                if positions_resp and "data" in positions_resp:
+                    positions = [{
+                        "symbol": p["symbol"],
+                        "size": float(p["positionQty"]),
+                        "pnl": float(p["unrealizedPnl"])
+                    } for p in positions_resp["data"] if float(p["positionQty"]) != 0]
+
+            else:  # Bybit Accounts
+                session_bybit = HTTP(
+                    api_key=sub["key"],
+                    api_secret=sub["secret"],
+                    recv_window=5000  # Höherer Timeout
+                )
+                
+                # Guthaben abfragen
                 balance_data = session_bybit.get_wallet_balance(accountType="UNIFIED")
-                if "result" in balance_data:
+                if balance_data and "result" in balance_data:
                     for item in balance_data["result"]["list"]:
                         for c in item["coin"]:
                             if c["coin"] == "USDT":
                                 balance += float(c["availableToWithdraw"])
                                 api_ok = True
-
-                    pos = session_bybit.get_positions(category="linear", settleCoin="USDT")
-                    if "result" in pos:
-                        positions = [{
-                            "symbol": p["symbol"],
-                            "size": float(p["size"]),
-                            "pnl": float(p["unrealisedPnl"])
-                        } for p in pos["result"]["list"] if float(p["size"]) != 0]
+                
+                # Offene Positionen abfragen
+                pos_data = session_bybit.get_positions(
+                    category="linear",
+                    settleCoin="USDT"
+                )
+                if pos_data and "result" in pos_data:
+                    positions = [{
+                        "symbol": p["symbol"],
+                        "size": float(p["size"]),
+                        "pnl": float(p["unrealisedPnl"])
+                    } for p in pos_data["result"]["list"] if float(p["size"]) != 0]
 
         except Exception as e:
-            error_msg = str(e)
+            error_msg = f"{type(e).__name__}: {str(e)}"
             api_ok = False
 
+        # Berechnungen
         pnl = balance - starting_balances.get(name, 0)
         pnl_percent = (pnl / starting_balances.get(name, 1)) * 100 if starting_balances.get(name, 0) != 0 else 0
         total_current += balance
@@ -120,15 +135,14 @@ def dashboard():
             "pnl": pnl,
             "pnl_percent": pnl_percent,
             "pnl_str": f"{pnl:+.2f}",
-            "pnl_percent_str": f"{pnl_percent:+.2f}",
+            "pnl_percent_str": f"{pnl_percent:+.2f}%",
             "positions": positions,
             "api_ok": api_ok,
             "error_msg": error_msg
         })
 
-    # Keine Google Sheets-Anbindung mehr (deaktiviert)
-    day1 = day7 = day30 = None
-
+    # Gesamtwerte berechnen
+    total_start = sum(starting_balances.values())
     total_pnl = total_current - total_start
     total_pnl_percent = (total_pnl / total_start) * 100 if total_start != 0 else 0
 
@@ -156,14 +170,14 @@ def dashboard():
         total_pnl_str=f"{total_pnl:+.2f}",
         total_pnl_percent=total_pnl_percent,
         total_pnl_percent_str=f"{total_pnl_percent:+.2f}%",
-        pnl_1d=day1 if day1 else 0,
-        pnl_1d_str=f"{day1:+.2f}" if day1 else "N/A",
+        pnl_1d=0,
+        pnl_1d_str="N/A",
         pnl_1d_percent=0,
-        pnl_7d=day7 if day7 else 0,
-        pnl_7d_str=f"{day7:+.2f}" if day7 else "N/A",
+        pnl_7d=0,
+        pnl_7d_str="N/A",
         pnl_7d_percent=0,
-        pnl_30d=day30 if day30 else 0,
-        pnl_30d_str=f"{day30:+.2f}" if day30 else "N/A",
+        pnl_30d=0,
+        pnl_30d_str="N/A",
         pnl_30d_percent=0,
         chart_path=chart_path
     )
