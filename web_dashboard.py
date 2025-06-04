@@ -4,23 +4,21 @@ from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from pybit.unified_trading import HTTP
 from blofin import BloFinClient
-import gspread
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+from flask_caching import Cache  # Für Caching
 
 # Flask Setup
 app = Flask(__name__)
-app.secret_key = 'sicherer_schlüssel'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'sicherer_schlüssel')
+
+# Caching Setup
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 # Benutzer
 users = {
     "husky125": generate_password_hash("Ideal250!")
 }
-
-# Google Sheets Setup
-sheet_id = "1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g"
-sheet_tab = "DailyBalances"
-json_path = "credentials.json"  # Datei im Root-Ordner ablegen
 
 # Startwerte je Account
 starting_balances = {
@@ -50,29 +48,19 @@ subaccounts = [
     {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
 ]
 
-def read_sheet_data(days=1):
-    gc = gspread.service_account(json_path)
-    sh = gc.open_by_key(sheet_id)
-    worksheet = sh.worksheet(sheet_tab)
-    rows = worksheet.get_all_records()
-    if not rows:
-        return None
-    now = datetime.utcnow()
-    cutoff = now - timedelta(days=days)
-    filtered = [r for r in rows if datetime.strptime(r["Date"], "%Y-%m-%d") >= cutoff]
-    return filtered[-1]["Total"] if filtered else None
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        u, p = request.form['username'], request.form['password']
-        if u in users and check_password_hash(users[u], p):
-            session['user'] = u
+        username = request.form['username']
+        password = request.form['password']
+        if username in users and check_password_hash(users[username], password):
+            session['user'] = username
             return redirect(url_for('dashboard'))
         return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
 
 @app.route('/dashboard')
+@cache.cached(timeout=60)  # Cache für 60 Sekunden
 def dashboard():
     if "user" not in session:
         return redirect(url_for('login'))
@@ -85,92 +73,98 @@ def dashboard():
         name = sub['name']
         balance = 0
         pnl = 0
-        error = None
+        api_ok = False
         positions = []
+        error_msg = None
 
         try:
             if name == "Blofin":
                 client = BloFinClient(sub["key"], sub["secret"], sub["passphrase"])
                 resp = client.account.get_balance(account_type="futures")
-                for b in resp["data"]:
-                    if b["currency"] == "USDT":
-                        balance = float(b["available"])
-                        break
+                if "data" in resp:
+                    for b in resp["data"]:
+                        if b["currency"] == "USDT":
+                            balance = float(b["available"])
+                            api_ok = True
+                            break
             else:
                 session_bybit = HTTP(api_key=sub["key"], api_secret=sub["secret"])
                 balance_data = session_bybit.get_wallet_balance(accountType="UNIFIED")
-                for item in balance_data["result"]["list"]:
-                    for c in item["coin"]:
-                        if c["coin"] == "USDT":
-                            balance += float(c["availableToWithdraw"])
+                if "result" in balance_data:
+                    for item in balance_data["result"]["list"]:
+                        for c in item["coin"]:
+                            if c["coin"] == "USDT":
+                                balance += float(c["availableToWithdraw"])
+                                api_ok = True
 
-                pos = session_bybit.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
-                positions = [{
-                    "symbol": p["symbol"],
-                    "size": float(p["size"]),
-                    "pnl": float(p["unrealisedPnl"])
-                } for p in pos if float(p["size"]) != 0]
+                    pos = session_bybit.get_positions(category="linear", settleCoin="USDT")
+                    if "result" in pos:
+                        positions = [{
+                            "symbol": p["symbol"],
+                            "size": float(p["size"]),
+                            "pnl": float(p["unrealisedPnl"])
+                        } for p in pos["result"]["list"] if float(p["size"]) != 0]
 
         except Exception as e:
-            error = str(e)
+            error_msg = str(e)
+            api_ok = False
 
         pnl = balance - starting_balances.get(name, 0)
-        pnl_percent = (pnl / starting_balances.get(name, 1)) * 100
+        pnl_percent = (pnl / starting_balances.get(name, 1)) * 100 if starting_balances.get(name, 0) != 0 else 0
         total_current += balance
 
         results.append({
             "name": name,
-            "balance": balance,
-            "start": starting_balances.get(name, 0),
+            "balance": f"{balance:.2f}",
+            "start": f"{starting_balances.get(name, 0):.2f}",
             "pnl": pnl,
             "pnl_percent": pnl_percent,
+            "pnl_str": f"{pnl:+.2f}",
+            "pnl_percent_str": f"{pnl_percent:+.2f}",
             "positions": positions,
-            "status": "OK" if not error else "Fehler",
-            "error_msg": error
+            "api_ok": api_ok,
+            "error_msg": error_msg
         })
 
-    # Google Sheets Log
-    try:
-        today_str = datetime.utcnow().strftime("%Y-%m-%d")
-        gc = gspread.service_account(json_path)
-        sh = gc.open_by_key(sheet_id)
-        worksheet = sh.worksheet(sheet_tab)
-        values = [today_str, f"{total_current:.2f}"]
-        worksheet.append_row(values)
-    except Exception as e:
-        print("Fehler beim Google Sheets Export:", e)
-
-    # Historie
-    day1 = read_sheet_data(1)
-    day7 = read_sheet_data(7)
-    day30 = read_sheet_data(30)
+    # Keine Google Sheets-Anbindung mehr (deaktiviert)
+    day1 = day7 = day30 = None
 
     total_pnl = total_current - total_start
-    total_pnl_percent = (total_pnl / total_start) * 100
+    total_pnl_percent = (total_pnl / total_start) * 100 if total_start != 0 else 0
 
     # Chart erstellen
-    labels = [r["name"] for r in results]
-    values = [r["pnl_percent"] for r in results]
-    chart_path = "static/pnl_chart.png"
+    chart_path = "static/chart.png"
     os.makedirs("static", exist_ok=True)
-    fig, ax = plt.subplots()
-    bars = ax.bar(labels, values, color=["green" if v > 0 else "red" for v in values])
-    ax.set_ylabel("PNL %")
-    plt.xticks(rotation=45)
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() * 0.98, f"{val:.2f}%", ha='center', va='bottom', fontsize=8)
-    fig.tight_layout()
-    plt.savefig(chart_path)
-    plt.close()
+    if results:
+        labels = [r["name"] for r in results]
+        values = [r["pnl_percent"] for r in results]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        bars = ax.bar(labels, values, color=["green" if v > 0 else "red" for v in values])
+        ax.set_ylabel("PNL %")
+        plt.xticks(rotation=45)
+        for bar, val in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() * 0.98, 
+                   f"{val:+.2f}%", ha='center', va='bottom', fontsize=8)
+        fig.tight_layout()
+        plt.savefig(chart_path, bbox_inches='tight', dpi=100)
+        plt.close()
 
     return render_template("dashboard.html",
-        accounts=results,
-        total=total_current,
+        subaccounts=results,
+        total_balance=f"{total_current:.2f}",
         total_pnl=total_pnl,
+        total_pnl_str=f"{total_pnl:+.2f}",
         total_pnl_percent=total_pnl_percent,
-        day1=day1,
-        day7=day7,
-        day30=day30,
+        total_pnl_percent_str=f"{total_pnl_percent:+.2f}%",
+        pnl_1d=day1 if day1 else 0,
+        pnl_1d_str=f"{day1:+.2f}" if day1 else "N/A",
+        pnl_1d_percent=0,
+        pnl_7d=day7 if day7 else 0,
+        pnl_7d_str=f"{day7:+.2f}" if day7 else "N/A",
+        pnl_7d_percent=0,
+        pnl_30d=day30 if day30 else 0,
+        pnl_30d_str=f"{day30:+.2f}" if day30 else "N/A",
+        pnl_30d_percent=0,
         chart_path=chart_path
     )
 
@@ -180,7 +174,5 @@ def logout():
     return redirect(url_for("login"))
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
-
