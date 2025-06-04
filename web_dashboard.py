@@ -14,7 +14,7 @@ app.secret_key = 'sicherer_schlüssel'
 
 # Benutzer
 users = {
-    "admin": generate_password_hash("dein_passwort")
+    "husky125": generate_password_hash("Ideal250!")
 }
 
 # Google Sheets Setup
