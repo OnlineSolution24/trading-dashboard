@@ -10,11 +10,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev_key_'+os.urandom(12).hex())
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_'+os.urandom(12).hex())
 
-# Konfiguration
+# Debug-Modus
 DEBUG = os.environ.get('DEBUG', 'false').lower() == 'true'
-API_TIMEOUT = 15
 
 # Benutzerdaten
 users = {"husky125": generate_password_hash("Ideal250!")}
@@ -34,8 +33,27 @@ starting_balances = {
 
 subaccounts = [
     {"name": "Incubatorzone", "exchange": "bybit", "key_env": "BYBIT_INCUBATORZONE_API_KEY", "secret_env": "BYBIT_INCUBATORZONE_API_SECRET"},
-    # ... (alle anderen Konten)
+    {"name": "Memestrategies", "exchange": "bybit", "key_env": "BYBIT_MEMESTRATEGIES_API_KEY", "secret_env": "BYBIT_MEMESTRATEGIES_API_SECRET"},
+    # ... (alle anderen Konten analog)
 ]
+
+def get_bybit_balance(api_key, api_secret):
+    try:
+        session = HTTP(api_key=api_key, api_secret=api_secret)
+        balance = session.get_wallet_balance(accountType="UNIFIED")
+        return float(balance['result']['list'][0]['coin'][0]['availableToWithdraw'])
+    except Exception as e:
+        print(f"Bybit Fehler: {str(e)}")
+        return 0.0
+
+def get_blofin_balance(api_key, api_secret, passphrase):
+    try:
+        client = BloFinClient(api_key, api_secret, passphrase)
+        balance = client.account.get_balance(account_type="futures")
+        return float(balance['data'][0]['available'])
+    except Exception as e:
+        print(f"Blofin Fehler: {str(e)}")
+        return 0.0
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -45,7 +63,7 @@ def login():
         if username in users and check_password_hash(users[username], password):
             session['user'] = username
             return redirect(url_for('dashboard'))
-        return render_template('login.html', error="Ungültige Anmeldedaten")
+        return render_template('login.html', error="Falsche Anmeldedaten")
     return render_template('login.html')
 
 @app.route('/dashboard')
@@ -53,46 +71,47 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    account_data = []
-    total_current = 0.0
+    accounts = []
+    total = 0.0
     
-    # API-Abfragen (wie zuvor)
-    for account in subaccounts:
-        # ... (existierende Logik)
+    for acc in subaccounts:
+        creds = {
+            'key': os.environ.get(acc['key_env']),
+            'secret': os.environ.get(acc['secret_env']),
+            'passphrase': os.environ.get(acc.get('passphrase_env', ''))
+        }
+        
+        if acc['exchange'] == 'bybit':
+            balance = get_bybit_balance(creds['key'], creds['secret'])
+        else:
+            balance = get_blofin_balance(creds['key'], creds['secret'], creds['passphrase'])
+        
+        start = starting_balances.get(acc['name'], 0.0)
+        pnl = balance - start
+        pnl_percent = (pnl / start) * 100 if start != 0 else 0
+        
+        accounts.append({
+            'name': acc['name'],
+            'balance': f"{balance:.2f}",
+            'pnl': f"{pnl:.2f}",
+            'pnl_percent': f"{pnl_percent:.2f}",
+            'status': 'OK' if balance > 0 else 'Error'
+        })
+        total += balance
 
-    # Zeitraum-Performance (Dummy-Werte)
+    # Zeitraum-Daten (Dummy-Werte)
     time_data = {
-        'pnl_1d': 0,
-        'pnl_1d_str': "N/A",
-        'pnl_1d_percent': 0,
-        'pnl_7d': 0,
-        'pnl_7d_str': "N/A",
-        'pnl_7d_percent': 0,
-        'pnl_30d': 0,
-        'pnl_30d_str': "N/A",
-        'pnl_30d_percent': 0,
+        'pnl_1d': 0, 'pnl_1d_str': "N/A", 'pnl_1d_percent': 0,
+        'pnl_7d': 0, 'pnl_7d_str': "N/A", 'pnl_7d_percent': 0,
+        'pnl_30d': 0, 'pnl_30d_str': "N/A", 'pnl_30d_percent': 0
     }
 
-    # Gesamtwerte
-    total_start = sum(starting_balances.values())
-    total_pnl = total_current - total_start
-    total_pnl_percent = (total_pnl / total_start) * 100 if total_start != 0 else 0
-
-    # Chart generierung
-    chart_path = "static/chart.png"
-    if account_data:
-        # ... (existierende Chart-Logik)
-
     return render_template(
-        "dashboard.html",
-        subaccounts=account_data,
-        total_balance=f"{total_current:.2f}",
-        total_pnl=total_pnl,
-        total_pnl_str=f"{total_pnl:+.2f}",
-        total_pnl_percent=total_pnl_percent,
-        total_pnl_percent_str=f"{total_pnl_percent:+.2f}%",
-        **time_data,  # Alle Zeitraum-Variablen
-        chart_path=chart_path
+        'dashboard.html',
+        accounts=accounts,
+        total_balance=f"{total:.2f}",
+        total_pnl=f"{(total - sum(starting_balances.values())):.2f}",
+        **time_data
     )
 
 @app.route('/logout')
@@ -101,5 +120,5 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=DEBUG)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=DEBUG)
