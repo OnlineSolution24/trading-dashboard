@@ -1,25 +1,81 @@
+import os
+import json
+import gspread
+import matplotlib
+matplotlib.use('Agg')  # Für headless Deployment (Render.com)
+import matplotlib.pyplot as plt
+from datetime import datetime
+from oauth2client.service_account import ServiceAccountCredentials
 from flask import Flask, render_template, request, redirect, session, url_for
 from pybit.unified_trading import HTTP
 from blofin import BloFinClient
 from werkzeug.security import check_password_hash, generate_password_hash
-from datetime import datetime
-import os
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import io
-import base64
 
 app = Flask(__name__)
-app.secret_key = 'geheim123'
+app.secret_key = 'supergeheim'
 
-# Login-Daten
+# 🔐 Benutzerverwaltung
 users = {
-    "admin": generate_password_hash("passwort123")
+    "admin": generate_password_hash("deinpasswort123")
 }
 
-# Startkapital zur Berechnung
-initial_balances = {
+# 📊 API-Konfiguration
+subaccounts = [
+    {
+        "name": "Incubatorzone",
+        "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"),
+        "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")
+    },
+    {
+        "name": "Memestrategies",
+        "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "Ethapestrategies",
+        "key": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "Altsstrategies",
+        "key": os.environ.get("BYBIT_ALTSSTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_ALTSSTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "Solstrategies",
+        "key": os.environ.get("BYBIT_SOLSTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_SOLSTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "Btcstrategies",
+        "key": os.environ.get("BYBIT_BTCSTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_BTCSTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "Corestrategies",
+        "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"),
+        "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET")
+    },
+    {
+        "name": "2k->10k Projekt",
+        "key": os.environ.get("BYBIT_2K_API_KEY"),
+        "secret": os.environ.get("BYBIT_2K_API_SECRET")
+    },
+    {
+        "name": "1k->5k Projekt",
+        "key": os.environ.get("BYBIT_1K_API_KEY"),
+        "secret": os.environ.get("BYBIT_1K_API_SECRET")
+    },
+    {
+        "name": "Blofin",
+        "key": os.environ.get("BLOFIN_API_KEY"),
+        "secret": os.environ.get("BLOFIN_API_SECRET"),
+        "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")
+    }
+]
+
+# 💵 Startkapital zur Berechnung von PnL
+startkapital = {
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
     "Ethapestrategies": 1200.00,
@@ -31,20 +87,6 @@ initial_balances = {
     "1k->5k Projekt": 1000.00,
     "Blofin": 1492.00
 }
-
-# Account-Definitionen
-subaccounts = [
-    {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
-    {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
-    {"name": "Ethapestrategies", "key": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_SECRET")},
-    {"name": "Altsstrategies", "key": os.environ.get("BYBIT_ALTSSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ALTSSTRATEGIES_API_SECRET")},
-    {"name": "Solstrategies", "key": os.environ.get("BYBIT_SOLSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_SOLSTRATEGIES_API_SECRET")},
-    {"name": "Btcstrategies", "key": os.environ.get("BYBIT_BTCSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_BTCSTRATEGIES_API_SECRET")},
-    {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET")},
-    {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET")},
-    {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET")},
-    {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
-]
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -66,103 +108,87 @@ def dashboard():
         return redirect(url_for('login'))
 
     account_data = []
-    chart_labels = []
-    chart_percentages = []
-    chart_values = []
-    open_positions_data = []
-
-    total_current = 0
-    total_start = sum(initial_balances.values())
+    total_balance = 0.0
+    total_start = sum(startkapital.values())
+    failed_apis = []
+    positions_all = []
 
     for acc in subaccounts:
         name = acc["name"]
-        start_balance = initial_balances.get(name, 0)
-        current_balance = 0
-        pnl_percent = 0
-        pnl_value = 0
-        error = None
-        positions = []
-
         try:
-            if name == "Blofin":
-                client = BloFinClient(acc["key"], acc["secret"], acc["passphrase"])
-                balance = client.account.get_balance(account_type="futures")["data"]
-                for item in balance:
-                    if item["currency"] == "USDT":
-                        current_balance = float(item["available"])
-                        break
+            if "Blofin" in name:
+                client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
+                balances = client.get_account_summary()
+                usdt = float(balances["data"]["totalEquity"])
+                status = "✅"
+                positions = []
             else:
-                session_bybit = HTTP(acc["key"], acc["secret"])
+                session_bybit = HTTP(api_key=acc["key"], api_secret=acc["secret"])
                 wallet_data = session_bybit.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
-                for item in wallet_data:
-                    for coin in item["coin"]:
+                usdt = 0.0
+                for acc_data in wallet_data:
+                    for coin in acc_data["coin"]:
                         if coin["coin"] == "USDT":
-                            current_balance = float(coin["equity"])
+                            usdt += float(coin["walletBalance"])
+                status = "✅"
+                positions = session_bybit.get_positions(category="linear")["result"]["list"]
+                positions_all.extend([(name, p) for p in positions if float(p.get("size", 0)) > 0])
+        except Exception:
+            usdt = 0.0
+            status = "❌"
+            positions = []
+            failed_apis.append(name)
 
-                pos_data = session_bybit.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
-                positions = [
-                    f"{p['symbol']}: Größe {p['size']}, PnL {float(p['unrealisedPnl']):+.2f} USDT"
-                    for p in pos_data if float(p["size"]) != 0
-                ]
-
-            pnl_value = current_balance - start_balance
-            pnl_percent = (pnl_value / start_balance) * 100 if start_balance != 0 else 0
-
-        except Exception as e:
-            error = str(e)
-
-        total_current += current_balance
-        chart_labels.append(name)
-        chart_percentages.append(round(pnl_percent, 2))
-        chart_values.append(round(pnl_value, 2))
+        pnl_value = usdt - startkapital.get(name, 0)
+        pnl_percent = (pnl_value / startkapital.get(name, 1)) * 100
 
         account_data.append({
             "name": name,
-            "balance": current_balance,
-            "start": start_balance,
+            "status": status,
+            "balance": usdt,
+            "start": startkapital.get(name, 0),
             "pnl": pnl_value,
             "pnl_percent": pnl_percent,
-            "status": "✅" if not error else f"❌ {error}",
             "positions": positions
         })
 
-    total_pnl = total_current - total_start
-    total_pnl_percent = (total_pnl / total_start) * 100
+        total_balance += usdt
 
-    # === CHART ===
+    total_pnl = total_balance - total_start
+    total_pnl_percent = (total_pnl / total_start) * 100 if total_start > 0 else 0
+
+    # 📊 Chart für Übersicht
+    chart_labels = [a["name"] for a in account_data]
+    chart_values = [a["pnl_percent"] for a in account_data]
+
     fig, ax = plt.subplots(figsize=(12, 6))
-    bars = ax.bar(chart_labels, chart_percentages, color=['green' if p >= 0 else 'red' for p in chart_percentages])
+    bars = ax.bar(chart_labels, chart_values, color=['green' if val >= 0 else 'red' for val in chart_values])
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.set_ylabel("PNL (%)")
+    ax.set_title("Strategie Performance")
     for i, bar in enumerate(bars):
-        value = f"{chart_percentages[i]:+.1f}%\n(${chart_values[i]:+.2f})"
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 1.01, value, ha='center', va='bottom', fontsize=9)
-    ax.axhline(0, color='black')
-    ax.set_title("PNL Übersicht pro Subaccount")
-    ax.set_ylabel("Veränderung in %")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    chart_img = io.BytesIO()
-    plt.savefig(chart_img, format='png')
-    chart_img.seek(0)
-    chart_data = base64.b64encode(chart_img.getvalue()).decode()
+        value = chart_values[i]
+        raw = account_data[i]["pnl"]
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + (1 if value >= 0 else -3),
+                f"{value:+.1f}%\n(${raw:+.2f})",
+                ha='center', va='bottom' if value >= 0 else 'top', fontsize=8)
+    fig.tight_layout()
+    chart_path = "static/chart.png"
+    fig.savefig(chart_path)
+    plt.close(fig)
 
     return render_template("dashboard.html",
                            accounts=account_data,
-                           total_current=total_current,
                            total_start=total_start,
+                           total_balance=total_balance,
                            total_pnl=total_pnl,
                            total_pnl_percent=total_pnl_percent,
-                           chart_data=chart_data,
-                           accounts=subaccount_data,
-                           now=datetime.utcnow
-    )
+                           chart_path=chart_path,
+                           positions_all=positions_all,
+                           now=datetime.utcnow)
 
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
