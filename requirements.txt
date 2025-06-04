@@ -4,3 +4,4 @@ blofin
 gspread
 oauth2client
 matplotlib
+flask_caching
