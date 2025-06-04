@@ -5,108 +5,75 @@
     <title>Trading Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .gain { color: green; font-weight: bold; }
-        .loss { color: red; font-weight: bold; }
-        .api-ok { color: #28a745; }
-        .api-fail { color: #dc3545; }
-        body { padding: 2rem; background-color: #f9f9f9; }
+        body { padding: 20px; }
+        .card { margin-bottom: 15px; }
+        .positive { color: green; }
+        .negative { color: red; }
+        .api-status { float: right; }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Kopfbereich -->
-        <div class="d-flex justify-content-between mb-4">
-            <h1>📊 Trading Dashboard</h1>
-            <a href="/logout" class="btn btn-outline-danger">Abmelden</a>
+        <h1 class="my-4">Trading Dashboard</h1>
+        
+        <!-- Gesamtübersicht -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Gesamtguthaben</div>
+                    <div class="card-body">
+                        <h3>${{ total_balance }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Gesamt-PnL</div>
+                    <div class="card-body">
+                        <h3 class="{{ 'positive' if total_pnl|float >= 0 else 'negative' }}">
+                            ${{ total_pnl }}
+                        </h3>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Performance-Karten -->
-        <div class="row mb-4">
-            <!-- Gesamtwert -->
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-header">Aktueller Gesamtwert</div>
+        <!-- Zeiträume -->
+        <div class="row mt-3">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">1 Tag</div>
                     <div class="card-body">
-                        <h4>${{ total_balance }}</h4>
+                        {{ pnl_1d_str }} ({{ pnl_1d_percent }}%)
                     </div>
                 </div>
             </div>
-            
-            <!-- Gesamt PnL -->
-            <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-header">Gesamt PnL</div>
-                    <div class="card-body">
-                        <p class="{{ 'gain' if total_pnl >= 0 else 'loss' }}">
-                            {{ total_pnl_str }} ({{ total_pnl_percent_str }})
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Zeiträume (mit defined-Prüfung) -->
-            {% for period in ['1d', '7d', '30d'] %}
-            <div class="col-md-2">
-                <div class="card text-center">
-                    <div class="card-header">{{ '1-Tag' if period == '1d' else period|replace('d', '')+'-Tage' }}</div>
-                    <div class="card-body">
-                        <p class="{{ 'gain' if vars.get('pnl_' + period, 0) >= 0 else 'loss' }}">
-                            {{ vars.get('pnl_' + period + '_str', 'N/A') }} 
-                            ({{ vars.get('pnl_' + period + '_percent', 0) }}%)
-                        </p>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
+            <!-- Analog für 7d und 30d -->
         </div>
 
-        <!-- Konten-Übersicht -->
-        {% for acc in subaccounts %}
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between">
-                <span>{{ acc.name }}</span>
-                <span class="{{ 'api-ok' if acc.api_ok else 'api-fail' }}">
-                    {{ "🟢 API OK" if acc.api_ok else "🔴 API FEHLER" }}
+        <!-- Konten -->
+        {% for acc in accounts %}
+        <div class="card mt-3">
+            <div class="card-header">
+                {{ acc.name }}
+                <span class="api-status {{ 'positive' if acc.status == 'OK' else 'negative' }}">
+                    {{ acc.status }}
                 </span>
             </div>
             <div class="card-body">
-                <p><strong>Guthaben:</strong> ${{ acc.balance }}</p>
-                <p><strong>Performance:</strong>
-                    <span class="{{ 'gain' if acc.pnl >= 0 else 'loss' }}">
-                        {{ acc.pnl|round(2) }} ({{ acc.pnl_percent|round(2) }}%)
+                <p>Guthaben: ${{ acc.balance }}</p>
+                <p>PnL: 
+                    <span class="{{ 'positive' if acc.pnl|float >= 0 else 'negative' }}">
+                        ${{ acc.pnl }} ({{ acc.pnl_percent }}%)
                     </span>
                 </p>
-                
-                {% if acc.positions %}
-                <h6>Offene Positionen:</h6>
-                <ul>
-                    {% for pos in acc.positions %}
-                    <li>
-                        {{ pos.symbol }} – {{ pos.size|round(4) }}
-                        <span class="{{ 'gain' if pos.pnl >= 0 else 'loss' }}">
-                            (PnL: {{ pos.pnl|round(2) }})
-                        </span>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
-
-        <!-- Chart -->
-        {% if chart_path %}
-        <div class="card mt-4">
-            <div class="card-header">Performance</div>
-            <div class="card-body">
-                <img src="{{ chart_path }}" class="img-fluid">
-            </div>
-        </div>
-        {% endif %}
     </div>
 
-    <!-- Auto-Refresh -->
     <script>
+        // Auto-Refresh alle 2 Minuten
         setTimeout(() => location.reload(), 120000);
     </script>
 </body>
