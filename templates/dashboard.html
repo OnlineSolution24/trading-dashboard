@@ -75,7 +75,6 @@
             text-align: center;
             margin: 40px 0;
         }
-
     </style>
 </head>
 <body>
@@ -167,7 +166,7 @@
     </div>
 
     <div class="timestamp">
-        Stand: {{ timestamp }}
+        Stand: {{ now.strftime('%d.%m.%Y %H:%M') }} MEZ
     </div>
 </body>
 </html>
