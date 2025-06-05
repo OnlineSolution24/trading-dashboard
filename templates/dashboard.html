@@ -4,34 +4,97 @@
     <meta charset="UTF-8">
     <title>Trading Dashboard</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
-        h1 { color: #333; }
-        .summary { display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .box {
-            border: 1px solid #ccc; padding: 15px; background: #fff; border-radius: 8px;
-            width: 30%; text-align: center; box-shadow: 0 0 5px rgba(0,0,0,0.05);
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f9f9f9;
         }
+
+        h1 {
+            color: #333;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .box {
+            border: 1px solid #ccc;
+            padding: 15px;
+            background: #fff;
+            border-radius: 8px;
+            width: 30%;
+            text-align: center;
+            box-shadow: 0 0 5px rgba(0,0,0,0.05);
+        }
+
         .gain { color: green; }
         .loss { color: red; }
-        .account-table, .positions table {
-            width: 100%; border-collapse: collapse; margin-top: 30px;
+
+        .account-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
         }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #f2f2f2; }
-        .positions { margin-top: 40px; }
-        .timestamp { text-align: right; font-size: 0.9em; color: #777; margin-top: 10px; }
-        .chart { text-align: center; margin: 40px 0; }
+
+        .account-table th, .account-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .account-table th {
+            background-color: #f2f2f2;
+        }
+
+        .positions {
+            margin-top: 40px;
+        }
+
+        .positions table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .positions th, .positions td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
+
+        .timestamp {
+            text-align: right;
+            font-size: 0.9em;
+            color: #777;
+            margin-top: 10px;
+        }
+
+        .chart {
+            text-align: center;
+            margin: 40px 0;
+        }
+
     </style>
 </head>
 <body>
     <h1>Trading Dashboard</h1>
 
     <div class="summary">
-        <div class="box"><h3>Startkapital</h3><p>${{ "%.2f"|format(total_start) }}</p></div>
-        <div class="box"><h3>Aktueller Gesamtwert</h3><p>${{ "%.2f"|format(total_balance) }}</p></div>
-        <div class="box"><h3>Gesamt PnL</h3>
+        <div class="box">
+            <h3>Startkapital</h3>
+            <p>${{ "%.2f"|format(total_start) }}</p>
+        </div>
+        <div class="box">
+            <h3>Aktueller Gesamtwert</h3>
+            <p>${{ "%.2f"|format(total_balance) }}</p>
+        </div>
+        <div class="box">
+            <h3>Gesamt PnL</h3>
             <p class="{{ 'gain' if total_pnl >= 0 else 'loss' }}">
-                {{ "%.2f"|format(total_pnl) }} USD<br>({{ "%.2f"|format(total_pnl_percent) }}%)
+                {{ "%.2f"|format(total_pnl) }} USD<br>
+                ({{ "%.2f"|format(total_pnl_percent) }}%)
             </p>
         </div>
     </div>
@@ -41,18 +104,31 @@
     </div>
 
     <table class="account-table">
-        <thead><tr><th>Strategie</th><th>Status</th><th>Start</th><th>Aktueller Wert</th><th>PnL (USD)</th><th>PnL (%)</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Strategie</th>
+                <th>Status</th>
+                <th>Start</th>
+                <th>Aktueller Wert</th>
+                <th>PnL (USD)</th>
+                <th>PnL (%)</th>
+            </tr>
+        </thead>
         <tbody>
-        {% for acc in accounts %}
-        <tr>
-            <td>{{ acc.name }}</td>
-            <td>{{ acc.status }}</td>
-            <td>${{ "%.2f"|format(acc.start) }}</td>
-            <td>${{ "%.2f"|format(acc.balance) }}</td>
-            <td class="{{ 'gain' if acc.pnl >= 0 else 'loss' }}">{{ "%.2f"|format(acc.pnl) }}</td>
-            <td class="{{ 'gain' if acc.pnl_percent >= 0 else 'loss' }}">{{ "%.2f"|format(acc.pnl_percent) }}%</td>
-        </tr>
-        {% endfor %}
+            {% for acc in accounts %}
+            <tr>
+                <td>{{ acc.name }}</td>
+                <td>{{ acc.status }}</td>
+                <td>${{ "%.2f"|format(acc.start) }}</td>
+                <td>${{ "%.2f"|format(acc.balance) }}</td>
+                <td class="{{ 'gain' if acc.pnl >= 0 else 'loss' }}">
+                    {{ "%.2f"|format(acc.pnl) }}
+                </td>
+                <td class="{{ 'gain' if acc.pnl_percent >= 0 else 'loss' }}">
+                    {{ "%.2f"|format(acc.pnl_percent) }}%
+                </td>
+            </tr>
+            {% endfor %}
         </tbody>
     </table>
 
@@ -60,28 +136,38 @@
         <h2>Offene Positionen</h2>
         {% if positions_all %}
         <table>
-            <thead><tr><th>Strategie</th><th>Symbol</th><th>Größe</th><th>Eintrittspreis</th><th>Marktpreis</th><th>Unreal. PnL</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Strategie</th>
+                    <th>Symbol</th>
+                    <th>Größe</th>
+                    <th>Eintrittspreis</th>
+                    <th>Marktpreis</th>
+                    <th>Unreal. PnL</th>
+                </tr>
+            </thead>
             <tbody>
-            {% for name, pos in positions_all %}
-            <tr>
-                <td>{{ name }}</td>
-                <td>{{ pos.symbol }}</td>
-                <td>{{ pos.size }}</td>
-                <td>{{ pos.entryPrice }}</td>
-                <td>{{ pos.markPrice }}</td>
-                <td class="{{ 'gain' if pos.unrealisedPnl|float >= 0 else 'loss' }}">{{ pos.unrealisedPnl }}</td>
-            </tr>
-            {% endfor %}
+                {% for name, pos in positions_all %}
+                <tr>
+                    <td>{{ name }}</td>
+                    <td>{{ pos.symbol }}</td>
+                    <td>{{ pos.size }}</td>
+                    <td>{{ pos.entryPrice }}</td>
+                    <td>{{ pos.markPrice }}</td>
+                    <td class="{{ 'gain' if pos.unrealisedPnl|float >= 0 else 'loss' }}">
+                        {{ pos.unrealisedPnl }}
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p>Keine offenen Positionen gefunden.</p>
+            <p>Keine offenen Positionen gefunden.</p>
         {% endif %}
     </div>
 
     <div class="timestamp">
         Stand: {{ now.strftime('%d.%m.%Y %H:%M') }}
-
     </div>
 </body>
 </html>
