@@ -74,7 +74,7 @@ def dashboard():
                 client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
                 balances = client.get_account_summary()
                 usdt = float(balances["data"]["totalEquity"])
-                positions = []  # optional: holen wenn API es zulässt
+                positions = []
             else:
                 client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
                 wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
@@ -125,16 +125,19 @@ def dashboard():
     plt.close(fig)
 
     return render_template("dashboard.html",
-                       accounts=account_data,
-                       total_start=total_start,
-                       total_balance=total_balance,
-                       total_pnl=total_pnl,
-                       total_pnl_percent=total_pnl_percent,
-                       chart_path=chart_path,
-                       positions_all=positions_all,
-                       now=datetime.utcnow())  # <-- wichtig: mit () aufrufen
+                           accounts=account_data,
+                           total_start=total_start,
+                           total_balance=total_balance,
+                           total_pnl=total_pnl,
+                           total_pnl_percent=total_pnl_percent,
+                           chart_path=chart_path,
+                           positions_all=positions_all,
+                           now=datetime.utcnow())
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
