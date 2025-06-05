@@ -77,7 +77,7 @@ def dashboard():
                 usdt = float(balances["data"]["totalEquity"])
                 positions = []
             else:
-                client = HTTP(api_key=acc["key"], api_secret=acc["secret"], recv_window=15000)
+                client = HTTP(api_key=acc["key"], api_secret=acc["secret"], recv_window=30000, adjust=True)
                 wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
                 usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
                 pos = client.get_positions(category="linear")["result"]["list"]
