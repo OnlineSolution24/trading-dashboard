@@ -3,6 +3,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
@@ -11,12 +12,12 @@ from blofin import BloFinClient
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
 
-# 🔐 Benutzerverwaltung
+# Benutzerverwaltung
 users = {
     "admin": generate_password_hash("deinpasswort123")
 }
 
-# 🔑 API-Zugangsdaten (Umgebungsvariablen vorausgesetzt)
+# Subaccount-APIs
 subaccounts = [
     {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
     {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
@@ -30,7 +31,7 @@ subaccounts = [
     {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
 ]
 
-# 📊 Startkapital
+# Startkapital
 startkapital = {
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
@@ -56,6 +57,7 @@ def login():
             return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
 
+
 @app.route('/dashboard')
 def dashboard():
     if 'user' not in session:
@@ -74,7 +76,7 @@ def dashboard():
                 client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
                 balances = client.get_account_summary()
                 usdt = float(balances["data"]["totalEquity"])
-                positions = []
+                positions = []  # optional: erweitern wenn nötig
             else:
                 client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
                 wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
@@ -109,7 +111,7 @@ def dashboard():
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
 
-    # 🎯 Chart
+    # 📈 Chart
     labels = [a["name"] for a in account_data]
     values = [a["pnl_percent"] for a in account_data]
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -124,20 +126,25 @@ def dashboard():
     fig.savefig(chart_path)
     plt.close(fig)
 
+    # 🇩🇪 Zeitstempel (MEZ)
+    aktuelle_zeit = datetime.now(ZoneInfo("Europe/Berlin"))
+
     return render_template("dashboard.html",
-                       accounts=account_data,
-                       total_start=total_start,
-                       total_balance=total_balance,
-                       total_pnl=total_pnl,
-                       total_pnl_percent=total_pnl_percent,
-                       chart_path=chart_path,
-                       positions_all=positions_all,
-                       timestamp=datetime.utcnow().strftime('%d.%m.%Y %H:%M'))
+                           accounts=account_data,
+                           total_start=total_start,
+                           total_balance=total_balance,
+                           total_pnl=total_pnl,
+                           total_pnl_percent=total_pnl_percent,
+                           chart_path=chart_path,
+                           positions_all=positions_all,
+                           now=aktuelle_zeit)
+
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+
+if __name__ == "__main__":
+    app.run(debug=True)
