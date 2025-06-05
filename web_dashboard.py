@@ -2,25 +2,22 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from datetime import datetime
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
 from blofin import BloFinClient
+from datetime import datetime
 import pytz
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
 
-# 🔐 Benutzer
+# Benutzerverwaltung
 users = {
     "admin": generate_password_hash("deinpasswort123")
 }
 
-# 🌍 Zeitzone definieren
-MEZ = pytz.timezone('Europe/Berlin')
-
-# 🔑 API-Zugang
+# API Zugangsdaten aus Umgebungsvariablen
 subaccounts = [
     {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
     {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
@@ -34,7 +31,7 @@ subaccounts = [
     {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
 ]
 
-# 📊 Startkapital
+# Startkapital
 startkapital = {
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
@@ -59,6 +56,7 @@ def login():
         else:
             return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -88,7 +86,7 @@ def dashboard():
                 for p in positions:
                     positions_all.append((name, p))
             status = "✅"
-        except Exception as e:
+        except Exception:
             usdt = 0.0
             positions = []
             status = "❌"
@@ -112,7 +110,7 @@ def dashboard():
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
 
-    # 📈 Chart
+    # Chart generieren
     labels = [a["name"] for a in account_data]
     values = [a["pnl_percent"] for a in account_data]
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -127,7 +125,8 @@ def dashboard():
     fig.savefig(chart_path)
     plt.close(fig)
 
-    now_local = datetime.now(MEZ)
+    # MEZ Zeit (Europe/Berlin)
+    berlin_time = datetime.now(pytz.timezone("Europe/Berlin")).strftime('%d.%m.%Y %H:%M')
 
     return render_template("dashboard.html",
                            accounts=account_data,
@@ -137,9 +136,15 @@ def dashboard():
                            total_pnl_percent=total_pnl_percent,
                            chart_path=chart_path,
                            positions_all=positions_all,
-                           now=now_local)
+                           last_updated=berlin_time)
+
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
