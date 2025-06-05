@@ -125,14 +125,14 @@ def dashboard():
     plt.close(fig)
 
     return render_template("dashboard.html",
-                           accounts=account_data,
-                           total_start=total_start,
-                           total_balance=total_balance,
-                           total_pnl=total_pnl,
-                           total_pnl_percent=total_pnl_percent,
-                           chart_path=chart_path,
-                           positions_all=positions_all,
-                           now=datetime.utcnow())
+                       accounts=account_data,
+                       total_start=total_start,
+                       total_balance=total_balance,
+                       total_pnl=total_pnl,
+                       total_pnl_percent=total_pnl_percent,
+                       chart_path=chart_path,
+                       positions_all=positions_all,
+                       now=datetime.utcnow())  # <-- wichtig: mit () aufrufen
 
 @app.route('/logout')
 def logout():
