@@ -75,9 +75,10 @@ def dashboard():
         try:
             if name == "Blofin":
                 client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
-                balances = client.get_account_summary()
+                balances = client.get_account_balance()
                 usdt = float(balances["data"]["totalEquity"])
-                positions = []
+                positions = []  # Optional: Positionen abrufen, wenn verfügbar
+
             else:
                 client = HTTP(api_key=acc["key"], api_secret=acc["secret"], recv_window=15000)
                 wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
