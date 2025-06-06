@@ -2,6 +2,8 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import logging
+logging.basicConfig(level=logging.DEBUG)
 from datetime import datetime
 import pytz
 
@@ -110,11 +112,12 @@ def dashboard():
             status = "✅"
 
         except Exception as e:
-            print(f"[❌] Fehler bei {name}: {str(e)}")
+            print(f"[ERROR] API-Verbindung zu {name} fehlgeschlagen: {e}")
             usdt = 0.0
             positions = []
             status = "❌"
             failed_apis.append(name)
+
 
         pnl = usdt - startkapital.get(name, 0)
         pnl_percent = (pnl / startkapital.get(name, 1)) * 100
