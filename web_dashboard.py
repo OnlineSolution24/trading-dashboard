@@ -82,7 +82,7 @@ def dashboard():
                 client = HTTP(api_key=acc["key"], api_secret=acc["secret"], recv_window=15000)
                 wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
                 usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
-                pos = client.get_positions(category="linear")["result"]["list"]
+                pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
                 positions = [p for p in pos if float(p.get("size", 0)) > 0]
                 for p in positions:
                     positions_all.append((name, p))
