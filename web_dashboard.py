@@ -1,21 +1,25 @@
 import os
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from datetime import datetime
 import pytz
+import logging
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
 from blofin import BloFinClient
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
+# 🌐 Flask App initialisieren
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
 
+# 🧑‍💻 Benutzer
 users = {
     "admin": generate_password_hash("deinpasswort123")
 }
 
+# 🪙 Subaccounts (API-Zugang)
 subaccounts = [
     {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
     {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
@@ -29,6 +33,7 @@ subaccounts = [
     {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
 ]
 
+# 📊 Startkapital
 startkapital = {
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
@@ -42,6 +47,7 @@ startkapital = {
     "Blofin": 1492.00
 }
 
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -50,9 +56,9 @@ def login():
         if user in users and check_password_hash(users[user], pw):
             session['user'] = user
             return redirect(url_for('dashboard'))
-        else:
-            return render_template('login.html', error="Login fehlgeschlagen.")
+        return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -66,16 +72,10 @@ def dashboard():
 
     for acc in subaccounts:
         name = acc["name"]
-        print(f"[INFO] API-Verbindung zu: {name}")
-        if not acc["key"] or not acc["secret"]:
-            print(f"[WARN] API Key oder Secret fehlen für: {name}")
-            continue
-
         try:
             if name == "Blofin":
                 client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
                 balances = client.get_account_summary()
-                print(f"[DEBUG] Blofin Antwort: {balances}")
                 usdt = float(balances["data"]["totalEquity"])
                 positions = []
             else:
@@ -86,16 +86,15 @@ def dashboard():
                 positions = [p for p in pos if float(p.get("size", 0)) > 0]
                 for p in positions:
                     positions_all.append((name, p))
-            pnl = usdt - startkapital.get(name, 0)
-            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
             status = "✅"
         except Exception as e:
-            print(f"[ERROR] Fehler bei {name}: {e}")
             usdt = 0.0
-            pnl = 0.0
-            pnl_percent = 0.0
-            status = "❌"
             positions = []
+            status = "❌"
+            logging.error(f"Fehler bei {name}: {str(e)}")
+
+        pnl = usdt - startkapital.get(name, 0)
+        pnl_percent = (pnl / startkapital.get(name, 1)) * 100
 
         account_data.append({
             "name": name,
@@ -112,14 +111,14 @@ def dashboard():
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
 
+    # 📈 Chart
     labels = [a["name"] for a in account_data]
     values = [a["pnl_percent"] for a in account_data]
     fig, ax = plt.subplots(figsize=(12, 6))
     bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
     ax.axhline(0, color='black')
     for i, bar in enumerate(bars):
-        ax.text(bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + (1 if values[i] >= 0 else -3),
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + (1 if values[i] >= 0 else -3),
                 f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
                 ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
     fig.tight_layout()
@@ -127,7 +126,7 @@ def dashboard():
     fig.savefig(chart_path)
     plt.close(fig)
 
-    # Aktuelle MEZ Zeit
+    # 🕓 Aktuelle Zeit in MEZ (Berlin)
     berlin = pytz.timezone('Europe/Berlin')
     jetzt = datetime.now(berlin).strftime('%d.%m.%Y %H:%M')
 
@@ -141,7 +140,13 @@ def dashboard():
                            positions_all=positions_all,
                            timestamp=jetzt)
 
+
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+
+# 🚀 App starten
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000, debug=True)
