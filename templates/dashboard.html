@@ -2,162 +2,174 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Trading Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             padding: 20px;
-            background-color: #f4f6f9;
         }
-
-        .gain { color: green; }
-        .loss { color: red; }
-
-        .timestamp {
-            position: fixed;
-            bottom: 10px;
-            right: 20px;
-            font-size: 0.9em;
-            color: #666;
+        .kpi-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
         }
-
-        .card h5 {
-            margin-bottom: 0.4rem;
+        .kpi-value {
+            font-size: 1.5rem;
+            font-weight: bold;
         }
-
-        .card p {
-            margin: 0;
+        .kpi-row {
+            margin-bottom: 30px;
         }
-
-        .chart img {
-            max-width: 100%;
-            height: auto;
+        .pnl-green {
+            color: green;
         }
-
+        .pnl-red {
+            color: red;
+        }
         .table-responsive {
             max-height: 500px;
             overflow-y: auto;
         }
-
-        .positions th, .positions td {
-            font-size: 0.9rem;
+        .fixed-footer {
+            position: fixed;
+            bottom: 10px;
+            right: 20px;
+            font-size: 0.85rem;
+            color: #666;
         }
-
+        .chart-img {
+            max-width: 100%;
+            height: auto;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container-fluid">
-        <h1 class="mb-4">📈 Trading Dashboard</h1>
+<div class="container-fluid">
 
-        <div class="row mb-4">
-            <div class="col-md-4">
-                <div class="card text-center shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Startkapital</h5>
-                        <p class="card-text fw-bold">${{ "%.2f"|format(total_start) }}</p>
-                    </div>
-                </div>
+    <!-- KPI BOXEN -->
+    <div class="row kpi-row text-center">
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Startkapital</div>
+                <div class="kpi-value">${{ total_start | round(2) }}</div>
             </div>
-            <div class="col-md-4">
-                <div class="card text-center shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Gesamtwert</h5>
-                        <p class="card-text fw-bold">${{ "%.2f"|format(total_balance) }}</p>
-                    </div>
-                </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Aktueller Wert</div>
+                <div class="kpi-value">${{ total_balance | round(2) }}</div>
             </div>
-            <div class="col-md-4">
-                <div class="card text-center shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">Gesamt PnL</h5>
-                        <p class="card-text fw-bold {{ 'gain' if total_pnl >= 0 else 'loss' }}">
-                            {{ "%.2f"|format(total_pnl) }} USD<br>
-                            ({{ "%.2f"|format(total_pnl_percent) }}%)
-                        </p>
-                    </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Gesamt-PnL</div>
+                <div class="kpi-value {% if total_pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                    ${{ total_pnl | round(2) }}
                 </div>
             </div>
         </div>
-
-        <div class="chart mb-4">
-            <img src="/{{ chart_path }}" alt="Strategie Chart">
-        </div>
-
-        <div class="row">
-            <div class="col-lg-6">
-                <h3>Strategien</h3>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover table-sm">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Strategie</th>
-                                <th>Status</th>
-                                <th>Start</th>
-                                <th>Wert</th>
-                                <th>PnL</th>
-                                <th>PnL (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for acc in accounts %}
-                            <tr>
-                                <td>{{ acc.name }}</td>
-                                <td>{{ acc.status }}</td>
-                                <td>${{ "%.2f"|format(acc.start) }}</td>
-                                <td>${{ "%.2f"|format(acc.balance) }}</td>
-                                <td class="{{ 'gain' if acc.pnl >= 0 else 'loss' }}">{{ "%.2f"|format(acc.pnl) }}</td>
-                                <td class="{{ 'gain' if acc.pnl_percent >= 0 else 'loss' }}">{{ "%.2f"|format(acc.pnl_percent) }}%</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Gesamt-PnL (%)</div>
+                <div class="kpi-value {% if total_pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                    {{ total_pnl_percent | round(2) }}%
                 </div>
-            </div>
-
-            <div class="col-lg-6">
-                <h3>Offene Positionen</h3>
-                {% if positions_all %}
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover table-sm positions">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Strategie</th>
-                                <th>Symbol</th>
-                                <th>Long/Short</th>
-                                <th>Größe</th>
-                                <th>Eintritt</th>
-                                <th>Markt</th>
-                                <th>Unreal. PnL</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for name, pos in positions_all %}
-                            <tr>
-                                <td>{{ name }}</td>
-                                <td>{{ pos.symbol }}</td>
-                                <td>{{ 'Long' if pos.side == 'Buy' else 'Short' }}</td>
-                                <td>{{ pos.size }}</td>
-                                <td>{{ pos.entryPrice }}</td>
-                                <td>{{ pos.markPrice }}</td>
-                                <td class="{{ 'gain' if pos.unrealisedPnl|float >= 0 else 'loss' }}">
-                                    {{ pos.unrealisedPnl }}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                    <p>Keine offenen Positionen gefunden.</p>
-                {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="timestamp">
-        Stand: {{ now }}
+    <!-- CHARTS -->
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Strategie Performance</h5>
+            <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
+        </div>
+        <div class="col-md-6">
+            <h5>Projekt Performance</h5>
+            <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
+        </div>
     </div>
+
+    <hr>
+
+    <!-- TABELLEN -->
+    <div class="row">
+        <!-- Strategien -->
+        <div class="col-md-6 table-responsive">
+            <h5>Strategien</h5>
+            <table class="table table-bordered table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Startkapital</th>
+                        <th>Balance</th>
+                        <th>PnL</th>
+                        <th>PnL (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in accounts %}
+                    <tr>
+                        <td>{{ a.name }}</td>
+                        <td>{{ a.status }}</td>
+                        <td>${{ a.start | round(2) }}</td>
+                        <td>${{ a.balance | round(2) }}</td>
+                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            ${{ a.pnl | round(2) }}
+                        </td>
+                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            {{ a.pnl_percent | round(2) }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Positionen -->
+        <div class="col-md-6 table-responsive">
+            <h5>Offene Positionen</h5>
+            <table class="table table-bordered table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Subaccount</th>
+                        <th>Symbol</th>
+                        <th>Größe</th>
+                        <th>Eintrittspreis</th>
+                        <th>Unrealized PnL</th>
+                        <th>Richtung</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, pos in positions_all %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ pos.symbol }}</td>
+                        <td>{{ pos.size }}</td>
+                        <td>{{ pos.avgPrice }}</td>
+                        <td class="{% if pos.unrealisedPnl | float >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            {{ pos.unrealisedPnl }}
+                        </td>
+                        <td>
+                            {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- ZEITSTEMPEL -->
+<div class="fixed-footer">
+    Zuletzt aktualisiert: {{ now }}
+</div>
 
 </body>
 </html>
