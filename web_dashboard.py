@@ -169,3 +169,8 @@ def dashboard():
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+
+# 📢 Wichtig für Render
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000, debug=True)
