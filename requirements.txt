@@ -8,3 +8,4 @@ flask_caching
 pytz
 werkzeug
 gunicorn
+requests
