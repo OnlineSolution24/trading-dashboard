@@ -12,12 +12,10 @@ from blofin import BloFinClient
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
 
-# 🔐 Benutzerverwaltung
 users = {
     "admin": generate_password_hash("deinpasswort123")
 }
 
-# 🔑 API-Zugangsdaten
 subaccounts = [
     {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
     {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
@@ -31,7 +29,6 @@ subaccounts = [
     {"name": "Blofin", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE")}
 ]
 
-# 📊 Startkapital
 startkapital = {
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
@@ -69,36 +66,31 @@ def dashboard():
 
     for acc in subaccounts:
         name = acc["name"]
-        print(f"[INFO] Verbinde mit {name}...")
+        print(f"[INFO] API-Verbindung zu: {name}")
         if not acc["key"] or not acc["secret"]:
-            print(f"[WARN] API-Key oder Secret fehlen für {name}")
+            print(f"[WARN] API Key oder Secret fehlen für: {name}")
             continue
 
         try:
             if name == "Blofin":
                 client = BloFinClient(api_key=acc["key"], api_secret=acc["secret"], passphrase=acc["passphrase"])
                 balances = client.get_account_summary()
-                print(f"[DEBUG] Blofin API Antwort für {name}: {balances}")
+                print(f"[DEBUG] Blofin Antwort: {balances}")
                 usdt = float(balances["data"]["totalEquity"])
                 positions = []
             else:
                 client = HTTP(api_key=acc["key"], api_secret=acc["secret"], recv_window=15000)
-                response = client.get_wallet_balance(accountType="UNIFIED")
-                print(f"[DEBUG] Bybit Wallet für {name}: {response}")
-                wallet = response["result"]["list"]
+                wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
                 usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
-
                 pos = client.get_positions(category="linear")["result"]["list"]
                 positions = [p for p in pos if float(p.get("size", 0)) > 0]
                 for p in positions:
                     positions_all.append((name, p))
-
             pnl = usdt - startkapital.get(name, 0)
             pnl_percent = (pnl / startkapital.get(name, 1)) * 100
             status = "✅"
-
         except Exception as e:
-            print(f"[ERROR] API-Verbindung zu {name} fehlgeschlagen: {e}")
+            print(f"[ERROR] Fehler bei {name}: {e}")
             usdt = 0.0
             pnl = 0.0
             pnl_percent = 0.0
@@ -120,14 +112,14 @@ def dashboard():
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
 
-    # 🎯 Chart
     labels = [a["name"] for a in account_data]
     values = [a["pnl_percent"] for a in account_data]
     fig, ax = plt.subplots(figsize=(12, 6))
     bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
     ax.axhline(0, color='black')
     for i, bar in enumerate(bars):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + (1 if values[i] >= 0 else -3),
+        ax.text(bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + (1 if values[i] >= 0 else -3),
                 f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
                 ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
     fig.tight_layout()
@@ -135,7 +127,7 @@ def dashboard():
     fig.savefig(chart_path)
     plt.close(fig)
 
-    # MEZ Zeitstempel
+    # Aktuelle MEZ Zeit
     berlin = pytz.timezone('Europe/Berlin')
     jetzt = datetime.now(berlin).strftime('%d.%m.%Y %H:%M')
 
