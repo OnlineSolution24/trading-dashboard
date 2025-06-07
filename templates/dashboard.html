@@ -24,9 +24,11 @@
         }
         .pnl-green {
             color: green;
+            font-weight: bold;
         }
         .pnl-red {
             color: red;
+            font-weight: bold;
         }
         .table-responsive {
             max-height: 500px;
@@ -145,26 +147,26 @@
                     </tr>
                 </thead>
                 <tbody>
-                        {% for name, pos in positions_all %}
+                    {% for name, pos in positions_all %}
                     <tr>
                         <td>{{ name }}</td>
                         <td>{{ pos.symbol }}</td>
                         <td>{{ pos.size }}</td>
                         <td>{{ pos.avgPrice }}</td>
                         <td class="{% if pos.unrealisedPnl | float >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                        {{ pos.unrealisedPnl }}
+                            {{ pos.unrealisedPnl }}
                         </td>
                         <td>
-                        {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
+                            {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
                         </td>
                     </tr>
-                {% endfor %}
+                    {% endfor %}
                 </tbody>
-                </table>
-            </div>
+            </table>
         </div>
-
     </div>
+
+</div>
 
 <!-- ZEITSTEMPEL -->
 <div class="fixed-footer">
