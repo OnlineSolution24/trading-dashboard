@@ -43,9 +43,6 @@
             max-width: 100%;
             height: auto;
         }
-        th, td {
-            font-size: 0.9rem;
-        }
     </style>
 </head>
 <body>
@@ -85,7 +82,7 @@
     </div>
 
     <!-- CHARTS -->
-    <div class="row mb-4">
+    <div class="row">
         <div class="col-md-6">
             <h5>Strategie Performance</h5>
             <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
@@ -95,6 +92,8 @@
             <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
         </div>
     </div>
+
+    <hr>
 
     <!-- TABELLEN -->
     <div class="row">
@@ -119,8 +118,12 @@
                         <td>{{ a.status }}</td>
                         <td>${{ a.start | round(2) }}</td>
                         <td>${{ a.balance | round(2) }}</td>
-                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">${{ a.pnl | round(2) }}</td>
-                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">{{ a.pnl_percent | round(2) }}%</td>
+                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            ${{ a.pnl | round(2) }}
+                        </td>
+                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            {{ a.pnl_percent | round(2) }}%
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
