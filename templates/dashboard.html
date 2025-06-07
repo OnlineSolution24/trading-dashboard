@@ -52,36 +52,65 @@
 <div class="container-fluid">
 
     <!-- KPI BOXEN -->
-    <div class="row kpi-row text-center">
-        <div class="col-md-3">
-            <div class="kpi-box">
-                <div>Startkapital</div>
-                <div class="kpi-value">${{ total_start | round(2) }}</div>
-            </div>
+<div class="row kpi-row text-center">
+    <div class="col-md-3">
+        <div class="kpi-box">
+            <div>Startkapital</div>
+            <div class="kpi-value">${{ total_start | round(2) }}</div>
         </div>
-        <div class="col-md-3">
-            <div class="kpi-box">
-                <div>Aktueller Wert</div>
-                <div class="kpi-value">${{ total_balance | round(2) }}</div>
-            </div>
+    </div>
+    <div class="col-md-3">
+        <div class="kpi-box">
+            <div>Aktueller Wert</div>
+            <div class="kpi-value">${{ total_balance | round(2) }}</div>
         </div>
-        <div class="col-md-3">
-            <div class="kpi-box">
-                <div>Gesamt-PnL</div>
-                <div class="kpi-value {% if total_pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                    ${{ total_pnl | round(2) }}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="kpi-box">
-                <div>Gesamt-PnL (%)</div>
-                <div class="kpi-value {% if total_pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                    {{ total_pnl_percent | round(2) }}%
-                </div>
+    </div>
+    <div class="col-md-3">
+        <div class="kpi-box">
+            <div>Gesamt-PnL</div>
+            <div class="kpi-value {% if total_pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                ${{ total_pnl | round(2) }}
             </div>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="kpi-box">
+            <div>Gesamt-PnL (%)</div>
+            <div class="kpi-value {% if total_pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                {{ total_pnl_percent | round(2) }}%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ZUSÄTZLICHE KPI BOXEN -->
+<div class="row kpi-row text-center">
+    <div class="col-md-4">
+        <div class="kpi-box">
+            <div>1-Tages Performance</div>
+            <div class="kpi-value {% if perf_1d >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                {{ perf_1d | round(2) }}%
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="kpi-box">
+            <div>7-Tage Performance</div>
+            <div class="kpi-value {% if perf_7d >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                {{ perf_7d | round(2) }}%
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="kpi-box">
+            <div>30-Tage Performance</div>
+            <div class="kpi-value {% if perf_30d >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                {{ perf_30d | round(2) }}%
+            </div>
+        </div>
+    </div>
+</div>
+
 
     <!-- CHARTS -->
     <div class="row">
