@@ -78,7 +78,7 @@ def dashboard():
             wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
             usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
 
-            pos_result = client.get_positions(category="linear", symbol="BTCUSDT")
+            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
             all_positions = client.get_positions(category="linear")["result"]["list"]
             positions = [p for p in all_positions if float(p.get("size", 0)) > 0]
             for p in positions:
