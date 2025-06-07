@@ -18,25 +18,24 @@ app = Flask(__name__)
 STARTKAPITAL = 13729.37
 TZ = pytz.timezone("Europe/Berlin")
 
-# 🔑 API-Zugangsdaten
-subaccounts = [
-    {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
-    {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
-    {"name": "Ethapestrategies", "key": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_SECRET")},
-    {"name": "Altsstrategies", "key": os.environ.get("BYBIT_ALTSSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ALTSSTRATEGIES_API_SECRET")},
-    {"name": "Solstrategies", "key": os.environ.get("BYBIT_SOLSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_SOLSTRATEGIES_API_SECRET")},
-    {"name": "Btcstrategies", "key": os.environ.get("BYBIT_BTCSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_BTCSTRATEGIES_API_SECRET")},
-    {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET")},
-    {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET")},
-    {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET")},
-    {"name": "7 Tage Performer", "key": os.environ.get("BYBIT_BLOFIN_API_KEY"), "secret": os.environ.get("BYBIT_BLOFIN_API_SECRET")}
+# Bybit Subaccounts (Name, API, Secret)
+bybit_accounts = [
+    ("Incubatorzone", "API_KEY1", "SECRET1"),
+    ("Memestrategies", "API_KEY2", "SECRET2"),
+    ("Ethapestrategies", "API_KEY3", "SECRET3"),
+    ("Altsstrategies", "API_KEY4", "SECRET4"),
+    ("Solstrategies", "API_KEY5", "SECRET5"),
+    ("Btcstrategies", "API_KEY6", "SECRET6"),
+    ("Corestrategies", "API_KEY7", "SECRET7"),
+    ("2k->10k Projekt", "API_KEY8", "SECRET8"),
+    ("1k->5k Projekt", "API_KEY9", "SECRET9")
 ]
 
 # Blofin Account (Einzelaccount)
 blofin_account = {
     "name": "7 Tage Performer",
-    "api_key": "BLOFIN_API_KEY",
-    "api_secret": "BLOFIN_API_SECRET"
+    "api_key": "YOUR_BLOFIN_API_KEY",
+    "api_secret": "YOUR_BLOFIN_API_SECRET"
 }
 
 
