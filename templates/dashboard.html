@@ -19,6 +19,9 @@
             font-size: 1.5rem;
             font-weight: bold;
         }
+        .kpi-row {
+            margin-bottom: 30px;
+        }
         .pnl-green {
             color: green;
         }
@@ -39,11 +42,9 @@
         .chart-img {
             max-width: 100%;
             height: auto;
-            margin-bottom: 30px;
         }
-        .chart-title {
-            font-weight: bold;
-            margin-top: 10px;
+        th, td {
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -52,7 +53,7 @@
 <div class="container-fluid">
 
     <!-- KPI BOXEN -->
-    <div class="row text-center mb-4">
+    <div class="row kpi-row text-center">
         <div class="col-md-3">
             <div class="kpi-box">
                 <div>Startkapital</div>
@@ -83,32 +84,20 @@
         </div>
     </div>
 
-    <!-- CHARTS: Strategien & Projekte -->
-    <div class="row">
+    <!-- CHARTS -->
+    <div class="row mb-4">
         <div class="col-md-6">
-            <div class="chart-title">Strategie Performance</div>
+            <h5>Strategie Performance</h5>
             <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
         </div>
         <div class="col-md-6">
-            <div class="chart-title">Projekt Performance</div>
+            <h5>Projekt Performance</h5>
             <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
         </div>
     </div>
 
-    <!-- ZEITLICHER VERLAUF -->
-    <div class="row">
-        <div class="col-md-6">
-            <div class="chart-title">Gesamtbalance Verlauf</div>
-            <img src="{{ verlauf_chart_path_balance }}" class="chart-img" alt="Balance Verlauf">
-        </div>
-        <div class="col-md-6">
-            <div class="chart-title">Gesamt-PnL Verlauf</div>
-            <img src="{{ verlauf_chart_path_pnl }}" class="chart-img" alt="PnL Verlauf">
-        </div>
-    </div>
-
     <!-- TABELLEN -->
-    <div class="row mt-4">
+    <div class="row">
         <!-- Strategien -->
         <div class="col-md-6 table-responsive">
             <h5>Strategien</h5>
@@ -130,12 +119,8 @@
                         <td>{{ a.status }}</td>
                         <td>${{ a.start | round(2) }}</td>
                         <td>${{ a.balance | round(2) }}</td>
-                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                            ${{ a.pnl | round(2) }}
-                        </td>
-                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                            {{ a.pnl_percent | round(2) }}%
-                        </td>
+                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">${{ a.pnl | round(2) }}</td>
+                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">{{ a.pnl_percent | round(2) }}%</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -178,7 +163,7 @@
 
 </div>
 
-<!-- Fester Zeitstempel -->
+<!-- ZEITSTEMPEL -->
 <div class="fixed-footer">
     Zuletzt aktualisiert: {{ now }}
 </div>
