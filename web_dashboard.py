@@ -13,6 +13,9 @@ import requests
 import hmac
 import hashlib
 import time
+import json
+import base64
+import uuid
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
@@ -58,29 +61,43 @@ class BlofinAPI:
         self.api_secret = api_secret
         self.base_url = "https://openapi.blofin.com"
     
-    def _generate_signature(self, timestamp, method, request_path, body=''):
-        message = f"{timestamp}{method}{request_path}{body}"
-        signature = hmac.new(
+    def _generate_signature(self, path, method, timestamp, nonce, body=''):
+        # Blofin signature format: {path}{method}{timestamp}{nonce}{body}
+        message = f"{path}{method}{timestamp}{nonce}"
+        if body:
+            message += body
+        
+        # Generate hex signature and convert to base64
+        hex_signature = hmac.new(
             self.api_secret.encode('utf-8'),
             message.encode('utf-8'),
             hashlib.sha256
-        ).hexdigest()
-        return signature
+        ).hexdigest().encode()
+        
+        return base64.b64encode(hex_signature).decode()
     
     def _make_request(self, method, endpoint, params=None):
+        import uuid
+        import base64
+        
         timestamp = str(int(time.time() * 1000))
+        nonce = str(uuid.uuid4())
         request_path = endpoint
+        body = ''
         
         if params and method == 'GET':
             query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
             request_path += f"?{query_string}"
+        elif params and method in ['POST', 'PUT']:
+            body = json.dumps(params)
         
-        signature = self._generate_signature(timestamp, method, request_path)
+        signature = self._generate_signature(request_path, method, timestamp, nonce, body)
         
         headers = {
             'BF-ACCESS-KEY': self.api_key,
             'BF-ACCESS-SIGN': signature,
             'BF-ACCESS-TIMESTAMP': timestamp,
+            'BF-ACCESS-NONCE': nonce,
             'Content-Type': 'application/json'
         }
         
@@ -90,7 +107,7 @@ class BlofinAPI:
             if method == 'GET':
                 response = requests.get(url, headers=headers, timeout=10)
             else:
-                response = requests.post(url, headers=headers, timeout=10)
+                response = requests.post(url, headers=headers, json=params, timeout=10)
             
             response.raise_for_status()
             return response.json()
@@ -99,7 +116,7 @@ class BlofinAPI:
             raise
     
     def get_account_balance(self):
-        return self._make_request('GET', '/api/v1/account/balance')
+        return self._make_request('GET', '/api/v1/asset/balances')
     
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
@@ -132,26 +149,34 @@ def get_blofin_data(acc):
         balance_response = client.get_account_balance()
         usdt = 0.0
         
+        logging.info(f"Blofin Balance Response: {balance_response}")
+        
         if balance_response.get('code') == '0' and balance_response.get('data'):
             for balance in balance_response['data']:
-                if balance.get('currency') == 'USDT':
-                    usdt = float(balance.get('available', 0)) + float(balance.get('frozen', 0))
+                if balance.get('currency') == 'USDT' or balance.get('ccy') == 'USDT':
+                    # Versuche verschiedene Feldnamen
+                    available = float(balance.get('available', balance.get('availBal', 0)))
+                    frozen = float(balance.get('frozen', balance.get('frozenBal', 0)))
+                    usdt = available + frozen
                     break
         
         # Positionen abrufen
         positions = []
         try:
             pos_response = client.get_positions()
+            logging.info(f"Blofin Positions Response: {pos_response}")
+            
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    if float(pos.get('size', 0)) > 0:
+                    pos_size = float(pos.get('pos', pos.get('size', 0)))
+                    if pos_size > 0:
                         # Konvertiere Blofin Position in Bybit-ähnliches Format
                         position = {
-                            'symbol': pos.get('instrument_id', ''),
-                            'size': pos.get('size', '0'),
-                            'avgPrice': pos.get('avg_cost', '0'),
-                            'unrealisedPnl': pos.get('unrealized_pnl', '0'),
-                            'side': 'Buy' if pos.get('side') == 'long' else 'Sell'
+                            'symbol': pos.get('instId', pos.get('instrument_id', '')),
+                            'size': str(pos_size),
+                            'avgPrice': pos.get('avgPx', pos.get('avg_cost', '0')),
+                            'unrealisedPnl': pos.get('upl', pos.get('unrealized_pnl', '0')),
+                            'side': 'Buy' if pos.get('posSide', pos.get('side')) in ['long', 'net'] else 'Sell'
                         }
                         positions.append(position)
         except Exception as e:
