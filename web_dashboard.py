@@ -1,201 +1,176 @@
 import os
-import time
 import logging
-import pytz
-import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, session, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
+from pytz import timezone
+import pandas as pd
 
-# Logging konfigurieren
+app = Flask(__name__)
+app.secret_key = 'supergeheim'
+
 logging.basicConfig(level=logging.INFO)
 
-# Flask App
-app = Flask(__name__)
-
-# Konstanten
-STARTKAPITAL = 13729.37
-TZ = pytz.timezone("Europe/Berlin")
-
-# Bybit Subaccounts (Name, API, Secret)
-bybit_accounts = [
-    ("Incubatorzone", "API_KEY1", "SECRET1"),
-    ("Memestrategies", "API_KEY2", "SECRET2"),
-    ("Ethapestrategies", "API_KEY3", "SECRET3"),
-    ("Altsstrategies", "API_KEY4", "SECRET4"),
-    ("Solstrategies", "API_KEY5", "SECRET5"),
-    ("Btcstrategies", "API_KEY6", "SECRET6"),
-    ("Corestrategies", "API_KEY7", "SECRET7"),
-    ("2k->10k Projekt", "API_KEY8", "SECRET8"),
-    ("1k->5k Projekt", "API_KEY9", "SECRET9")
-]
-
-# Blofin Account (Einzelaccount)
-blofin_account = {
-    "name": "7 Tage Performer",
-    "api_key": "YOUR_BLOFIN_API_KEY",
-    "api_secret": "YOUR_BLOFIN_API_SECRET"
+# 🔐 Benutzerverwaltung
+users = {
+    "admin": generate_password_hash("deinpasswort123")
 }
 
+# 🔑 API-Zugangsdaten
+subaccounts = [
+    {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET")},
+    {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET")},
+    {"name": "Ethapestrategies", "key": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_SECRET")},
+    {"name": "Altsstrategies", "key": os.environ.get("BYBIT_ALTSSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ALTSSTRATEGIES_API_SECRET")},
+    {"name": "Solstrategies", "key": os.environ.get("BYBIT_SOLSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_SOLSTRATEGIES_API_SECRET")},
+    {"name": "Btcstrategies", "key": os.environ.get("BYBIT_BTCSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_BTCSTRATEGIES_API_SECRET")},
+    {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET")},
+    {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET")},
+    {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET")},
+    {"name": "7 Tage Performer", "key": os.environ.get("BYBIT_BLOFIN_API_KEY"), "secret": os.environ.get("BYBIT_BLOFIN_API_SECRET")}
+]
 
-def get_bybit_balance_and_positions(name, key, secret):
-    try:
-        session = HTTP(api_key=key, api_secret=secret)
-        balance = session.get_wallet_balance(accountType="UNIFIED")["result"]["list"][0]["totalWalletBalance"]
-        positions = session.get_positions(category="linear")["result"]["list"]
-        open_positions = [
-            {
-                "symbol": p["symbol"],
-                "size": float(p["size"]),
-                "avgPrice": float(p["avgPrice"]),
-                "unrealisedPnl": float(p["unrealisedPnl"]),
-                "side": p["side"]
-            }
-            for p in positions if float(p["size"]) > 0
-        ]
-        return balance, open_positions, "OK"
-    except Exception as e:
-        logging.error(f"Fehler bei {name}: {e}")
-        return 0.0, [], "Fehler"
+# 📊 Startkapital
+startkapital = {
+    "Incubatorzone": 400.00,
+    "Memestrategies": 800.00,
+    "Ethapestrategies": 1200.00,
+    "Altsstrategies": 1200.00,
+    "Solstrategies": 1713.81,
+    "Btcstrategies": 1923.00,
+    "Corestrategies": 2000.56,
+    "2k->10k Projekt": 2000.00,
+    "1k->5k Projekt": 1000.00,
+    "7 Tage Performer": 1492.00
+}
 
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pw = request.form['password']
+        if user in users and check_password_hash(users[user], pw):
+            session['user'] = user
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Login fehlgeschlagen.")
+    return render_template('login.html')
 
-def get_blofin_balance():
-    import requests
-    import hmac
-    import hashlib
-
-    try:
-        url = "https://api.blofin.com/api/v1/account/assets"
-        timestamp = str(int(time.time() * 1000))
-        sign_payload = timestamp + "GET" + "/api/v1/account/assets"
-        signature = hmac.new(
-            blofin_account["api_secret"].encode(),
-            sign_payload.encode(),
-            hashlib.sha256
-        ).hexdigest()
-
-        headers = {
-            "ACCESS-KEY": blofin_account["api_key"],
-            "ACCESS-SIGN": signature,
-            "ACCESS-TIMESTAMP": timestamp
-        }
-
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            raise Exception(f"Http status code is not 200. (ErrCode: {response.status_code})")
-
-        assets = response.json()["data"]
-        total_usd = sum(float(a["usdValue"]) for a in assets)
-        return total_usd, "OK"
-    except Exception as e:
-        logging.error(f"Fehler bei {blofin_account['name']}: {e}")
-        return 0.0, "Fehler"
-
-
-def calculate_pnl(balance, start):
-    pnl = balance - start
-    pnl_percent = (pnl / start) * 100 if start > 0 else 0
-    return pnl, pnl_percent
-
-
-def generate_chart(data, filename, title):
-    df = pd.DataFrame(data)
-    fig, ax = plt.subplots(figsize=(8, 4))
-    bars = ax.bar(df["Name"], df["PNL"], color=["green" if v >= 0 else "red" for v in df["PNL"]])
-    ax.set_title(title)
-    ax.set_ylabel("PNL ($)")
-    ax.set_xticks(range(len(df)))
-    ax.set_xticklabels(df["Name"], rotation=45, ha="right")
-    for bar in bars:
-        yval = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2, yval, f"{yval:.0f}", ha='center', va='bottom', fontsize=8)
-    plt.tight_layout()
-    path = f"static/{filename}"
-    fig.savefig(path)
-    plt.close()
-    return path
-
-
-@app.route("/")
-@app.route("/dashboard")
+@app.route('/dashboard')
 def dashboard():
-    accounts = []
-    positions_all = []
-    projects = {
-        "10k->1Mio Projekt": [],
-        "2k->10k Projekt": [],
-        "1k->5k Projekt": [],
-        "7 Tage Performer": []
-    }
+    if 'user' not in session:
+        return redirect(url_for('login'))
 
-    # Daten sammeln
-    for name, key, secret in bybit_accounts:
-        start = 1000 if "Projekt" not in name else (2000 if "2k" in name else 1000)
-        balance, positions, status = get_bybit_balance_and_positions(name, key, secret)
-        pnl, pnl_percent = calculate_pnl(balance, start)
-        accounts.append({
+    account_data = []
+    total_balance = 0.0
+    total_start = sum(startkapital.values())
+    positions_all = []
+
+    for acc in subaccounts:
+        name = acc["name"]
+        try:
+            client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+            wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+            usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
+
+            try:
+                pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+            except Exception as e:
+                pos = []
+                logging.error(f"Fehler bei {name}: {e}")
+            positions = [p for p in pos if float(p.get("size", 0)) > 0]
+            for p in positions:
+                positions_all.append((name, p))
+            status = "✅"
+        except Exception as e:
+            usdt = 0.0
+            positions = []
+            status = "❌"
+            logging.error(f"Fehler bei {name}: {e}")
+
+        pnl = usdt - startkapital.get(name, 0)
+        pnl_percent = (pnl / startkapital.get(name, 1)) * 100
+
+        account_data.append({
             "name": name,
-            "start": start,
-            "balance": balance,
+            "status": status,
+            "balance": usdt,
+            "start": startkapital.get(name, 0),
             "pnl": pnl,
             "pnl_percent": pnl_percent,
-            "status": status
+            "positions": positions
         })
-        for pos in positions:
-            positions_all.append((name, pos))
 
-        # Projektzuordnung
-        if name in ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"]:
-            projects["10k->1Mio Projekt"].append(pnl)
-        elif "2k->10k" in name:
-            projects["2k->10k Projekt"].append(pnl)
-        elif "1k->5k" in name:
-            projects["1k->5k Projekt"].append(pnl)
+        total_balance += usdt
 
-    # Blofin
-    blofin_balance, blofin_status = get_blofin_balance()
-    blofin_start = 1000
-    blofin_pnl, blofin_pnl_percent = calculate_pnl(blofin_balance, blofin_start)
-    accounts.append({
-        "name": "7 Tage Performer",
-        "start": blofin_start,
-        "balance": blofin_balance,
-        "pnl": blofin_pnl,
-        "pnl_percent": blofin_pnl_percent,
-        "status": blofin_status
-    })
-    projects["7 Tage Performer"].append(blofin_pnl)
-
-    # Summen
-    total_start = sum(a["start"] for a in accounts)
-    total_balance = sum(a["balance"] for a in accounts)
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
 
-    # Charts generieren
-    chart_path_strategien = generate_chart(
-        [{"Name": a["name"], "PNL": a["pnl"]} for a in accounts],
-        "chart_strategien.png",
-        "Strategien PNL"
-    )
-    chart_path_projekte = generate_chart(
-        [{"Name": k, "PNL": sum(v)} for k, v in projects.items()],
-        "chart_projekte.png",
-        "Projektübersicht"
-    )
+    # 🎯 Zeit
+    tz = timezone("Europe/Berlin")
+    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+
+    # 🎯 Chart Strategien
+    fig, ax = plt.subplots(figsize=(12, 6))
+    labels = [a["name"] for a in account_data]
+    values = [a["pnl_percent"] for a in account_data]
+    bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
+    ax.axhline(0, color='black')
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    for i, bar in enumerate(bars):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
+                ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
+    fig.tight_layout()
+    chart_path_strategien = "static/chart_strategien.png"
+    fig.savefig(chart_path_strategien)
+    plt.close(fig)
+
+    # 🎯 Chart Projekte
+    projekte = {
+        "10k->1Mio Projekt": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+        "2k->10k Projekt": ["2k->10k Projekt"],
+        "1k->5k Projekt": ["1k->5k Projekt"],
+        "7 Tage Performer": ["7 Tage Performer"]
+    }
+
+    proj_labels = []
+    proj_values = []
+    for pname, members in projekte.items():
+        start_sum = sum(startkapital.get(m, 0) for m in members)
+        curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+        pnl_percent = ((curr_sum - start_sum) / start_sum) * 100
+        proj_labels.append(pname)
+        proj_values.append(pnl_percent)
+
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
+    ax2.axhline(0, color='black')
+    ax2.set_xticklabels(proj_labels, rotation=30, ha="right")
+    for i, bar in enumerate(bars2):
+        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                 f"{proj_values[i]:+.1f}%", ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
+    fig2.tight_layout()
+    chart_path_projekte = "static/chart_projekte.png"
+    fig2.savefig(chart_path_projekte)
+    plt.close(fig2)
 
     return render_template("dashboard.html",
-                           accounts=accounts,
-                           positions_all=positions_all,
+                           accounts=account_data,
                            total_start=total_start,
                            total_balance=total_balance,
                            total_pnl=total_pnl,
                            total_pnl_percent=total_pnl_percent,
                            chart_path_strategien=chart_path_strategien,
                            chart_path_projekte=chart_path_projekte,
-                           now=datetime.now(TZ).strftime("%d.%m.%Y %H:%M"))
+                           positions_all=positions_all,
+                           now=now)
 
-
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=10000)
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
