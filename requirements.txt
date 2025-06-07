@@ -10,3 +10,4 @@ werkzeug
 gunicorn
 requests
 pandas
+jinja2
