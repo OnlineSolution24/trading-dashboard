@@ -31,7 +31,7 @@ subaccounts = [
     {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET")},
     {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET")},
     {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET")},
-    {"name": "7 Tage Performer", "key": os.environ.get("BYBIT_BLOFIN_API_KEY"), "secret": os.environ.get("BYBIT_BLOFIN_API_SECRET")}
+    {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET")}
 ]
 
 # 📊 Startkapital
@@ -174,3 +174,7 @@ def dashboard():
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=10000)
