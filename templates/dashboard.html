@@ -132,39 +132,39 @@
 
         <!-- Positionen -->
         <div class="col-md-6 table-responsive">
-    <h5>Offene Positionen</h5>
-    <table class="table table-bordered table-sm table-hover">
-        <thead class="table-light">
-            <tr>
-                <th>Subaccount</th>
-                <th>Symbol</th>
-                <th>Größe</th>
-                <th>Eintrittspreis</th>
-                <th>Unrealized PnL</th>
-                <th>Richtung</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for name, pos in positions_all %}
-            <tr>
-                <td>{{ name }}</td>
-                <td>{{ pos.symbol }}</td>
-                <td>{{ pos.size }}</td>
-                <td>{{ pos.avgPrice }}</td>
-                <td class="{% if pos.unrealisedPnl | float >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
-                    {{ pos.unrealisedPnl }}
-                </td>
-                <td>
-                    {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-    </div>
+            <h5>Offene Positionen</h5>
+            <table class="table table-bordered table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Subaccount</th>
+                        <th>Symbol</th>
+                        <th>Größe</th>
+                        <th>Eintrittspreis</th>
+                        <th>Unrealized PnL</th>
+                        <th>Richtung</th>
+                    </tr>
+                </thead>
+                <tbody>
+                        {% for name, pos in positions_all %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ pos.symbol }}</td>
+                        <td>{{ pos.size }}</td>
+                        <td>{{ pos.avgPrice }}</td>
+                        <td class="{% if pos.unrealisedPnl | float >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                        {{ pos.unrealisedPnl }}
+                        </td>
+                        <td>
+                        {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+                </table>
+            </div>
+        </div>
 
-</div>
+    </div>
 
 <!-- ZEITSTEMPEL -->
 <div class="fixed-footer">
