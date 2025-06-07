@@ -34,8 +34,8 @@ bybit_accounts = [
 # Blofin Account (Einzelaccount)
 blofin_account = {
     "name": "7 Tage Performer",
-    "api_key": "YOUR_BLOFIN_API_KEY",
-    "api_secret": "YOUR_BLOFIN_API_SECRET"
+    "api_key": "BLOFIN_API_KEY",
+    "api_secret": "BLOFIN_API_SECRET"
 }
 
 
