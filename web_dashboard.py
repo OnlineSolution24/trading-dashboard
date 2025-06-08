@@ -197,22 +197,29 @@ class BlofinAPI:
         
         signature = self._generate_signature(request_path, method, timestamp, nonce, body)
         
+        # Korrekte Blofin Header nach offizieller Dokumentation
         headers = {
-            'BF-ACCESS-KEY': self.api_key,
-            'BF-ACCESS-SIGN': signature,
-            'BF-ACCESS-TIMESTAMP': timestamp,
-            'BF-ACCESS-NONCE': nonce,
-            'BF-ACCESS-PASSPHRASE': self.passphrase,
+            'ACCESS-KEY': self.api_key,
+            'ACCESS-SIGN': signature,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-NONCE': nonce,
+            'ACCESS-PASSPHRASE': self.passphrase,
             'Content-Type': 'application/json'
         }
         
         url = f"{self.base_url}{request_path}"
         
         try:
+            logging.info(f"Blofin API Request: {method} {url}")
+            logging.info(f"Headers: {dict(headers)}")  # Log headers (ohne sensible Daten)
+            
             if method == 'GET':
                 response = requests.get(url, headers=headers, timeout=10)
             else:
                 response = requests.post(url, headers=headers, json=params, timeout=10)
+            
+            logging.info(f"Blofin Response Status: {response.status_code}")
+            logging.info(f"Blofin Response: {response.text}")
             
             response.raise_for_status()
             return response.json()
