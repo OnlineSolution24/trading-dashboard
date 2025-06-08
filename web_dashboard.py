@@ -211,6 +211,7 @@ def dashboard():
     total_balance = 0.0
     total_start = sum(startkapital.values())
     positions_all = []
+    total_positions_pnl = 0.0
 
     for acc in subaccounts:
         name = acc["name"]
@@ -221,9 +222,14 @@ def dashboard():
         else:  # bybit
             usdt, positions, status = get_bybit_data(acc)
         
-        # Positionen zur Gesamtliste hinzufügen
+        # Positionen zur Gesamtliste hinzufügen und PnL summieren
         for p in positions:
             positions_all.append((name, p))
+            try:
+                pos_pnl = float(p.get('unrealisedPnl', 0))
+                total_positions_pnl += pos_pnl
+            except (ValueError, TypeError):
+                pass
 
         pnl = usdt - startkapital.get(name, 0)
         pnl_percent = (pnl / startkapital.get(name, 1)) * 100
@@ -242,6 +248,9 @@ def dashboard():
 
     total_pnl = total_balance - total_start
     total_pnl_percent = (total_pnl / total_start) * 100
+    
+    # Berechne PnL Prozent für offene Positionen basierend auf Gesamtkapital
+    total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
 
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
@@ -301,6 +310,8 @@ def dashboard():
                            chart_path_strategien=chart_path_strategien,
                            chart_path_projekte=chart_path_projekte,
                            positions_all=positions_all,
+                           total_positions_pnl=total_positions_pnl,
+                           total_positions_pnl_percent=total_positions_pnl_percent,
                            now=now)
 
 @app.route('/logout')
