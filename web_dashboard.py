@@ -324,19 +324,17 @@ def get_blofin_data(acc):
         try:
             pos_response = client.get_positions()
             logging.info(f"Blofin Positions Response: {pos_response}")
-            
+
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    # Verschiedene Feldnamen für Position Size versuchen
-                    pos_size = float(pos.get('pos', pos.get('size', pos.get('sz', 0))))
-                    if pos_size != 0:  # Auch negative Positionen (Short) berücksichtigen
-                        # Konvertiere Blofin Position in Bybit-ähnliches Format
+                    pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
+                    if pos_size != 0:
                         position = {
                             'symbol': pos.get('instId', pos.get('instrument_id', pos.get('symbol', ''))),
-                            'size': str(abs(pos_size)),  # Absolutwert für Anzeige
-                            'avgPrice': pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0'))),
-                            'unrealisedPnl': pos.get('upl', pos.get('unrealized_pnl', pos.get('unrealizedPnl', '0'))),
-                            'side': 'Buy' if pos_size > 0 else 'Sell'  # Positive = Long, Negative = Short
+                            'size': str(abs(pos_size)),
+                            'avgPrice': pos.get('averagePrice', pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0'))),
+                            'side': 'Buy' if pos_size > 0 else 'Sell'
                         }
                         positions.append(position)
                         logging.info(f"Blofin Position gefunden: {position}")
