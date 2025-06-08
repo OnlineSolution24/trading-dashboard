@@ -43,6 +43,20 @@ subaccounts = [
     {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
 ]
 
+# 📊 Startkapital
+startkapital = {
+    "Incubatorzone": 400.00,
+    "Memestrategies": 800.00,
+    "Ethapestrategies": 1200.00,
+    "Altsstrategies": 1200.00,
+    "Solstrategies": 1713.81,
+    "Btcstrategies": 1923.00,
+    "Corestrategies": 2000.56,
+    "2k->10k Projekt": 2000.00,
+    "1k->5k Projekt": 1000.00,
+    "7 Tage Performer": 1492.00
+}
+
 # 📊 Google Sheets Integration
 def setup_google_sheets():
     """Google Sheets Setup für historische Daten"""
@@ -146,17 +160,6 @@ def get_historical_performance(total_pnl, sheet=None):
         logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
     
     return performance_data
-    "Incubatorzone": 400.00,
-    "Memestrategies": 800.00,
-    "Ethapestrategies": 1200.00,
-    "Altsstrategies": 1200.00,
-    "Solstrategies": 1713.81,
-    "Btcstrategies": 1923.00,
-    "Corestrategies": 2000.56,
-    "2k->10k Projekt": 2000.00,
-    "1k->5k Projekt": 1000.00,
-    "7 Tage Performer": 1492.00
-}
 
 class BlofinAPI:
     def __init__(self, api_key, api_secret, passphrase):
@@ -181,9 +184,6 @@ class BlofinAPI:
         return base64.b64encode(hex_signature).decode()
     
     def _make_request(self, method, endpoint, params=None):
-        import uuid
-        import base64
-        
         timestamp = str(int(time.time() * 1000))
         nonce = str(uuid.uuid4())
         request_path = endpoint
