@@ -11,3 +11,4 @@ gunicorn
 requests
 pandas
 jinja2
+google-auth
