@@ -11,31 +11,38 @@
             --profit-color: #28a745;
             --loss-color: #dc3545;
             --neutral-color: #6c757d;
-            --bg-dark: #1a1d29;
-            --bg-card: #2d3142;
+            --bg-dark: #2c3e50;
+            --bg-card: #34495e;
+            --bg-light: #ecf0f1;
             --text-light: #ffffff;
-            --text-muted: #9ca3af;
-            --border-color: #374151;
+            --text-dark: #2c3e50;
+            --text-muted: #95a5a6;
+            --border-color: #7f8c8d;
+            --blue-primary: #3498db;
+            --blue-secondary: #2980b9;
+            --gray-light: #bdc3c7;
+            --gray-dark: #95a5a6;
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 50%, #2980b9 100%);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: var(--text-light);
         }
 
         .dashboard-container {
-            background: rgba(26, 29, 41, 0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(44, 62, 80, 0.95);
+            backdrop-filter: blur(15px);
             border-radius: 20px;
             padding: 30px;
             margin: 20px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
         }
 
         .kpi-card {
-            background: linear-gradient(145deg, var(--bg-card), #3a3f5c);
+            background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
             border-radius: 15px;
             padding: 25px;
             text-align: center;
@@ -47,15 +54,16 @@
 
         .kpi-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.3);
         }
 
         .kpi-title {
             font-size: 0.9rem;
-            color: var(--text-muted);
+            color: var(--gray-light);
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 10px;
+            font-weight: 600;
         }
 
         .kpi-value {
@@ -67,12 +75,12 @@
         .kpi-icon {
             font-size: 2.5rem;
             margin-bottom: 15px;
-            opacity: 0.7;
+            opacity: 0.8;
         }
 
         .profit { color: var(--profit-color) !important; }
         .loss { color: var(--loss-color) !important; }
-        .neutral { color: var(--neutral-color) !important; }
+        .neutral { color: var(--gray-light) !important; }
 
         .chart-container {
             background: var(--bg-card);
@@ -80,6 +88,7 @@
             padding: 20px;
             margin-bottom: 30px;
             border: 1px solid var(--border-color);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
         .chart-title {
@@ -102,6 +111,7 @@
             padding: 20px;
             border: 1px solid var(--border-color);
             margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
         .table-title {
@@ -120,10 +130,11 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 0;
         }
 
         .custom-table thead {
-            background: linear-gradient(145deg, #4c5567, #5a6478);
+            background: linear-gradient(145deg, var(--blue-secondary), var(--blue-primary));
         }
 
         .custom-table th {
@@ -148,7 +159,11 @@
         }
 
         .custom-table tbody tr:hover {
-            background-color: rgba(255,255,255,0.05);
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+
+        .custom-table tbody tr:last-child td {
+            border-bottom: none;
         }
 
         .status-badge {
@@ -182,7 +197,7 @@
         }
 
         .symbol-badge {
-            background: linear-gradient(145deg, #667eea, #764ba2);
+            background: linear-gradient(145deg, var(--blue-primary), var(--blue-secondary));
             color: white;
             padding: 4px 10px;
             border-radius: 15px;
@@ -214,11 +229,11 @@
             position: fixed;
             bottom: 20px;
             right: 30px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(44, 62, 80, 0.9);
             padding: 10px 15px;
             border-radius: 25px;
             font-size: 0.85rem;
-            color: var(--text-muted);
+            color: var(--gray-light);
             backdrop-filter: blur(10px);
             border: 1px solid var(--border-color);
         }
@@ -231,37 +246,26 @@
         .header-title {
             font-size: 2.5rem;
             font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, var(--blue-primary), var(--gray-light));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 10px;
         }
 
         .header-subtitle {
-            color: var(--text-muted);
+            color: var(--gray-light);
             font-size: 1.1rem;
         }
 
-        .scroll-container {
-            max-height: 400px;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border-color) transparent;
+        .icon-blue { color: var(--blue-primary); }
+        .icon-gray { color: var(--gray-light); }
+
+        /* Entfernen der Scroll-Container */
+        .table-container {
+            overflow: visible;
         }
 
-        .scroll-container::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .scroll-container::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .scroll-container::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 3px;
-        }
-
+        /* Responsive Design */
         @media (max-width: 768px) {
             .dashboard-container {
                 margin: 10px;
@@ -274,6 +278,22 @@
             
             .header-title {
                 font-size: 2rem;
+            }
+
+            .custom-table {
+                font-size: 0.85rem;
+            }
+
+            .custom-table th,
+            .custom-table td {
+                padding: 8px 6px;
+            }
+        }
+
+        /* Bessere Darstellung für kleine Bildschirme */
+        @media (max-width: 576px) {
+            .col-lg-6 {
+                margin-bottom: 20px;
             }
         }
     </style>
@@ -293,7 +313,7 @@
             <div class="col-lg-3 col-md-6">
                 <div class="kpi-card">
                     <div class="kpi-icon">
-                        <i class="fas fa-wallet text-info"></i>
+                        <i class="fas fa-wallet icon-blue"></i>
                     </div>
                     <div class="kpi-title">Startkapital</div>
                     <div class="kpi-value neutral">${{ "%.2f"|format(total_start) }}</div>
@@ -302,7 +322,7 @@
             <div class="col-lg-3 col-md-6">
                 <div class="kpi-card">
                     <div class="kpi-icon">
-                        <i class="fas fa-coins text-warning"></i>
+                        <i class="fas fa-coins icon-gray"></i>
                     </div>
                     <div class="kpi-title">Aktueller Wert</div>
                     <div class="kpi-value neutral">${{ "%.2f"|format(total_balance) }}</div>
@@ -337,7 +357,7 @@
             <div class="col-lg-6">
                 <div class="chart-container">
                     <h5 class="chart-title">
-                        <i class="fas fa-chart-bar me-2"></i>Subaccount Performance
+                        <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
                     </h5>
                     <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
                 </div>
@@ -345,7 +365,7 @@
             <div class="col-lg-6">
                 <div class="chart-container">
                     <h5 class="chart-title">
-                        <i class="fas fa-project-diagram me-2"></i>Projekt Performance
+                        <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
                     </h5>
                     <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
                 </div>
@@ -358,10 +378,10 @@
             <div class="col-lg-6">
                 <div class="data-table">
                     <h5 class="table-title">
-                        <i class="fas fa-users"></i>
+                        <i class="fas fa-users icon-blue"></i>
                         Subaccounts
                     </h5>
-                    <div class="scroll-container">
+                    <div class="table-container">
                         <table class="table custom-table">
                             <thead>
                                 <tr>
@@ -404,10 +424,10 @@
             <div class="col-lg-6">
                 <div class="data-table">
                     <h5 class="table-title">
-                        <i class="fas fa-chart-area"></i>
+                        <i class="fas fa-chart-area icon-blue"></i>
                         Offene Positionen
                     </h5>
-                    <div class="scroll-container">
+                    <div class="table-container">
                         <table class="table custom-table">
                             <thead>
                                 <tr>
