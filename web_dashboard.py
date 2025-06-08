@@ -118,7 +118,7 @@ class BlofinAPI:
             raise
     
     def get_account_balance(self):
-        return self._make_request('GET', '/api/v1/asset/balances')
+        return self._make_request('GET', '/api/v1/account/balance')
     
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
@@ -147,20 +147,67 @@ def get_blofin_data(acc):
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
-        # Account Balance abrufen
-        balance_response = client.get_account_balance()
+        # Verschiedene Balance-Endpunkte versuchen
         usdt = 0.0
+        balance_response = None
         
-        logging.info(f"Blofin Balance Response: {balance_response}")
+        # Versuch 1: Asset Balances
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Asset Balance Response: {balance_response}")
+            
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                for balance in balance_response['data']:
+                    currency = balance.get('currency') or balance.get('ccy') or balance.get('coin')
+                    if currency == 'USDT':
+                        # Versuche verschiedene Feldnamen für verfügbares Guthaben
+                        available = float(balance.get('available', balance.get('availBal', balance.get('free', 0))))
+                        frozen = float(balance.get('frozen', balance.get('frozenBal', balance.get('locked', 0))))
+                        total = float(balance.get('total', balance.get('totalBal', balance.get('balance', 0))))
+                        
+                        # Wenn total vorhanden ist, verwende das, sonst available + frozen
+                        if total > 0:
+                            usdt = total
+                        else:
+                            usdt = available + frozen
+                        
+                        logging.info(f"Blofin USDT gefunden: available={available}, frozen={frozen}, total={total}, final={usdt}")
+                        break
+        except Exception as e:
+            logging.error(f"Fehler bei Blofin Asset Balance {acc['name']}: {e}")
         
-        if balance_response.get('code') == '0' and balance_response.get('data'):
-            for balance in balance_response['data']:
-                if balance.get('currency') == 'USDT' or balance.get('ccy') == 'USDT':
-                    # Versuche verschiedene Feldnamen
-                    available = float(balance.get('available', balance.get('availBal', 0)))
-                    frozen = float(balance.get('frozen', balance.get('frozenBal', 0)))
-                    usdt = available + frozen
-                    break
+        # Versuch 2: Account Info falls Asset Balance nicht funktioniert
+        if usdt == 0.0:
+            try:
+                account_response = client._make_request('GET', '/api/v1/account/account')
+                logging.info(f"Blofin Account Response: {account_response}")
+                
+                if account_response.get('code') == '0' and account_response.get('data'):
+                    data = account_response['data']
+                    if isinstance(data, list) and len(data) > 0:
+                        data = data[0]
+                    
+                    # Suche nach USDT in verschiedenen Strukturen
+                    if 'details' in data:
+                        for detail in data['details']:
+                            if detail.get('ccy') == 'USDT' or detail.get('currency') == 'USDT':
+                                usdt = float(detail.get('cashBal', detail.get('bal', detail.get('balance', 0))))
+                                break
+                    elif 'totalEq' in data:
+                        usdt = float(data.get('totalEq', 0))
+                    elif 'uTime' in data:  # Bybit-ähnliche Struktur
+                        usdt = float(data.get('totalWalletBalance', data.get('totalMarginBalance', 0)))
+            except Exception as e:
+                logging.error(f"Fehler bei Blofin Account Info {acc['name']}: {e}")
+        
+        # Versuch 3: Wallet Balance
+        if usdt == 0.0:
+            try:
+                wallet_response = client._make_request('GET', '/api/v1/asset/currencies')
+                logging.info(f"Blofin Wallet Response: {wallet_response}")
+                # Weitere Implementierung falls nötig
+            except Exception as e:
+                logging.error(f"Fehler bei Blofin Wallet {acc['name']}: {e}")
         
         # Positionen abrufen
         positions = []
@@ -170,19 +217,27 @@ def get_blofin_data(acc):
             
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    pos_size = float(pos.get('pos', pos.get('size', 0)))
-                    if pos_size > 0:
+                    # Verschiedene Feldnamen für Position Size versuchen
+                    pos_size = float(pos.get('pos', pos.get('size', pos.get('sz', 0))))
+                    if pos_size != 0:  # Auch negative Positionen (Short) berücksichtigen
                         # Konvertiere Blofin Position in Bybit-ähnliches Format
                         position = {
-                            'symbol': pos.get('instId', pos.get('instrument_id', '')),
-                            'size': str(pos_size),
-                            'avgPrice': pos.get('avgPx', pos.get('avg_cost', '0')),
-                            'unrealisedPnl': pos.get('upl', pos.get('unrealized_pnl', '0')),
-                            'side': 'Buy' if pos.get('posSide', pos.get('side')) in ['long', 'net'] else 'Sell'
+                            'symbol': pos.get('instId', pos.get('instrument_id', pos.get('symbol', ''))),
+                            'size': str(abs(pos_size)),  # Absolutwert für Anzeige
+                            'avgPrice': pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0'))),
+                            'unrealisedPnl': pos.get('upl', pos.get('unrealized_pnl', pos.get('unrealizedPnl', '0'))),
+                            'side': 'Buy' if pos_size > 0 else 'Sell'  # Positive = Long, Negative = Short
                         }
                         positions.append(position)
+                        logging.info(f"Blofin Position gefunden: {position}")
         except Exception as e:
             logging.error(f"Fehler bei Blofin Positionen {acc['name']}: {e}")
+        
+        # Debug-Output
+        if usdt == 0.0:
+            logging.warning(f"Blofin {acc['name']}: Kein USDT-Guthaben gefunden. Balance Response: {balance_response}")
+        else:
+            logging.info(f"Blofin {acc['name']}: Erfolgreich ${usdt} USDT gefunden")
         
         return usdt, positions, "✅"
     
