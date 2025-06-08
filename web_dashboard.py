@@ -347,6 +347,37 @@ def get_blofin_data(acc):
                         logging.info(f"Blofin Position gefunden: {position}")
         except Exception as e:
             logging.error(f"Fehler bei Blofin Positionen {acc['name']}: {e}")
+
+        # USDT-Guthaben aus Balance-Daten ermitteln
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Asset Balance Response: {balance_response}")
+
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                data = balance_response['data']
+                if isinstance(data, dict) and 'details' in data:
+                    for balance in data['details']:
+                        currency = balance.get('currency') or balance.get('ccy') or balance.get('coin')
+                        if currency == 'USDT':
+                            available = float(balance.get('available', 0))
+                            frozen = float(balance.get('frozen', 0))
+                            total = float(balance.get('total', balance.get('balance', 0)))
+                            equity_usd = float(balance.get('equityUsd', 0)) if balance.get('equityUsd') else 0
+                            equity = float(balance.get('equity', 0)) if balance.get('equity') else 0
+
+                            if equity_usd > 0:
+                                usdt = equity_usd
+                            elif equity > 0:
+                                usdt = equity
+                            elif total > 0:
+                                usdt = total
+                            else:
+                                usdt = available + frozen
+
+                            logging.info(f"Blofin USDT gefunden: equityUsd={equity_usd}, equity={equity}, total={total}, available={available}, frozen={frozen}, final={usdt}")
+                            break
+        except Exception as e:
+            logging.error(f"Fehler bei Blofin Asset Balance {acc['name']}: {e}")
         
         # Debug-Output
         if usdt == 0.0:
