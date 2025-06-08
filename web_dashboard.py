@@ -275,8 +275,15 @@ def get_blofin_data(acc):
                         frozen = float(balance.get('frozen', balance.get('frozenBal', balance.get('locked', 0))))
                         total = float(balance.get('total', balance.get('totalBal', balance.get('balance', 0))))
                         
-                        # Wenn total vorhanden ist, verwende das, sonst available + frozen
-                        if total > 0:
+                        # Versuche zuerst equityUsd (der reale Wert inkl. PnL)
+                        equity_usd = float(balance.get('equityUsd', 0)) if balance.get('equityUsd') else 0
+                        equity = float(balance.get('equity', 0)) if balance.get('equity') else 0
+
+                        if equity_usd > 0:
+                            usdt = equity_usd
+                        elif equity > 0:
+                            usdt = equity
+                        elif total > 0:
                             usdt = total
                         else:
                             usdt = available + frozen
