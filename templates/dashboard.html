@@ -426,6 +426,11 @@
                     <h5 class="table-title">
                         <i class="fas fa-chart-area icon-blue"></i>
                         Offene Positionen
+                        <span class="ms-auto">
+                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
+                            </small>
+                        </span>
                     </h5>
                     <div class="table-container">
                         <table class="table custom-table">
@@ -460,6 +465,19 @@
                                     </td>
                                 </tr>
                                 {% endfor %}
+                                {% if positions_all %}
+                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                                    <td colspan="4" class="text-end" style="padding-top: 15px;">
+                                        <strong>Gesamt Offene Positionen:</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
+                                    </td>
+                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
