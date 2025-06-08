@@ -3,7 +3,7 @@ import logging
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
@@ -16,6 +16,8 @@ import time
 import json
 import base64
 import uuid
+import gspread
+from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
@@ -41,8 +43,106 @@ subaccounts = [
     {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
 ]
 
-# 📊 Startkapital
-startkapital = {
+# 📊 Google Sheets Integration
+def setup_google_sheets():
+    """Google Sheets Setup für historische Daten"""
+    try:
+        # Service Account JSON aus Umgebungsvariable
+        service_account_info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "{}"))
+        
+        # Scopes für Google Sheets
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        
+        # Credentials erstellen
+        credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+        
+        # Google Sheets Client
+        gc = gspread.authorize(credentials)
+        
+        # Spreadsheet öffnen (ID aus Umgebungsvariable)
+        spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
+        sheet = gc.open_by_key(spreadsheet_id).sheet1
+        
+        return sheet
+    except Exception as e:
+        logging.error(f"Google Sheets Setup Fehler: {e}")
+        return None
+
+def save_daily_data(total_balance, total_pnl, sheet=None):
+    """Tägliche Daten in Google Sheets speichern"""
+    if not sheet:
+        return
+    
+    try:
+        # Datum im deutschen Format
+        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
+        
+        # Prüfen ob heute bereits ein Eintrag existiert
+        records = sheet.get_all_records()
+        today_exists = any(record.get('Datum') == today for record in records)
+        
+        if not today_exists:
+            # Neue Zeile hinzufügen
+            sheet.append_row([today, total_balance, total_pnl])
+            logging.info(f"Daten für {today} in Google Sheets gespeichert")
+        else:
+            # Bestehende Zeile aktualisieren
+            for i, record in enumerate(records, start=2):  # Start bei 2 wegen Header
+                if record.get('Datum') == today:
+                    sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                    logging.info(f"Daten für {today} in Google Sheets aktualisiert")
+                    break
+    except Exception as e:
+        logging.error(f"Fehler beim Speichern in Google Sheets: {e}")
+
+def get_historical_performance(total_pnl, sheet=None):
+    """Historische Performance berechnen"""
+    performance_data = {
+        '1_day': 0.0,
+        '7_day': 0.0,
+        '30_day': 0.0
+    }
+    
+    if not sheet:
+        return performance_data
+    
+    try:
+        # Alle Daten aus dem Sheet holen
+        records = sheet.get_all_records()
+        
+        # Nach Datum sortieren
+        df = pd.DataFrame(records)
+        if df.empty:
+            return performance_data
+        
+        # Datum in datetime konvertieren
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y')
+        df = df.sort_values('Datum')
+        
+        # Heutiges Datum
+        today = datetime.now(timezone("Europe/Berlin")).date()
+        
+        # Performance für verschiedene Zeiträume berechnen
+        for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
+            target_date = today - timedelta(days=days)
+            
+            # Nächstgelegenen Eintrag finden
+            df['date_diff'] = abs(df['Datum'].dt.date - target_date)
+            closest_idx = df['date_diff'].idxmin()
+            
+            if pd.notna(closest_idx):
+                historical_pnl = float(df.loc[closest_idx, 'PnL'])
+                performance_data[key] = total_pnl - historical_pnl
+        
+        logging.info(f"Historische Performance berechnet: {performance_data}")
+        
+    except Exception as e:
+        logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
+    
+    return performance_data
     "Incubatorzone": 400.00,
     "Memestrategies": 800.00,
     "Ethapestrategies": 1200.00,
@@ -262,6 +362,9 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
+    # Google Sheets Setup
+    sheet = setup_google_sheets()
+
     account_data = []
     total_balance = 0.0
     total_start = sum(startkapital.values())
@@ -306,6 +409,12 @@ def dashboard():
     
     # Berechne PnL Prozent für offene Positionen basierend auf Gesamtkapital
     total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
+
+    # Historische Performance abrufen
+    historical_performance = get_historical_performance(total_pnl, sheet)
+    
+    # Tägliche Daten speichern
+    save_daily_data(total_balance, total_pnl, sheet)
 
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
@@ -362,6 +471,7 @@ def dashboard():
                            total_balance=total_balance,
                            total_pnl=total_pnl,
                            total_pnl_percent=total_pnl_percent,
+                           historical_performance=historical_performance,
                            chart_path_strategien=chart_path_strategien,
                            chart_path_projekte=chart_path_projekte,
                            positions_all=positions_all,
