@@ -64,7 +64,10 @@ def setup_google_sheets():
         
         # Spreadsheet öffnen (ID aus Umgebungsvariable)
         spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
-        sheet = gc.open_by_key(spreadsheet_id).sheet1
+        spreadsheet = gc.open_by_key(spreadsheet_id)
+        
+        # Spezifisches Arbeitsblatt öffnen
+        sheet = spreadsheet.worksheet("DailyBalances")
         
         return sheet
     except Exception as e:
