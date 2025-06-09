@@ -351,13 +351,13 @@ def calculate_trading_metrics(trades, account_name):
         profit_factor = total_wins / total_losses if total_losses > 0 else (float('inf') if total_wins > 0 else 0)
         
         # Maximum Drawdown
-        cumulative_pnl = []
-        running_total = 0
-        for pnl in pnl_list:
-            running_total += pnl
-            cumulative_pnl.append(running_total)
-        
-        if cumulative_pnl:
+        if len(pnl_list) > 0:
+            cumulative_pnl = []
+            running_total = 0
+            for pnl in pnl_list:
+                running_total += pnl
+                cumulative_pnl.append(running_total)
+            
             peak = cumulative_pnl[0]
             max_drawdown = 0
             for value in cumulative_pnl:
@@ -602,8 +602,15 @@ def get_blofin_data(acc):
                         frozen = float(balance.get('frozen', balance.get('frozenBal', balance.get('locked', 0))))
                         total = float(balance.get('total', balance.get('totalBal', balance.get('balance', 0))))
                         
-                        # Wenn total vorhanden ist, verwende das, sonst available + frozen
-                        if total > 0:
+                        # Versuche zuerst equityUsd (der reale Wert inkl. PnL)
+                        equity_usd = float(balance.get('equityUsd', 0)) if balance.get('equityUsd') else 0
+                        equity = float(balance.get('equity', 0)) if balance.get('equity') else 0
+
+                        if equity_usd > 0:
+                            usdt = equity_usd
+                        elif equity > 0:
+                            usdt = equity
+                        elif total > 0:
                             usdt = total
                         else:
                             usdt = available + frozen
@@ -651,24 +658,53 @@ def get_blofin_data(acc):
         try:
             pos_response = client.get_positions()
             logging.info(f"Blofin Positions Response: {pos_response}")
-            
+
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    # Verschiedene Feldnamen für Position Size versuchen
-                    pos_size = float(pos.get('pos', pos.get('size', pos.get('sz', 0))))
-                    if pos_size != 0:  # Auch negative Positionen (Short) berücksichtigen
-                        # Konvertiere Blofin Position in Bybit-ähnliches Format
+                    pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
+                    if pos_size != 0:
                         position = {
                             'symbol': pos.get('instId', pos.get('instrument_id', pos.get('symbol', ''))),
-                            'size': str(abs(pos_size)),  # Absolutwert für Anzeige
-                            'avgPrice': pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0'))),
-                            'unrealisedPnl': pos.get('upl', pos.get('unrealized_pnl', pos.get('unrealizedPnl', '0'))),
-                            'side': 'Buy' if pos_size > 0 else 'Sell'  # Positive = Long, Negative = Short
+                            'size': str(abs(pos_size)),
+                            'avgPrice': pos.get('averagePrice', pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0'))),
+                            'side': 'Buy' if pos_size > 0 else 'Sell'
                         }
                         positions.append(position)
                         logging.info(f"Blofin Position gefunden: {position}")
         except Exception as e:
             logging.error(f"Fehler bei Blofin Positionen {acc['name']}: {e}")
+
+        # USDT-Guthaben aus Balance-Daten ermitteln
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Asset Balance Response: {balance_response}")
+
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                data = balance_response['data']
+                if isinstance(data, dict) and 'details' in data:
+                    for balance in data['details']:
+                        currency = balance.get('currency') or balance.get('ccy') or balance.get('coin')
+                        if currency == 'USDT':
+                            available = float(balance.get('available', 0))
+                            frozen = float(balance.get('frozen', 0))
+                            total = float(balance.get('total', balance.get('balance', 0)))
+                            equity_usd = float(balance.get('equityUsd', 0)) if balance.get('equityUsd') else 0
+                            equity = float(balance.get('equity', 0)) if balance.get('equity') else 0
+
+                            if equity_usd > 0:
+                                usdt = equity_usd
+                            elif equity > 0:
+                                usdt = equity
+                            elif total > 0:
+                                usdt = total
+                            else:
+                                usdt = available + frozen
+
+                            logging.info(f"Blofin USDT gefunden: equityUsd={equity_usd}, equity={equity}, total={total}, available={available}, frozen={frozen}, final={usdt}")
+                            break
+        except Exception as e:
+            logging.error(f"Fehler bei Blofin Asset Balance {acc['name']}: {e}")
         
         # Debug-Output
         if usdt == 0.0:
