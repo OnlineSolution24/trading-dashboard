@@ -607,6 +607,8 @@ def get_coin_performance(acc, trade_history):
     coin_performance.sort(key=lambda x: x['pnl'], reverse=True)
     
     return coin_performance[:10]  # Top 10 Coins
+
+def check_bot_alerts(account_data):
     """Bot-Alerts überprüfen"""
     alerts = []
     
@@ -632,6 +634,13 @@ def get_coin_performance(acc, trade_history):
         # Balance-Alerts
         if account['pnl_percent'] < -20:
             alerts.append(f"🔴 {name}: ROI unter -20%!")
+        
+        # Coin-spezifische Alerts
+        coin_performance = account.get('coin_performance', [])
+        poor_coins = [coin for coin in coin_performance if coin['win_rate'] < 30 and coin['trades_count'] > 5]
+        if poor_coins:
+            coin_names = [coin['symbol'] for coin in poor_coins[:3]]  # Top 3 schlechteste
+            alerts.append(f"⚠️ {name}: Schlechte Coin Performance - {', '.join(coin_names)}")
     
     return alerts
 
