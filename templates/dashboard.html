@@ -607,6 +607,205 @@
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
+
+        <!-- KPI Cards -->
+        <div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-chart-line icon-blue"></i>
+                    </div>
+                    <div class="kpi-title">Gesamtperformance</div>
+                    <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
+                    <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
+                        ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-calendar-day icon-gray"></i>
+                    </div>
+                    <div class="kpi-title">1-Tages Performance</div>
+                    <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ "%.2f"|format(historical_performance['1_day']) }}
+                    </div>
+                    <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                        {% if total_start > 0 %}
+                            ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-calendar-week icon-blue"></i>
+                    </div>
+                    <div class="kpi-title">7-Tages Performance</div>
+                    <div class="kpi-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ "%.2f"|format(historical_performance['7_day']) }}
+                    </div>
+                    <div class="pnl-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                        {% if total_start > 0 %}
+                            ({{ "%.2f"|format((historical_performance['7_day'] / total_start) * 100) }}%)
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-calendar-alt icon-gray"></i>
+                    </div>
+                    <div class="kpi-title">30-Tages Performance</div>
+                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ "%.2f"|format(historical_performance['30_day']) }}
+                    </div>
+                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                        {% if total_start > 0 %}
+                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
+                    </h5>
+                    <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
+                    </h5>
+                    <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables -->
+        <div class="row">
+            <!-- Subaccounts Table -->
+            <div class="col-lg-6">
+                <div class="data-table">
+                    <h5 class="table-title">
+                        <i class="fas fa-users icon-blue"></i>
+                        Subaccounts
+                    </h5>
+                    <div class="table-container">
+                        <table class="table custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Status</th>
+                                    <th>Start</th>
+                                    <th>Balance</th>
+                                    <th>PnL</th>
+                                    <th>PnL %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for a in accounts %}
+                                <tr>
+                                    <td class="account-name">{{ a.name }}</td>
+                                    <td>
+                                        {% if a.status == "✅" %}
+                                            <span class="status-badge status-online">Online</span>
+                                        {% else %}
+                                            <span class="status-badge status-offline">Offline</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="neutral">${{ "%.2f"|format(a.start) }}</td>
+                                    <td class="neutral">${{ "%.2f"|format(a.balance) }}</td>
+                                    <td class="pnl-value {% if a.pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                        ${{ "%.2f"|format(a.pnl) }}
+                                    </td>
+                                    <td class="pnl-value {% if a.pnl_percent >= 0 %}profit{% else %}loss{% endif %}">
+                                        {{ "%.2f"|format(a.pnl_percent) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Positions Table -->
+            <div class="col-lg-6">
+                <div class="data-table">
+                    <h5 class="table-title">
+                        <i class="fas fa-chart-area icon-blue"></i>
+                        Offene Positionen
+                        <span class="ms-auto">
+                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
+                            </small>
+                        </span>
+                    </h5>
+                    <div class="table-container">
+                        <table class="table custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Symbol</th>
+                                    <th>Größe</th>
+                                    <th>Einstieg</th>
+                                    <th>PnL</th>
+                                    <th>Seite</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name, pos in positions_all %}
+                                <tr>
+                                    <td class="account-name">{{ name }}</td>
+                                    <td>
+                                        <span class="symbol-badge">{{ pos.symbol }}</span>
+                                    </td>
+                                    <td class="neutral">{{ pos.size }}</td>
+                                    <td class="neutral">${{ pos.avgPrice }}</td>
+                                    <td class="pnl-value {% if pos.unrealisedPnl|float >= 0 %}profit{% else %}loss{% endif %}">
+                                        ${{ "%.2f"|format(pos.unrealisedPnl|float) }}
+                                    </td>
+                                    <td>
+                                        {% if pos.side == "Buy" %}
+                                            <span class="side-long">Long</span>
+                                        {% else %}
+                                            <span class="side-short">Short</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if positions_all %}
+                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                                    <td colspan="4" class="text-end" style="padding-top: 15px;">
+                                        <strong>Gesamt Offene Positionen:</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
             <!-- Bot Performance Analytics Section (am Ende) -->
         <div class="row">
             <div class="col-12">
@@ -867,205 +1066,7 @@
                 </div>
             </div>
         </div>
-
-        <!-- KPI Cards -->
-        <div class="row">
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-chart-line icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">Gesamtperformance</div>
-                    <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
-                    <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
-                        ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-day icon-gray"></i>
-                    </div>
-                    <div class="kpi-title">1-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['1_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-week icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">7-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['7_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['7_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-alt icon-gray"></i>
-                    </div>
-                    <div class="kpi-title">30-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['30_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="row">
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
-                    </h5>
-                    <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
-                    </h5>
-                    <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
-                </div>
-            </div>
-        </div>
-
-        <!-- Tables -->
-        <div class="row">
-            <!-- Subaccounts Table -->
-            <div class="col-lg-6">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-users icon-blue"></i>
-                        Subaccounts
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Status</th>
-                                    <th>Start</th>
-                                    <th>Balance</th>
-                                    <th>PnL</th>
-                                    <th>PnL %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in accounts %}
-                                <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        {% if a.status == "✅" %}
-                                            <span class="status-badge status-online">Online</span>
-                                        {% else %}
-                                            <span class="status-badge status-offline">Offline</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="neutral">${{ "%.2f"|format(a.start) }}</td>
-                                    <td class="neutral">${{ "%.2f"|format(a.balance) }}</td>
-                                    <td class="pnl-value {% if a.pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(a.pnl) }}
-                                    </td>
-                                    <td class="pnl-value {% if a.pnl_percent >= 0 %}profit{% else %}loss{% endif %}">
-                                        {{ "%.2f"|format(a.pnl_percent) }}%
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Positions Table -->
-            <div class="col-lg-6">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-chart-area icon-blue"></i>
-                        Offene Positionen
-                        <span class="ms-auto">
-                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
-                            </small>
-                        </span>
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Symbol</th>
-                                    <th>Größe</th>
-                                    <th>Einstieg</th>
-                                    <th>PnL</th>
-                                    <th>Seite</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for name, pos in positions_all %}
-                                <tr>
-                                    <td class="account-name">{{ name }}</td>
-                                    <td>
-                                        <span class="symbol-badge">{{ pos.symbol }}</span>
-                                    </td>
-                                    <td class="neutral">{{ pos.size }}</td>
-                                    <td class="neutral">${{ pos.avgPrice }}</td>
-                                    <td class="pnl-value {% if pos.unrealisedPnl|float >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(pos.unrealisedPnl|float) }}
-                                    </td>
-                                    <td>
-                                        {% if pos.side == "Buy" %}
-                                            <span class="side-long">Long</span>
-                                        {% else %}
-                                            <span class="side-short">Short</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                                {% if positions_all %}
-                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
-                                    <td colspan="4" class="text-end" style="padding-top: 15px;">
-                                        <strong>Gesamt Offene Positionen:</strong>
-                                    </td>
-                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
-                                    </td>
-                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
-                                    </td>
-                                </tr>
-                                {% endif %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
+        
     <!-- Footer Timestamp -->
     <div class="footer-timestamp">
         <i class="fas fa-clock me-2"></i>
