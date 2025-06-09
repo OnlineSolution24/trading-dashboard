@@ -531,7 +531,82 @@ def save_bot_performance_to_sheets(account_data, sheet=None):
     except Exception as e:
         logging.error(f"Fehler beim Speichern der Bot-Performance: {e}")
 
-def check_bot_alerts(account_data):
+def get_coin_performance(acc, trade_history):
+    """Individual Coin Performance analysieren"""
+    if not trade_history:
+        return []
+    
+    coin_data = {}
+    
+    for trade in trade_history:
+        # Symbol extrahieren
+        if acc["exchange"] == "blofin":
+            symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+            pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+            size = float(trade.get('size', trade.get('sz', 0)))
+            price = float(trade.get('price', trade.get('px', 0)))
+        else:  # bybit
+            symbol = trade.get('symbol', '').replace('USDT', '')
+            pnl = float(trade.get('closedPnl', 0))
+            size = float(trade.get('execQty', 0))
+            price = float(trade.get('execPrice', 0))
+        
+        if not symbol or symbol == '':
+            continue
+            
+        if symbol not in coin_data:
+            coin_data[symbol] = {
+                'symbol': symbol,
+                'trades': [],
+                'total_volume': 0,
+                'total_pnl': 0
+            }
+        
+        coin_data[symbol]['trades'].append({
+            'pnl': pnl,
+            'volume': size * price,
+            'timestamp': trade.get('execTime', trade.get('cTime', int(time.time() * 1000)))
+        })
+        coin_data[symbol]['total_volume'] += size * price
+        coin_data[symbol]['total_pnl'] += pnl
+    
+    # Performance-Metriken pro Coin berechnen
+    coin_performance = []
+    
+    for symbol, data in coin_data.items():
+        trades = data['trades']
+        if len(trades) == 0:
+            continue
+            
+        # Basis-Metriken
+        winning_trades = [t['pnl'] for t in trades if t['pnl'] > 0]
+        losing_trades = [t['pnl'] for t in trades if t['pnl'] < 0]
+        
+        win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
+        total_pnl = sum(t['pnl'] for t in trades)
+        
+        # 24h Change simulieren (basierend auf letzten Trades)
+        recent_trades = sorted(trades, key=lambda x: x['timestamp'])[-5:] if len(trades) > 5 else trades
+        daily_change = sum(t['pnl'] for t in recent_trades) / len(recent_trades) if recent_trades else 0
+        
+        # Balance schätzen (Volumen-gewichtet)
+        estimated_balance = data['total_volume'] / len(trades) if trades else 0
+        pnl_percent = (total_pnl / estimated_balance * 100) if estimated_balance > 0 else 0
+        
+        coin_performance.append({
+            'symbol': symbol,
+            'balance': estimated_balance,
+            'pnl': total_pnl,
+            'pnl_percent': pnl_percent,
+            'daily_change': daily_change,
+            'trades_count': len(trades),
+            'win_rate': win_rate
+        })
+    
+    # Nach PnL sortieren (beste zuerst)
+    coin_performance.sort(key=lambda x: x['pnl'], reverse=True)
+    
+    return coin_performance[:10]  # Top 10 Coins
     """Bot-Alerts überprüfen"""
     alerts = []
     
@@ -757,6 +832,9 @@ def dashboard():
         trade_history = get_trade_history(acc)
         trading_metrics = calculate_trading_metrics(trade_history, name)
         
+        # Individual Coin Performance abrufen
+        coin_performance = get_coin_performance(acc, trade_history)
+        
         # Positionen zur Gesamtliste hinzufügen und PnL summieren
         for p in positions:
             positions_all.append((name, p))
@@ -779,7 +857,8 @@ def dashboard():
             "positions": positions,
             "trading_metrics": trading_metrics,
             "risk_score": calculate_risk_score(trading_metrics),
-            "performance_grade": get_performance_grade(trading_metrics)
+            "performance_grade": get_performance_grade(trading_metrics),
+            "coin_performance": coin_performance
         })
 
         total_balance += usdt
