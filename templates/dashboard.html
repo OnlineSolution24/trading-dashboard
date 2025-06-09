@@ -2,1076 +2,198 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root {
-            --profit-color: #28a745;
-            --loss-color: #dc3545;
-            --neutral-color: #6c757d;
-            --bg-dark: #2c3e50;
-            --bg-card: #34495e;
-            --bg-light: #ecf0f1;
-            --text-light: #ffffff;
-            --text-dark: #2c3e50;
-            --text-muted: #95a5a6;
-            --border-color: #7f8c8d;
-            --blue-primary: #3498db;
-            --blue-secondary: #2980b9;
-            --gray-light: #bdc3c7;
-            --gray-dark: #95a5a6;
-        }
-
         body {
-            background: #2c3e50;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: var(--text-light);
+            padding: 20px;
         }
-
-        .dashboard-container {
-            background: rgba(44, 62, 80, 0.95);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            margin: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-            border: 1px solid var(--border-color);
-        }
-
-        .kpi-card {
-            background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
-            border-radius: 15px;
-            padding: 25px;
+        .kpi-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
             text-align: center;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-            border: 1px solid var(--border-color);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
         }
-
-        .kpi-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.3);
-        }
-
-        .kpi-title {
-            font-size: 0.9rem;
-            color: var(--gray-light);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
         .kpi-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin: 0;
+            font-size: 1.5rem;
+            font-weight: bold;
         }
-
-        .kpi-icon {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-            opacity: 0.8;
-        }
-
-        .profit { color: var(--profit-color) !important; }
-        .loss { color: var(--loss-color) !important; }
-        .neutral { color: var(--gray-light) !important; }
-
-        .chart-container {
-            background: var(--bg-card);
-            border-radius: 15px;
-            padding: 20px;
+        .kpi-row {
             margin-bottom: 30px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
-
-        .chart-title {
-            color: var(--text-light);
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-            text-align: center;
+        .pnl-green {
+            color: green;
         }
-
-        .chart-img {
-            width: 100%;
-            height: auto;
-            border-radius: 10px;
+        .pnl-red {
+            color: red;
         }
-
-        .data-table {
-            background: var(--bg-card);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 30px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        .table-responsive {
+            max-height: 500px;
+            overflow-y: auto;
         }
-
-        .table-title {
-            color: var(--text-light);
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .custom-table {
-            background: transparent;
-            color: var(--text-light);
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 0;
-        }
-
-        .custom-table thead {
-            background: #95a5a6;
-        }
-
-        .custom-table th {
-            border: none;
-            padding: 15px 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 0.5px;
-            color: var(--text-light);
-        }
-
-        .custom-table td {
-            border: none;
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-        }
-
-        .custom-table tbody tr {
-            transition: background-color 0.2s ease;
-        }
-
-        .custom-table tbody tr:hover {
-            background-color: rgba(52, 152, 219, 0.1);
-        }
-
-        .custom-table tbody tr:last-child td {
-            border-bottom: none;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .status-online {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: var(--profit-color);
-            border: 1px solid var(--profit-color);
-        }
-
-        .status-offline {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: var(--loss-color);
-            border: 1px solid var(--loss-color);
-        }
-
-        .pnl-value {
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        .account-name {
-            font-weight: 600;
-            color: var(--text-light);
-        }
-
-        .symbol-badge {
-            background: #95a5a6;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .side-long {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: var(--profit-color);
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            border: 1px solid var(--profit-color);
-        }
-
-        .side-short {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: var(--loss-color);
-            padding: 4px 12px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            border: 1px solid var(--loss-color);
-        }
-
-        .footer-timestamp {
+        .fixed-footer {
             position: fixed;
-            bottom: 20px;
-            right: 30px;
-            background: rgba(44, 62, 80, 0.9);
-            padding: 10px 15px;
-            border-radius: 25px;
+            bottom: 10px;
+            right: 20px;
             font-size: 0.85rem;
-            color: var(--gray-light);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
+            color: #666;
         }
-
-        .header-section {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .header-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--blue-primary), var(--gray-light));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-        }
-
-        .header-subtitle {
-            color: var(--gray-light);
-            font-size: 1.1rem;
-        }
-
-        .icon-blue { color: var(--blue-primary); }
-        .icon-gray { color: var(--gray-light); }
-
-        /* Analytics-spezifische Styles */
-        .grade-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 0.8rem;
-        }
-        
-        .grade-Aplus { background: #28a745; color: white; }
-        .grade-A { background: #17a2b8; color: white; }
-        .grade-Bplus { background: #20c997; color: white; }
-        .grade-B { background: #ffc107; color: black; }
-        .grade-Cplus { background: #fd7e14; color: white; }
-        .grade-C { background: #e83e8c; color: white; }
-        .grade-D { background: #dc3545; color: white; }
-        .grade-NA { background: #6c757d; color: white; }
-        
-        .risk-score {
-            font-weight: 600;
-            color: var(--text-light);
-            font-size: 0.9rem;
-        }
-        
-        .action-badge {
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
-        
-        .action-stop { background: #dc3545; color: white; }
-        .action-review { background: #ffc107; color: black; }
-        .action-optimize { background: #17a2b8; color: white; }
-        .action-scale { background: #28a745; color: white; }
-        .action-na { background: #6c757d; color: white; }
-
-        .alert-banner {
-            background: linear-gradient(145deg, #dc3545, #c82333);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #721c24;
-        }
-
-        .alert-banner h6 {
-            color: white;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .alert-banner ul {
-            color: white;
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .analytics-table {
-            font-size: 0.9rem;
-        }
-
-        .analytics-table th {
-            font-size: 0.8rem;
-            padding: 10px 8px;
-        }
-
-        .analytics-table td {
-            padding: 10px 8px;
-        }
-
-        .legend-container {
-            background: var(--bg-card);
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-        .legend-container h6 {
-            color: var(--text-light);
-            margin-bottom: 15px;
-            font-weight: 600;
-        }
-
-        .legend-section {
-            margin-bottom: 15px;
-        }
-
-        .legend-section h6 {
-            font-size: 0.9rem;
-            color: var(--blue-primary);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 5px;
-            font-size: 0.8rem;
-            color: var(--gray-light);
-        }
-
-        .legend-item strong {
-            color: var(--text-light);
-            min-width: 80px;
-        }
-
-        /* Entfernen der Scroll-Container */
-        .table-container {
-            overflow: visible;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1200px) {
-            .kpi-value {
-                font-size: 1.8rem;
-            }
-        }
-
-        @media (max-width: 992px) {
-            .dashboard-container {
-                margin: 15px;
-                padding: 25px;
-            }
-
-            .chart-container,
-            .data-table {
-                margin-bottom: 25px;
-            }
-
-            /* Tabellen werden untereinander auf mittelgroßen Bildschirmen */
-            .col-lg-6 {
-                margin-bottom: 20px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .dashboard-container {
-                margin: 10px;
-                padding: 20px;
-            }
-            
-            .kpi-value {
-                font-size: 1.5rem;
-            }
-            
-            .header-title {
-                font-size: 2rem;
-            }
-
-            .header-subtitle {
-                font-size: 1rem;
-            }
-
-            .kpi-icon {
-                font-size: 2rem;
-                margin-bottom: 10px;
-            }
-
-            .kpi-card {
-                padding: 20px;
-                margin-bottom: 15px;
-            }
-
-            .chart-title,
-            .table-title {
-                font-size: 1.1rem;
-            }
-
-            .custom-table {
-                font-size: 0.85rem;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 8px 6px;
-            }
-
-            /* Bessere Darstellung der PnL-Zusammenfassung im Titel */
-            .table-title {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 5px;
-            }
-
-            .table-title .ms-auto {
-                margin-left: 0 !important;
-                align-self: flex-end;
-            }
-        }
-
-        /* Sehr kleine Bildschirme (Smartphones) */
-        @media (max-width: 576px) {
-            .dashboard-container {
-                margin: 5px;
-                padding: 15px;
-            }
-
-            .header-title {
-                font-size: 1.5rem;
-            }
-
-            .kpi-value {
-                font-size: 1.3rem;
-            }
-
-            .kpi-title {
-                font-size: 0.8rem;
-            }
-
-            .kpi-card {
-                padding: 15px;
-            }
-
-            /* KPI Cards werden zu einer Spalte */
-            .col-lg-3 {
-                margin-bottom: 15px;
-            }
-
-            /* Tabellen werden kompakter */
-            .custom-table {
-                font-size: 0.75rem;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 6px 4px;
-            }
-
-            /* Account-Namen kürzen bei sehr kleinen Bildschirmen */
-            .account-name {
-                font-size: 0.8rem;
-                max-width: 80px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            /* Symbol-Badges kompakter */
-            .symbol-badge {
-                font-size: 0.7rem;
-                padding: 2px 6px;
-            }
-
-            /* Side-Badges kompakter */
-            .side-long,
-            .side-short {
-                font-size: 0.7rem;
-                padding: 2px 8px;
-            }
-
-            /* Analytics-Tabelle responsiver machen */
-            .analytics-table {
-                font-size: 0.8rem;
-            }
-
-            .analytics-table th,
-            .analytics-table td {
-                padding: 6px 4px;
-            }
-
-            .grade-badge,
-            .action-badge {
-                font-size: 0.6rem;
-                padding: 2px 6px;
-            }
-
-            /* Footer-Timestamp anpassen */
-            .footer-timestamp {
-                position: relative;
-                bottom: auto;
-                right: auto;
-                margin-top: 20px;
-                text-align: center;
-                font-size: 0.8rem;
-            }
-
-            /* Charts responsiver machen */
-            .chart-container {
-                padding: 15px;
-            }
-
-            .data-table {
-                padding: 15px;
-            }
-
-            /* Horizontales Scrollen für Tabellen bei sehr kleinen Bildschirmen */
-            .table-container {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-
-            .custom-table {
-                min-width: 500px;
-            }
-        }
-
-        /* Extra kleine Bildschirme */
-        @media (max-width: 400px) {
-            .header-title {
-                font-size: 1.3rem;
-            }
-
-            .kpi-value {
-                font-size: 1.1rem;
-            }
-
-            .custom-table {
-                font-size: 0.7rem;
-                min-width: 450px;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 4px 3px;
-            }
-        }
-
-        /* Landscape-Modus für Smartphones */
-        @media (max-height: 500px) and (orientation: landscape) {
-            .header-section {
-                margin-bottom: 20px;
-            }
-
-            .kpi-card {
-                padding: 15px;
-                margin-bottom: 10px;
-            }
-
-            .chart-container,
-            .data-table {
-                margin-bottom: 20px;
-            }
+        .chart-img {
+            max-width: 100%;
+            height: auto;
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <!-- Header -->
-        <div class="header-section">
-            <h1 class="header-title">
-                <i class="fas fa-chart-line me-3"></i>Trading Dashboard
-            </h1>
-            <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
-            <!-- Bot Performance Analytics Section (am Ende) -->
-        <div class="row">
-            <div class="col-12">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-robot icon-blue"></i>
-                        Bot Performance Analytics
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table analytics-table">
-                            <thead>
-                                <tr>
-                                    <th>Bot Name</th>
-                                    <th>Grade</th>
-                                    <th>Risk Score</th>
-                                    <th>Trades</th>
-                                    <th>Win Rate</th>
-                                    <th>Profit Factor</th>
-                                    <th>Max DD</th>
-                                    <th>Sharpe</th>
-                                    <th>Best Trade</th>
-                                    <th>Worst Trade</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in accounts %}
-                                {% if a.trading_metrics %}
-                                <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        <span class="grade-badge grade-{{ a.performance_grade.replace('+', 'plus').replace('/', '').replace('N/A', 'NA') }}">
-                                            {{ a.performance_grade }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="risk-score">{{ a.risk_score }}</span>
-                                    </td>
-                                    <td class="neutral">{{ a.trading_metrics.total_trades }}</td>
-                                    <td class="{% if a.trading_metrics.win_rate >= 50 %}profit{% elif a.trading_metrics.win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.win_rate }}%
-                                    </td>
-                                    <td class="{% if a.trading_metrics.profit_factor >= 1.2 %}profit{% elif a.trading_metrics.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.profit_factor }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.max_drawdown <= 100 %}profit{% elif a.trading_metrics.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
-                                        ${{ a.trading_metrics.max_drawdown }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.sharpe_ratio >= 0.5 %}profit{% elif a.trading_metrics.sharpe_ratio >= 0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.sharpe_ratio }}
-                                    </td>
-                                    <td class="profit">
-                                        ${{ a.trading_metrics.best_trade }}
-                                    </td>
-                                    <td class="loss">
-                                        ${{ a.trading_metrics.worst_trade }}
-                                    </td>
-                                    <td>
-                                        {% if a.performance_grade == 'D' %}
-                                            <span class="action-badge action-stop">STOP</span>
-                                        {% elif a.performance_grade in ['C', 'C+'] %}
-                                            <span class="action-badge action-review">REVIEW</span>
-                                        {% elif a.performance_grade in ['B', 'B+'] %}
-                                            <span class="action-badge action-optimize">OPTIMIZE</span>
-                                        {% elif a.performance_grade in ['A', 'A+'] %}
-                                            <span class="action-badge action-scale">SCALE UP</span>
-                                        {% else %}
-                                            <span class="action-badge action-na">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endif %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+
+<div class="container-fluid">
+
+    <!-- KPI BOXEN -->
+    <div class="row kpi-row text-center">
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Startkapital</div>
+                <div class="kpi-value">${{ total_start | round(2) }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Aktueller Wert</div>
+                <div class="kpi-value">${{ total_balance | round(2) }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Gesamt-PnL</div>
+                <div class="kpi-value {% if total_pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                    ${{ total_pnl | round(2) }}
                 </div>
             </div>
         </div>
-
-        <!-- Analytics Legend -->
-        <div class="row">
-            <div class="col-12">
-                <div class="legend-container">
-                    <h6><i class="fas fa-info-circle me-2"></i>Analytics Legend</h6>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Performance Grades:</h6>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Aplus">A+</span> Excellent (80-100 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-A">A</span> Very Good (70-79 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Bplus">B+</span> Good (60-69 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-B">B</span> Average (50-59 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Cplus">C+</span> Below Avg (40-49 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-C">C</span> Poor (30-39 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-D">D</span> Very Poor (0-29 pts)
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Action Recommendations:</h6>
-                                <div class="legend-item">
-                                    <span class="action-badge action-scale">SCALE UP</span> Increase capital
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-optimize">OPTIMIZE</span> Fine-tune parameters
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-review">REVIEW</span> Check strategy
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-stop">STOP</span> Disable bot
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Key Metrics:</h6>
-                                <div class="legend-item">
-                                    <strong>Win Rate:</strong> % profitable trades
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Profit Factor:</strong> Total wins ÷ Total losses
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Max DD:</strong> Largest peak-to-trough loss
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Sharpe:</strong> Risk-adjusted return
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Risk Score Components:</h6>
-                                <div class="legend-item">
-                                    Win Rate: 30% weight
-                                </div>
-                                <div class="legend-item">
-                                    Profit Factor: 25% weight
-                                </div>
-                                <div class="legend-item">
-                                    Max Drawdown: 25% weight
-                                </div>
-                                <div class="legend-item">
-                                    Sharpe Ratio: 20% weight
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <div class="col-md-3">
+            <div class="kpi-box">
+                <div>Gesamt-PnL (%)</div>
+                <div class="kpi-value {% if total_pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                    {{ total_pnl_percent | round(2) }}%
                 </div>
             </div>
         </div>
     </div>
 
-        <!-- Bot Alerts Banner -->
-        {% if bot_alerts %}
-        <div class="alert-banner">
-            <h6><i class="fas fa-exclamation-triangle me-2"></i>Bot Performance Alerts</h6>
+    <!-- CHARTS -->
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Strategie Performance</h5>
+            <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
+        </div>
+        <div class="col-md-6">
+            <h5>Projekt Performance</h5>
+            <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- TABELLEN -->
+    <div class="row">
+        <!-- Strategien -->
+        <div class="col-md-6 table-responsive">
+            <h5>Strategien</h5>
+            <table class="table table-bordered table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Startkapital</th>
+                        <th>Balance</th>
+                        <th>PnL</th>
+                        <th>PnL (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in accounts %}
+                    <tr>
+                        <td>{{ a.name }}</td>
+                        <td>{{ a.status }}</td>
+                        <td>${{ a.start | round(2) }}</td>
+                        <td>${{ a.balance | round(2) }}</td>
+                        <td class="{% if a.pnl >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            ${{ a.pnl | round(2) }}
+                        </td>
+                        <td class="{% if a.pnl_percent >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            {{ a.pnl_percent | round(2) }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Positionen -->
+        <div class="col-md-6 table-responsive">
+            <h5>Offene Positionen</h5>
+            <table class="table table-bordered table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Subaccount</th>
+                        <th>Symbol</th>
+                        <th>Größe</th>
+                        <th>Eintrittspreis</th>
+                        <th>Unrealized PnL</th>
+                        <th>Richtung</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, pos in positions_all %}
+                    <tr>
+                        <td>{{ name }}</td>
+                        <td>{{ pos.symbol }}</td>
+                        <td>{{ pos.size }}</td>
+                        <td>{{ pos.avgPrice }}</td>
+                        <td class="{% if pos.unrealisedPnl | float >= 0 %}pnl-green{% else %}pnl-red{% endif %}">
+                            {{ pos.unrealisedPnl }}
+                        </td>
+                        <td>
+                            {% if pos.side == "Buy" %} Long {% else %} Short {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- BOT PERFORMANCE -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <h5>Bot Performance Analytics</h5>
             <ul>
-                {% for alert in bot_alerts %}
-                <li>{{ alert }}</li>
-                {% endfor %}
+                <li>Strategie-PnLs farblich hervorgehoben</li>
+                <li>Projektweise Visualisierung</li>
+                <li>Fixierter Zeitstempel für Updates</li>
             </ul>
         </div>
-        {% endif %}
+    </div>
 
-        <!-- Bot Analytics Section -->
-        <div class="row">
-            <div class="col-12">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-robot icon-blue"></i>
-                        Bot Performance Analytics
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table analytics-table">
-                            <thead>
-                                <tr>
-                                    <th>Bot Name</th>
-                                    <th>Grade</th>
-                                    <th>Risk Score</th>
-                                    <th>Trades</th>
-                                    <th>Win Rate</th>
-                                    <th>Profit Factor</th>
-                                    <th>Max DD</th>
-                                    <th>Sharpe</th>
-                                    <th>Best Trade</th>
-                                    <th>Worst Trade</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in accounts %}
-                                {% if a.trading_metrics %}
-                                <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        <span class="grade-badge grade-{{ a.performance_grade.replace('+', 'plus').replace('/', '').replace('N/A', 'NA') }}">
-                                            {{ a.performance_grade }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="risk-score">{{ a.risk_score }}</span>
-                                    </td>
-                                    <td class="neutral">{{ a.trading_metrics.total_trades }}</td>
-                                    <td class="{% if a.trading_metrics.win_rate >= 50 %}profit{% elif a.trading_metrics.win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.win_rate }}%
-                                    </td>
-                                    <td class="{% if a.trading_metrics.profit_factor >= 1.2 %}profit{% elif a.trading_metrics.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.profit_factor }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.max_drawdown <= 100 %}profit{% elif a.trading_metrics.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
-                                        ${{ a.trading_metrics.max_drawdown }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.sharpe_ratio >= 0.5 %}profit{% elif a.trading_metrics.sharpe_ratio >= 0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.sharpe_ratio }}
-                                    </td>
-                                    <td class="profit">
-                                        ${{ a.trading_metrics.best_trade }}
-                                    </td>
-                                    <td class="loss">
-                                        ${{ a.trading_metrics.worst_trade }}
-                                    </td>
-                                    <td>
-                                        {% if a.performance_grade == 'D' %}
-                                            <span class="action-badge action-stop">STOP</span>
-                                        {% elif a.performance_grade in ['C', 'C+'] %}
-                                            <span class="action-badge action-review">REVIEW</span>
-                                        {% elif a.performance_grade in ['B', 'B+'] %}
-                                            <span class="action-badge action-optimize">OPTIMIZE</span>
-                                        {% elif a.performance_grade in ['A', 'A+'] %}
-                                            <span class="action-badge action-scale">SCALE UP</span>
-                                        {% else %}
-                                            <span class="action-badge action-na">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endif %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- KPI Cards -->
-        <div class="row">
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-chart-line icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">Gesamtperformance</div>
-                    <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
-                    <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
-                        ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-day icon-gray"></i>
-                    </div>
-                    <div class="kpi-title">1-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['1_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-week icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">7-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['7_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['7_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-alt icon-gray"></i>
-                    </div>
-                    <div class="kpi-title">30-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['30_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="row">
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
-                    </h5>
-                    <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
-                    </h5>
-                    <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
-                </div>
-            </div>
-        </div>
-
-        <!-- Tables -->
-        <div class="row">
-            <!-- Subaccounts Table -->
-            <div class="col-lg-6">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-users icon-blue"></i>
-                        Subaccounts
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Status</th>
-                                    <th>Start</th>
-                                    <th>Balance</th>
-                                    <th>PnL</th>
-                                    <th>PnL %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for a in accounts %}
-                                <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        {% if a.status == "✅" %}
-                                            <span class="status-badge status-online">Online</span>
-                                        {% else %}
-                                            <span class="status-badge status-offline">Offline</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="neutral">${{ "%.2f"|format(a.start) }}</td>
-                                    <td class="neutral">${{ "%.2f"|format(a.balance) }}</td>
-                                    <td class="pnl-value {% if a.pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(a.pnl) }}
-                                    </td>
-                                    <td class="pnl-value {% if a.pnl_percent >= 0 %}profit{% else %}loss{% endif %}">
-                                        {{ "%.2f"|format(a.pnl_percent) }}%
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Positions Table -->
-            <div class="col-lg-6">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-chart-area icon-blue"></i>
-                        Offene Positionen
-                        <span class="ms-auto">
-                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
-                            </small>
-                        </span>
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Symbol</th>
-                                    <th>Größe</th>
-                                    <th>Einstieg</th>
-                                    <th>PnL</th>
-                                    <th>Seite</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for name, pos in positions_all %}
-                                <tr>
-                                    <td class="account-name">{{ name }}</td>
-                                    <td>
-                                        <span class="symbol-badge">{{ pos.symbol }}</span>
-                                    </td>
-                                    <td class="neutral">{{ pos.size }}</td>
-                                    <td class="neutral">${{ pos.avgPrice }}</td>
-                                    <td class="pnl-value {% if pos.unrealisedPnl|float >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(pos.unrealisedPnl|float) }}
-                                    </td>
-                                    <td>
-                                        {% if pos.side == "Buy" %}
-                                            <span class="side-long">Long</span>
-                                        {% else %}
-                                            <span class="side-short">Short</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                                {% if positions_all %}
-                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
-                                    <td colspan="4" class="text-end" style="padding-top: 15px;">
-                                        <strong>Gesamt Offene Positionen:</strong>
-                                    </td>
-                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
-                                    </td>
-                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
-                                    </td>
-                                </tr>
-                                {% endif %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
+    <!-- LEGENDE -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <h6>Analytics Legend</h6>
+            <ul>
+                <li><span class="pnl-green">Grün:</span> Positive PnL</li>
+                <li><span class="pnl-red">Rot:</span> Negative PnL</li>
+                <li>Alle Werte in USD sofern nicht anders angegeben</li>
+            </ul>
         </div>
     </div>
 
-    <!-- Footer Timestamp -->
-    <div class="footer-timestamp">
-        <i class="fas fa-clock me-2"></i>
-        Letztes Update: {{ now }}
-    </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- ZEITSTEMPEL -->
+<div class="fixed-footer">
+    Zuletzt aktualisiert: {{ now }}
+</div>
+
 </body>
 </html>
