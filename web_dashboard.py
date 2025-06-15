@@ -912,28 +912,32 @@ def dashboard():
 
     # 🎯 Chart Projekte
     projekte = {
-        "10k->1Mio Projekt": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
-        "2k->10k Projekt": ["2k->10k Projekt"],
-        "1k->5k Projekt": ["1k->5k Projekt"],
-        "7 Tage Performer": ["7 Tage Performer"]
+        "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+        "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+        "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+        "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
     }
 
     proj_labels = []
     proj_values = []
+    proj_pnl_values = []  # Für absolute PnL-Werte
     for pname, members in projekte.items():
         start_sum = sum(startkapital.get(m, 0) for m in members)
         curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
-        pnl_percent = ((curr_sum - start_sum) / start_sum) * 100
+        pnl_absolute = curr_sum - start_sum
+        pnl_percent = (pnl_absolute / start_sum) * 100
         proj_labels.append(pname)
         proj_values.append(pnl_percent)
+        proj_pnl_values.append(pnl_absolute)
 
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    fig2, ax2 = plt.subplots(figsize=(12, 6))
     bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
     ax2.axhline(0, color='black')
-    ax2.set_xticklabels(proj_labels, rotation=30, ha="right")
+    ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
     for i, bar in enumerate(bars2):
         ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                 f"{proj_values[i]:+.1f}%", ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
+                 f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
+                 ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
     fig2.tight_layout()
     chart_path_projekte = "static/chart_projekte.png"
     fig2.savefig(chart_path_projekte)
