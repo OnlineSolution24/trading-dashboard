@@ -531,82 +531,156 @@ def save_bot_performance_to_sheets(account_data, sheet=None):
     except Exception as e:
         logging.error(f"Fehler beim Speichern der Bot-Performance: {e}")
 
-def get_coin_performance(acc, trade_history):
-    """Individual Coin Performance analysieren"""
-    if not trade_history:
-        return []
+def get_all_coin_performance(account_data):
+    """Alle Coin Performance aus allen Subaccounts sammeln und analysieren"""
+    all_coin_data = {}
     
-    coin_data = {}
-    
-    for trade in trade_history:
-        # Symbol extrahieren
-        if acc["exchange"] == "blofin":
-            symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-            pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
-            size = float(trade.get('size', trade.get('sz', 0)))
-            price = float(trade.get('price', trade.get('px', 0)))
-        else:  # bybit
-            symbol = trade.get('symbol', '').replace('USDT', '')
-            pnl = float(trade.get('closedPnl', 0))
-            size = float(trade.get('execQty', 0))
-            price = float(trade.get('execPrice', 0))
+    for account in account_data:
+        acc_name = account['name']
         
-        if not symbol or symbol == '':
-            continue
-            
-        if symbol not in coin_data:
-            coin_data[symbol] = {
-                'symbol': symbol,
-                'trades': [],
-                'total_volume': 0,
-                'total_pnl': 0
+        # Trade History für dieses Account abrufen
+        if account['name'] == "7 Tage Performer":
+            acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
+                         "secret": os.environ.get("BLOFIN_API_SECRET"), 
+                         "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
+        else:
+            # Bybit Account - muss API Keys dynamisch zuordnen basierend auf Account Name
+            key_map = {
+                "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
+                "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
+                "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
+                "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
+                "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
+                "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
+                "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
+                "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
+                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
             }
+            
+            if acc_name in key_map:
+                key_env, secret_env = key_map[acc_name]
+                acc_config = {"name": acc_name, "key": os.environ.get(key_env), 
+                             "secret": os.environ.get(secret_env), "exchange": "bybit"}
+            else:
+                continue
         
-        coin_data[symbol]['trades'].append({
-            'pnl': pnl,
-            'volume': size * price,
-            'timestamp': trade.get('execTime', trade.get('cTime', int(time.time() * 1000)))
-        })
-        coin_data[symbol]['total_volume'] += size * price
-        coin_data[symbol]['total_pnl'] += pnl
+        trade_history = get_trade_history(acc_config)
+        
+        for trade in trade_history:
+            # Symbol extrahieren
+            if acc_config["exchange"] == "blofin":
+                symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+                pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+                size = float(trade.get('size', trade.get('sz', 0)))
+                price = float(trade.get('price', trade.get('px', 0)))
+                timestamp = trade.get('cTime', int(time.time() * 1000))
+            else:  # bybit
+                symbol = trade.get('symbol', '').replace('USDT', '')
+                pnl = float(trade.get('closedPnl', 0))
+                size = float(trade.get('execQty', 0))
+                price = float(trade.get('execPrice', 0))
+                timestamp = trade.get('execTime', int(time.time() * 1000))
+            
+            if not symbol or symbol == '' or pnl == 0:
+                continue
+                
+            # Eindeutiger Key: Symbol + Account
+            coin_key = f"{symbol}_{acc_name}"
+            
+            if coin_key not in all_coin_data:
+                all_coin_data[coin_key] = {
+                    'symbol': symbol,
+                    'account': acc_name,
+                    'trades': [],
+                    'total_volume': 0,
+                    'total_pnl': 0
+                }
+            
+            all_coin_data[coin_key]['trades'].append({
+                'pnl': pnl,
+                'volume': size * price,
+                'timestamp': timestamp,
+                'size': size,
+                'price': price
+            })
+            all_coin_data[coin_key]['total_volume'] += size * price
+            all_coin_data[coin_key]['total_pnl'] += pnl
     
     # Performance-Metriken pro Coin berechnen
     coin_performance = []
     
-    for symbol, data in coin_data.items():
+    for coin_key, data in all_coin_data.items():
         trades = data['trades']
         if len(trades) == 0:
             continue
             
         # Basis-Metriken
-        winning_trades = [t['pnl'] for t in trades if t['pnl'] > 0]
-        losing_trades = [t['pnl'] for t in trades if t['pnl'] < 0]
+        pnl_list = [t['pnl'] for t in trades]
+        winning_trades = [pnl for pnl in pnl_list if pnl > 0]
+        losing_trades = [pnl for pnl in pnl_list if pnl < 0]
         
         win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
-        total_pnl = sum(t['pnl'] for t in trades)
+        total_pnl = sum(pnl_list)
         
-        # 24h Change simulieren (basierend auf letzten Trades)
-        recent_trades = sorted(trades, key=lambda x: x['timestamp'])[-5:] if len(trades) > 5 else trades
-        daily_change = sum(t['pnl'] for t in recent_trades) / len(recent_trades) if recent_trades else 0
+        # Profit Factor
+        total_wins = sum(winning_trades) if winning_trades else 0
+        total_losses = abs(sum(losing_trades)) if losing_trades else 0
+        profit_factor = total_wins / total_losses if total_losses > 0 else (999 if total_wins > 0 else 0)
         
-        # Balance schätzen (Volumen-gewichtet)
-        estimated_balance = data['total_volume'] / len(trades) if trades else 0
-        pnl_percent = (total_pnl / estimated_balance * 100) if estimated_balance > 0 else 0
+        # Maximum Drawdown berechnen
+        cumulative_pnl = []
+        running_total = 0
+        for pnl in pnl_list:
+            running_total += pnl
+            cumulative_pnl.append(running_total)
+        
+        peak = cumulative_pnl[0] if cumulative_pnl else 0
+        max_drawdown = 0
+        for value in cumulative_pnl:
+            if value > peak:
+                peak = value
+            drawdown = peak - value
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+        
+        # Durchschnittliche Gewinne/Verluste
+        avg_win = sum(winning_trades) / len(winning_trades) if winning_trades else 0
+        avg_loss = abs(sum(losing_trades) / len(losing_trades)) if losing_trades else 0
+        
+        # Best/Worst Trade
+        best_trade = max(pnl_list) if pnl_list else 0
+        worst_trade = min(pnl_list) if pnl_list else 0
+        
+        # 7-Tage Performance (basierend auf letzten Trades)
+        seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
+        recent_trades = [t for t in trades if t['timestamp'] > seven_days_ago]
+        week_pnl = sum(t['pnl'] for t in recent_trades)
         
         coin_performance.append({
-            'symbol': symbol,
-            'balance': estimated_balance,
-            'pnl': total_pnl,
-            'pnl_percent': pnl_percent,
-            'daily_change': daily_change,
-            'trades_count': len(trades),
-            'win_rate': win_rate
+            'symbol': data['symbol'],
+            'account': data['account'],
+            'total_trades': len(trades),
+            'win_rate': round(win_rate, 1),
+            'total_pnl': round(total_pnl, 2),
+            'profit_factor': round(profit_factor, 2),
+            'max_drawdown': round(max_drawdown, 2),
+            'avg_win': round(avg_win, 2),
+            'avg_loss': round(avg_loss, 2),
+            'best_trade': round(best_trade, 2),
+            'worst_trade': round(worst_trade, 2),
+            'week_pnl': round(week_pnl, 2),
+            'daily_volume': round(data['total_volume'] / 30, 2)  # 30-Tage Durchschnitt
         })
     
-    # Nach PnL sortieren (beste zuerst)
-    coin_performance.sort(key=lambda x: x['pnl'], reverse=True)
+    # Nach Total PnL sortieren (beste zuerst)
+    coin_performance.sort(key=lambda x: x['total_pnl'], reverse=True)
     
-    return coin_performance[:10]  # Top 10 Coins
+    return coin_performance
+
+def get_coin_performance(acc, trade_history):
+    """Individual Coin Performance analysieren (Legacy-Funktion für Kompatibilität)"""
+    # Diese Funktion wird nicht mehr verwendet, aber beibehalten für Kompatibilität
+    return []
 
 def check_bot_alerts(account_data):
     """Bot-Alerts überprüfen"""
@@ -841,8 +915,8 @@ def dashboard():
         trade_history = get_trade_history(acc)
         trading_metrics = calculate_trading_metrics(trade_history, name)
         
-        # Individual Coin Performance abrufen
-        coin_performance = get_coin_performance(acc, trade_history)
+        # Individual Coin Performance abrufen (Legacy - wird nicht mehr verwendet)
+        coin_performance = []
         
         # Positionen zur Gesamtliste hinzufügen und PnL summieren
         for p in positions:
@@ -889,6 +963,9 @@ def dashboard():
     
     # Bot-Alerts generieren
     bot_alerts = check_bot_alerts(account_data)
+    
+    # Alle Coin Performance sammeln
+    all_coin_performance = get_all_coin_performance(account_data)
 
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
@@ -956,6 +1033,7 @@ def dashboard():
                            total_positions_pnl=total_positions_pnl,
                            total_positions_pnl_percent=total_positions_pnl_percent,
                            bot_alerts=bot_alerts,
+                           all_coin_performance=all_coin_performance,
                            now=now)
 
 @app.route('/logout')
