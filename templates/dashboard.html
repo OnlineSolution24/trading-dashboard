@@ -134,7 +134,7 @@
         }
 
         .custom-table thead {
-            background: #95a5a6;
+            background: #3498db;
         }
 
         .custom-table th {
@@ -197,7 +197,7 @@
         }
 
         .symbol-badge {
-            background: #95a5a6;
+            background: #2980b9;
             color: white;
             padding: 4px 10px;
             border-radius: 15px;
@@ -260,75 +260,6 @@
         .icon-blue { color: var(--blue-primary); }
         .icon-gray { color: var(--gray-light); }
 
-        /* Analytics-spezifische Styles */
-        .grade-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 0.8rem;
-        }
-        
-        .grade-Aplus { background: #28a745; color: white; }
-        .grade-A { background: #17a2b8; color: white; }
-        .grade-Bplus { background: #20c997; color: white; }
-        .grade-B { background: #ffc107; color: black; }
-        .grade-Cplus { background: #fd7e14; color: white; }
-        .grade-C { background: #e83e8c; color: white; }
-        .grade-D { background: #dc3545; color: white; }
-        .grade-NA { background: #6c757d; color: white; }
-        
-        .risk-score {
-            font-weight: 600;
-            color: var(--text-light);
-            font-size: 0.9rem;
-        }
-        
-        .action-badge {
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 700;
-        }
-        
-        .action-stop { background: #dc3545; color: white; }
-        .action-review { background: #ffc107; color: black; }
-        .action-optimize { background: #17a2b8; color: white; }
-        .action-scale { background: #28a745; color: white; }
-        .action-na { background: #6c757d; color: white; }
-
-        .alert-banner {
-            background: linear-gradient(145deg, #dc3545, #c82333);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-left: 4px solid #721c24;
-        }
-
-        .alert-banner h6 {
-            color: white;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .alert-banner ul {
-            color: white;
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .analytics-table {
-            font-size: 0.9rem;
-        }
-
-        .analytics-table th {
-            font-size: 0.8rem;
-            padding: 10px 8px;
-        }
-
-        .analytics-table td {
-            padding: 10px 8px;
-        }
-
         .legend-container {
             background: var(--bg-card);
             border-radius: 15px;
@@ -370,35 +301,24 @@
             min-width: 80px;
         }
 
-        /* Entfernen der Scroll-Container */
         .table-container {
             overflow: visible;
         }
 
+        .analytics-table {
+            font-size: 0.9rem;
+        }
+
+        .analytics-table th {
+            font-size: 0.8rem;
+            padding: 10px 8px;
+        }
+
+        .analytics-table td {
+            padding: 10px 8px;
+        }
+
         /* Responsive Design */
-        @media (max-width: 1200px) {
-            .kpi-value {
-                font-size: 1.8rem;
-            }
-        }
-
-        @media (max-width: 992px) {
-            .dashboard-container {
-                margin: 15px;
-                padding: 25px;
-            }
-
-            .chart-container,
-            .data-table {
-                margin-bottom: 25px;
-            }
-
-            /* Tabellen werden untereinander auf mittelgroßen Bildschirmen */
-            .col-lg-6 {
-                margin-bottom: 20px;
-            }
-        }
-
         @media (max-width: 768px) {
             .dashboard-container {
                 margin: 10px;
@@ -413,108 +333,6 @@
                 font-size: 2rem;
             }
 
-            .header-subtitle {
-                font-size: 1rem;
-            }
-
-            .kpi-icon {
-                font-size: 2rem;
-                margin-bottom: 10px;
-            }
-
-            .kpi-card {
-                padding: 20px;
-                margin-bottom: 15px;
-            }
-
-            .chart-title,
-            .table-title {
-                font-size: 1.1rem;
-            }
-
-            .custom-table {
-                font-size: 0.85rem;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 8px 6px;
-            }
-
-            /* Bessere Darstellung der PnL-Zusammenfassung im Titel */
-            .table-title {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 5px;
-            }
-
-            .table-title .ms-auto {
-                margin-left: 0 !important;
-                align-self: flex-end;
-            }
-        }
-
-        /* Sehr kleine Bildschirme (Smartphones) */
-        @media (max-width: 576px) {
-            .dashboard-container {
-                margin: 5px;
-                padding: 15px;
-            }
-
-            .header-title {
-                font-size: 1.5rem;
-            }
-
-            .kpi-value {
-                font-size: 1.3rem;
-            }
-
-            .kpi-title {
-                font-size: 0.8rem;
-            }
-
-            .kpi-card {
-                padding: 15px;
-            }
-
-            /* KPI Cards werden zu einer Spalte */
-            .col-lg-3 {
-                margin-bottom: 15px;
-            }
-
-            /* Tabellen werden kompakter */
-            .custom-table {
-                font-size: 0.75rem;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 6px 4px;
-            }
-
-            /* Account-Namen kürzen bei sehr kleinen Bildschirmen */
-            .account-name {
-                font-size: 0.8rem;
-                max-width: 80px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            /* Symbol-Badges kompakter */
-            .symbol-badge {
-                font-size: 0.7rem;
-                padding: 2px 6px;
-            }
-
-            /* Side-Badges kompakter */
-            .side-long,
-            .side-short {
-                font-size: 0.7rem;
-                padding: 2px 8px;
-            }
-
-            /* Analytics-Tabelle responsiver machen */
             .analytics-table {
                 font-size: 0.8rem;
             }
@@ -524,77 +342,13 @@
                 padding: 6px 4px;
             }
 
-            .grade-badge,
-            .action-badge {
-                font-size: 0.6rem;
-                padding: 2px 6px;
-            }
-
-            /* Footer-Timestamp anpassen */
-            .footer-timestamp {
-                position: relative;
-                bottom: auto;
-                right: auto;
-                margin-top: 20px;
-                text-align: center;
-                font-size: 0.8rem;
-            }
-
-            /* Charts responsiver machen */
-            .chart-container {
-                padding: 15px;
-            }
-
-            .data-table {
-                padding: 15px;
-            }
-
-            /* Horizontales Scrollen für Tabellen bei sehr kleinen Bildschirmen */
             .table-container {
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
             }
 
             .custom-table {
-                min-width: 500px;
-            }
-        }
-
-        /* Extra kleine Bildschirme */
-        @media (max-width: 400px) {
-            .header-title {
-                font-size: 1.3rem;
-            }
-
-            .kpi-value {
-                font-size: 1.1rem;
-            }
-
-            .custom-table {
-                font-size: 0.7rem;
-                min-width: 450px;
-            }
-
-            .custom-table th,
-            .custom-table td {
-                padding: 4px 3px;
-            }
-        }
-
-        /* Landscape-Modus für Smartphones */
-        @media (max-height: 500px) and (orientation: landscape) {
-            .header-section {
-                margin-bottom: 20px;
-            }
-
-            .kpi-card {
-                padding: 15px;
-                margin-bottom: 10px;
-            }
-
-            .chart-container,
-            .data-table {
-                margin-bottom: 20px;
+                min-width: 800px;
             }
         }
     </style>
@@ -607,6 +361,7 @@
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
+        </div>
 
         <!-- KPI Cards -->
         <div class="row">
@@ -804,81 +559,88 @@
                 </div>
             </div>
         </div>
-    </div>
 
-            <!-- Bot Performance Analytics Section (am Ende) -->
+        <!-- ===== COIN PERFORMANCE ANALYTICS (NEUE VERSION) ===== -->
         <div class="row">
             <div class="col-12">
                 <div class="data-table">
                     <h5 class="table-title">
-                        <i class="fas fa-robot icon-blue"></i>
-                        Bot Performance Analytics
+                        <i class="fas fa-coins icon-blue"></i>
+                        🪙 Coin Performance Analytics (46 Strategien)
+                        <small class="ms-auto">
+                            <span class="neutral">{{ all_coin_performance|length }} Coins gefunden</span>
+                        </small>
                     </h5>
                     <div class="table-container">
                         <table class="table custom-table analytics-table">
-                            <thead>
+                            <thead style="background: #3498db;">
                                 <tr>
-                                    <th>Bot Name</th>
-                                    <th>Grade</th>
-                                    <th>Risk Score</th>
-                                    <th>Trades</th>
-                                    <th>Win Rate</th>
-                                    <th>Profit Factor</th>
-                                    <th>Max DD</th>
-                                    <th>Sharpe</th>
-                                    <th>Best Trade</th>
-                                    <th>Worst Trade</th>
-                                    <th>Action</th>
+                                    <th style="color: white;"><i class="fas fa-coins me-1"></i>Symbol</th>
+                                    <th style="color: white;"><i class="fas fa-user me-1"></i>Account</th>
+                                    <th style="color: white;"><i class="fas fa-chart-line me-1"></i>Trades</th>
+                                    <th style="color: white;"><i class="fas fa-percentage me-1"></i>Win Rate</th>
+                                    <th style="color: white;"><i class="fas fa-dollar-sign me-1"></i>Total PnL</th>
+                                    <th style="color: white;"><i class="fas fa-calendar-week me-1"></i>7D PnL</th>
+                                    <th style="color: white;"><i class="fas fa-calculator me-1"></i>Profit Factor</th>
+                                    <th style="color: white;"><i class="fas fa-arrow-down me-1"></i>Max DD</th>
+                                    <th style="color: white;"><i class="fas fa-arrow-up me-1"></i>Avg Win</th>
+                                    <th style="color: white;"><i class="fas fa-arrow-down me-1"></i>Avg Loss</th>
+                                    <th style="color: white;"><i class="fas fa-trophy me-1"></i>Best</th>
+                                    <th style="color: white;"><i class="fas fa-minus me-1"></i>Worst</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for a in accounts %}
-                                {% if a.trading_metrics %}
+                                {% if all_coin_performance and all_coin_performance|length > 0 %}
+                                    {% for coin in all_coin_performance %}
+                                    <tr>
+                                        <td>
+                                            <span class="symbol-badge" style="background: #2980b9; color: white;">{{ coin.symbol }}</span>
+                                        </td>
+                                        <td class="account-name">{{ coin.account }}</td>
+                                        <td class="neutral">{{ coin.total_trades }}</td>
+                                        <td class="{% if coin.win_rate >= 50 %}profit{% elif coin.win_rate >= 40 %}neutral{% else %}loss{% endif %}">
+                                            {{ coin.win_rate }}%
+                                        </td>
+                                        <td class="pnl-value {% if coin.total_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.total_pnl }}
+                                        </td>
+                                        <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.week_pnl }}
+                                        </td>
+                                        <td class="{% if coin.profit_factor >= 1.2 %}profit{% elif coin.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
+                                            {{ coin.profit_factor }}
+                                        </td>
+                                        <td class="{% if coin.max_drawdown <= 100 %}profit{% elif coin.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
+                                            ${{ coin.max_drawdown }}
+                                        </td>
+                                        <td class="profit">
+                                            ${{ coin.avg_win }}
+                                        </td>
+                                        <td class="loss">
+                                            ${{ coin.avg_loss }}
+                                        </td>
+                                        <td class="profit">
+                                            ${{ coin.best_trade }}
+                                        </td>
+                                        <td class="loss">
+                                            ${{ coin.worst_trade }}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
                                 <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        <span class="grade-badge grade-{{ a.performance_grade.replace('+', 'plus').replace('/', '').replace('N/A', 'NA') }}">
-                                            {{ a.performance_grade }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="risk-score">{{ a.risk_score }}</span>
-                                    </td>
-                                    <td class="neutral">{{ a.trading_metrics.total_trades }}</td>
-                                    <td class="{% if a.trading_metrics.win_rate >= 50 %}profit{% elif a.trading_metrics.win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.win_rate }}%
-                                    </td>
-                                    <td class="{% if a.trading_metrics.profit_factor >= 1.2 %}profit{% elif a.trading_metrics.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.profit_factor }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.max_drawdown <= 100 %}profit{% elif a.trading_metrics.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
-                                        ${{ a.trading_metrics.max_drawdown }}
-                                    </td>
-                                    <td class="{% if a.trading_metrics.sharpe_ratio >= 0.5 %}profit{% elif a.trading_metrics.sharpe_ratio >= 0 %}neutral{% else %}loss{% endif %}">
-                                        {{ a.trading_metrics.sharpe_ratio }}
-                                    </td>
-                                    <td class="profit">
-                                        ${{ a.trading_metrics.best_trade }}
-                                    </td>
-                                    <td class="loss">
-                                        ${{ a.trading_metrics.worst_trade }}
-                                    </td>
-                                    <td>
-                                        {% if a.performance_grade == 'D' %}
-                                            <span class="action-badge action-stop">STOP</span>
-                                        {% elif a.performance_grade in ['C', 'C+'] %}
-                                            <span class="action-badge action-review">REVIEW</span>
-                                        {% elif a.performance_grade in ['B', 'B+'] %}
-                                            <span class="action-badge action-optimize">OPTIMIZE</span>
-                                        {% elif a.performance_grade in ['A', 'A+'] %}
-                                            <span class="action-badge action-scale">SCALE UP</span>
-                                        {% else %}
-                                            <span class="action-badge action-na">N/A</span>
-                                        {% endif %}
+                                    <td colspan="12" class="text-center text-warning">
+                                        <div class="py-4">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>⚠️ COIN PERFORMANCE DATA LOADING...</strong><br>
+                                            <small>Falls diese Meldung bleibt:</small><br>
+                                            <small>• Überprüfen Sie API-Keys in den Umgebungsvariablen</small><br>
+                                            <small>• Prüfen Sie die Logs auf Fehler</small><br>
+                                            <small>• Demo-Daten werden automatisch geladen falls APIs nicht verfügbar</small>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endif %}
-                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -886,55 +648,12 @@
             </div>
         </div>
 
-        <!-- Analytics Legend -->
+        <!-- Coin Performance Legend -->
         <div class="row">
             <div class="col-12">
                 <div class="legend-container">
-                    <h6><i class="fas fa-info-circle me-2"></i>Analytics Legend</h6>
+                    <h6><i class="fas fa-info-circle me-2"></i>Coin Performance Metrics</h6>
                     <div class="row">
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Performance Grades:</h6>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Aplus">A+</span> Excellent (80-100 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-A">A</span> Very Good (70-79 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Bplus">B+</span> Good (60-69 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-B">B</span> Average (50-59 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-Cplus">C+</span> Below Avg (40-49 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-C">C</span> Poor (30-39 pts)
-                                </div>
-                                <div class="legend-item">
-                                    <span class="grade-badge grade-D">D</span> Very Poor (0-29 pts)
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="legend-section">
-                                <h6>Action Recommendations:</h6>
-                                <div class="legend-item">
-                                    <span class="action-badge action-scale">SCALE UP</span> Increase capital
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-optimize">OPTIMIZE</span> Fine-tune parameters
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-review">REVIEW</span> Check strategy
-                                </div>
-                                <div class="legend-item">
-                                    <span class="action-badge action-stop">STOP</span> Disable bot
-                                </div>
-                            </div>
-                        </div>
                         <div class="col-md-3">
                             <div class="legend-section">
                                 <h6>Key Metrics:</h6>
@@ -942,30 +661,61 @@
                                     <strong>Win Rate:</strong> % profitable trades
                                 </div>
                                 <div class="legend-item">
+                                    <strong>Total PnL:</strong> Gesamtgewinn/-verlust
+                                </div>
+                                <div class="legend-item">
+                                    <strong>7D PnL:</strong> Performance letzte 7 Tage
+                                </div>
+                                <div class="legend-item">
                                     <strong>Profit Factor:</strong> Total wins ÷ Total losses
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Max DD:</strong> Largest peak-to-trough loss
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Sharpe:</strong> Risk-adjusted return
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="legend-section">
-                                <h6>Risk Score Components:</h6>
+                                <h6>Risk Metrics:</h6>
                                 <div class="legend-item">
-                                    Win Rate: 30% weight
+                                    <strong>Max DD:</strong> Größter Peak-to-Trough Verlust
                                 </div>
                                 <div class="legend-item">
-                                    Profit Factor: 25% weight
+                                    <strong>Avg Win:</strong> Durchschnittlicher Gewinn-Trade
                                 </div>
                                 <div class="legend-item">
-                                    Max Drawdown: 25% weight
+                                    <strong>Avg Loss:</strong> Durchschnittlicher Verlust-Trade
                                 </div>
                                 <div class="legend-item">
-                                    Sharpe Ratio: 20% weight
+                                    <strong>Best/Worst:</strong> Bester/Schlechtester Trade
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="legend-section">
+                                <h6>Performance Bewertung:</h6>
+                                <div class="legend-item">
+                                    <span class="profit">Grün:</span> Positive Performance
+                                </div>
+                                <div class="legend-item">
+                                    <span class="neutral">Grau:</span> Neutrale Performance
+                                </div>
+                                <div class="legend-item">
+                                    <span class="loss">Rot:</span> Negative Performance
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="legend-section">
+                                <h6>Datenquelle:</h6>
+                                <div class="legend-item">
+                                    Live-Daten aus API-Abfragen
+                                </div>
+                                <div class="legend-item">
+                                    Letzte 30 Tage Trade-History
+                                </div>
+                                <div class="legend-item">
+                                    Alle aktiven Subaccounts
+                                </div>
+                                <div class="legend-item">
+                                    Sortiert nach Total PnL
                                 </div>
                             </div>
                         </div>
@@ -975,18 +725,6 @@
         </div>
     </div>
 
-        <!-- Bot Alerts Banner -->
-        {% if bot_alerts %}
-        <div class="alert-banner">
-            <h6><i class="fas fa-exclamation-triangle me-2"></i>Bot Performance Alerts</h6>
-            <ul>
-                {% for alert in bot_alerts %}
-                <li>{{ alert }}</li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-       
     <!-- Footer Timestamp -->
     <div class="footer-timestamp">
         <i class="fas fa-clock me-2"></i>
