@@ -615,11 +615,11 @@
                                         <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
                                             ${{ coin.week_pnl }}
                                         </td>
-                                        <td class="pnl-value {% if coin.five_week_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ coin.five_week_pnl }}
+                                        <td class="pnl-value {% if coin.get('five_week_pnl', 0) >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.get('five_week_pnl', 0) }}
                                         </td>
-                                        <td class="pnl-value {% if coin.inception_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ coin.inception_pnl }}
+                                        <td class="pnl-value {% if coin.get('inception_pnl', 0) >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.get('inception_pnl', 0) }}
                                         </td>
                                         <td class="{% if coin.profit_factor >= 1.2 %}profit{% elif coin.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
                                             {{ coin.profit_factor }}
