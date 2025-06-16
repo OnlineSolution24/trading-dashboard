@@ -134,17 +134,18 @@
         }
 
         .custom-table thead {
-            background: #3498db;
+            background: #3498db !important;
         }
 
         .custom-table th {
-            border: none;
-            padding: 15px 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 0.5px;
-            color: var(--text-light);
+            border: none !important;
+            padding: 15px 12px !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            font-size: 0.85rem !important;
+            letter-spacing: 0.5px !important;
+            color: var(--text-light) !important;
+            background: #3498db !important;
         }
 
         .custom-table td {
@@ -348,7 +349,7 @@
             }
 
             .custom-table {
-                min-width: 800px;
+                min-width: 1000px;
             }
         }
     </style>
@@ -573,20 +574,20 @@
                     </h5>
                     <div class="table-container">
                         <table class="table custom-table analytics-table">
-                            <thead style="background: #3498db;">
-                                <tr>
-                                    <th style="color: white;"><i class="fas fa-coins me-1"></i>Symbol</th>
-                                    <th style="color: white;"><i class="fas fa-user me-1"></i>Account</th>
-                                    <th style="color: white;"><i class="fas fa-chart-line me-1"></i>Trades</th>
-                                    <th style="color: white;"><i class="fas fa-percentage me-1"></i>Win Rate</th>
-                                    <th style="color: white;"><i class="fas fa-dollar-sign me-1"></i>Total PnL</th>
-                                    <th style="color: white;"><i class="fas fa-calendar-week me-1"></i>7D PnL</th>
-                                    <th style="color: white;"><i class="fas fa-calculator me-1"></i>Profit Factor</th>
-                                    <th style="color: white;"><i class="fas fa-arrow-down me-1"></i>Max DD</th>
-                                    <th style="color: white;"><i class="fas fa-arrow-up me-1"></i>Avg Win</th>
-                                    <th style="color: white;"><i class="fas fa-arrow-down me-1"></i>Avg Loss</th>
-                                    <th style="color: white;"><i class="fas fa-trophy me-1"></i>Best</th>
-                                    <th style="color: white;"><i class="fas fa-minus me-1"></i>Worst</th>
+                            <thead style="background: #3498db !important;">
+                                <tr style="background: #3498db !important;">
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-coins me-1"></i>Symbol</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-user me-1"></i>Account</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-chart-line me-1"></i>Trades</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-percentage me-1"></i>Win Rate</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-dollar-sign me-1"></i>Total PnL</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calendar-week me-1"></i>7D PnL</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calendar me-1"></i>5W PnL</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-clock me-1"></i>Seit Beginn</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calculator me-1"></i>Profit Factor</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-arrow-down me-1"></i>Max DD</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-trophy me-1"></i>Best</th>
+                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-minus me-1"></i>Worst</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -607,17 +608,17 @@
                                         <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
                                             ${{ coin.week_pnl }}
                                         </td>
+                                        <td class="pnl-value {% if coin.five_week_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.five_week_pnl }}
+                                        </td>
+                                        <td class="pnl-value {% if coin.inception_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                            ${{ coin.inception_pnl }}
+                                        </td>
                                         <td class="{% if coin.profit_factor >= 1.2 %}profit{% elif coin.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
                                             {{ coin.profit_factor }}
                                         </td>
                                         <td class="{% if coin.max_drawdown <= 100 %}profit{% elif coin.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
                                             ${{ coin.max_drawdown }}
-                                        </td>
-                                        <td class="profit">
-                                            ${{ coin.avg_win }}
-                                        </td>
-                                        <td class="loss">
-                                            ${{ coin.avg_loss }}
                                         </td>
                                         <td class="profit">
                                             ${{ coin.best_trade }}
@@ -667,6 +668,12 @@
                                     <strong>7D PnL:</strong> Performance letzte 7 Tage
                                 </div>
                                 <div class="legend-item">
+                                    <strong>5W PnL:</strong> Performance letzte 5 Wochen
+                                </div>
+                                <div class="legend-item">
+                                    <strong>Seit Beginn:</strong> Performance seit erstem Trade
+                                </div>
+                                <div class="legend-item">
                                     <strong>Profit Factor:</strong> Total wins ÷ Total losses
                                 </div>
                             </div>
@@ -709,7 +716,10 @@
                                     Live-Daten aus API-Abfragen
                                 </div>
                                 <div class="legend-item">
-                                    Letzte 30 Tage Trade-History
+                                    Letzte 60 Tage Trade-History
+                                </div>
+                                <div class="legend-item">
+                                    Performance über verschiedene Zeiträume
                                 </div>
                                 <div class="legend-item">
                                     Alle aktiven Subaccounts
