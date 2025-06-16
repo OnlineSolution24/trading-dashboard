@@ -292,7 +292,7 @@ def get_bybit_trade_history(acc):
                             'avgEntryPrice': pnl_record.get('avgEntryPrice', '0'),
                             'qty': pnl_record.get('qty', '0'),
                             'createdTime': pnl_record.get('createdTime', str(int(time.time() * 1000))),
-                            'execTime': pnl_record.get('createdTime', str(int(time.time() * 1000)))
+                            'execTime': safe_timestamp_convert(pnl_record.get('createdTime', str(int(time.time() * 1000))))
                         })
             except Exception as e:
                 logging.error(f"Error with get_closed_pnl for {acc['name']}: {e}")
@@ -329,7 +329,7 @@ def get_bybit_trade_history(acc):
                                 'closedPnl': pos.get('unrealisedPnl', '0'),
                                 'execPrice': pos.get('avgPrice', '0'),
                                 'execQty': pos.get('size', '0'),
-                                'execTime': str(int(time.time() * 1000))
+                                'execTime': safe_timestamp_convert(int(time.time() * 1000))
                             })
             except Exception as e:
                 logging.error(f"Error getting positions fallback for {acc['name']}: {e}")
@@ -607,6 +607,18 @@ def save_bot_performance_to_sheets(account_data, sheet=None):
         
     except Exception as e:
         logging.error(f"Fehler beim Speichern der Bot-Performance: {e}")
+
+def safe_timestamp_convert(timestamp_value):
+    """Sichere Konvertierung von Timestamps zu Integers"""
+    try:
+        if isinstance(timestamp_value, str):
+            return int(float(timestamp_value))
+        elif isinstance(timestamp_value, (int, float)):
+            return int(timestamp_value)
+        else:
+            return int(time.time() * 1000)  # Fallback zu aktuellem Timestamp
+    except (ValueError, TypeError):
+        return int(time.time() * 1000)  # Fallback zu aktuellem Timestamp
 
 def get_all_coin_performance(account_data):
     """Alle Coin Performance aus allen Subaccounts sammeln und analysieren"""
