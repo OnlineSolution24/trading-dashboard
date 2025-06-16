@@ -252,14 +252,91 @@ def get_bybit_trade_history(acc):
         end_time = int(time.time() * 1000)
         start_time = end_time - (30 * 24 * 60 * 60 * 1000)  # 30 Tage zurück
         
-        trades = client.get_executions(
-            category="linear",
-            startTime=start_time,
-            endTime=end_time,
-            limit=200
-        )["result"]["list"]
+        logging.info(f"Fetching Bybit trades for {acc['name']} from {start_time} to {end_time}")
         
+        # Versuche verschiedene Endpunkte für Trade-History
+        trades = []
+        
+        # Methode 1: get_executions (am häufigsten verwendeter Endpunkt)
+        try:
+            executions_response = client.get_executions(
+                category="linear",
+                startTime=start_time,
+                endTime=end_time,
+                limit=200
+            )
+            if executions_response.get("result") and executions_response["result"].get("list"):
+                trades = executions_response["result"]["list"]
+                logging.info(f"Bybit executions found: {len(trades)} for {acc['name']}")
+        except Exception as e:
+            logging.error(f"Error with get_executions for {acc['name']}: {e}")
+        
+        # Methode 2: Falls get_executions nicht funktioniert, versuche get_closed_pnl
+        if not trades:
+            try:
+                pnl_response = client.get_closed_pnl(
+                    category="linear",
+                    startTime=start_time,
+                    endTime=end_time,
+                    limit=200
+                )
+                if pnl_response.get("result") and pnl_response["result"].get("list"):
+                    pnl_trades = pnl_response["result"]["list"]
+                    logging.info(f"Bybit PnL records found: {len(pnl_trades)} for {acc['name']}")
+                    
+                    # Konvertiere PnL-Records zu Trade-Format
+                    for pnl_record in pnl_trades:
+                        trades.append({
+                            'symbol': pnl_record.get('symbol', ''),
+                            'closedPnl': pnl_record.get('closedPnl', '0'),
+                            'avgEntryPrice': pnl_record.get('avgEntryPrice', '0'),
+                            'qty': pnl_record.get('qty', '0'),
+                            'createdTime': pnl_record.get('createdTime', str(int(time.time() * 1000))),
+                            'execTime': pnl_record.get('createdTime', str(int(time.time() * 1000)))
+                        })
+            except Exception as e:
+                logging.error(f"Error with get_closed_pnl for {acc['name']}: {e}")
+        
+        # Methode 3: Falls nichts funktioniert, versuche get_trade_history (falls verfügbar)
+        if not trades:
+            try:
+                # Fallback-Methode
+                trade_response = client.get_trade_history(
+                    category="linear",
+                    startTime=start_time,
+                    endTime=end_time,
+                    limit=200
+                )
+                if trade_response.get("result") and trade_response["result"].get("list"):
+                    trades = trade_response["result"]["list"]
+                    logging.info(f"Bybit trade history found: {len(trades)} for {acc['name']}")
+            except Exception as e:
+                logging.warning(f"get_trade_history not available for {acc['name']}: {e}")
+        
+        # Falls immer noch keine Trades, versuche aktuelle Positionen als Fallback
+        if not trades:
+            try:
+                positions_response = client.get_positions(category="linear", settleCoin="USDT")
+                if positions_response.get("result") and positions_response["result"].get("list"):
+                    positions = positions_response["result"]["list"]
+                    logging.info(f"Bybit positions found: {len(positions)} for {acc['name']}")
+                    
+                    # Konvertiere Positionen zu Trade-ähnlichen Records (nur für Demo)
+                    for pos in positions:
+                        if float(pos.get("size", 0)) > 0:
+                            trades.append({
+                                'symbol': pos.get('symbol', ''),
+                                'closedPnl': pos.get('unrealisedPnl', '0'),
+                                'execPrice': pos.get('avgPrice', '0'),
+                                'execQty': pos.get('size', '0'),
+                                'execTime': str(int(time.time() * 1000))
+                            })
+            except Exception as e:
+                logging.error(f"Error getting positions fallback for {acc['name']}: {e}")
+        
+        logging.info(f"Final trades count for {acc['name']}: {len(trades)}")
         return trades
+        
     except Exception as e:
         logging.error(f"Fehler bei Bybit Trade History {acc['name']}: {e}")
         return []
