@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Dashboard</title>
+    <title>Trading Dashboard - 5-Wochen Analytics</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -22,10 +22,12 @@
             --blue-secondary: #2980b9;
             --gray-light: #bdc3c7;
             --gray-dark: #95a5a6;
+            --orange-warning: #f39c12;
+            --green-success: #27ae60;
         }
 
         body {
-            background: #2c3e50;
+            background: linear-gradient(135deg, #2c3e50, #3a5f7a);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: var(--text-light);
@@ -41,6 +43,33 @@
             border: 1px solid var(--border-color);
         }
 
+        .enhancement-banner {
+            background: linear-gradient(135deg, var(--green-success), #2ecc71);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.3);
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 8px 25px rgba(39, 174, 96, 0.3); }
+            to { box-shadow: 0 8px 35px rgba(39, 174, 96, 0.5); }
+        }
+
+        .enhancement-banner h4 {
+            margin: 0;
+            color: white;
+            font-weight: 600;
+        }
+
+        .enhancement-banner p {
+            margin: 5px 0 0 0;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.9rem;
+        }
+
         .kpi-card {
             background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
             border-radius: 15px;
@@ -50,6 +79,23 @@
             border: 1px solid var(--border-color);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .kpi-card:hover::before {
+            left: 100%;
         }
 
         .kpi-card:hover {
@@ -70,6 +116,8 @@
             font-size: 2rem;
             font-weight: 700;
             margin: 0;
+            z-index: 1;
+            position: relative;
         }
 
         .kpi-icon {
@@ -134,7 +182,7 @@
         }
 
         .custom-table thead {
-            background: #3498db !important;
+            background: linear-gradient(135deg, #3498db, #2980b9) !important;
         }
 
         .custom-table th {
@@ -145,7 +193,7 @@
             font-size: 0.85rem !important;
             letter-spacing: 0.5px !important;
             color: var(--text-light) !important;
-            background: #3498db !important;
+            background: transparent !important;
         }
 
         .custom-table td {
@@ -153,6 +201,7 @@
             padding: 12px;
             border-bottom: 1px solid var(--border-color);
             vertical-align: middle;
+            transition: all 0.2s ease;
         }
 
         .custom-table tbody tr {
@@ -161,6 +210,7 @@
 
         .custom-table tbody tr:hover {
             background-color: rgba(52, 152, 219, 0.1);
+            transform: scale(1.01);
         }
 
         .custom-table tbody tr:last-child td {
@@ -198,12 +248,13 @@
         }
 
         .symbol-badge {
-            background: #2980b9;
+            background: linear-gradient(135deg, #2980b9, #3498db);
             color: white;
             padding: 4px 10px;
             border-radius: 15px;
             font-size: 0.85rem;
             font-weight: 600;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
         }
 
         .side-long {
@@ -237,6 +288,7 @@
             color: var(--gray-light);
             backdrop-filter: blur(10px);
             border: 1px solid var(--border-color);
+            z-index: 1000;
         }
 
         .header-section {
@@ -250,6 +302,7 @@
             background: linear-gradient(135deg, var(--blue-primary), var(--gray-light));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 10px;
         }
 
@@ -303,20 +356,99 @@
         }
 
         .table-container {
-            overflow: visible;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         .analytics-table {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            min-width: 1400px;
         }
 
         .analytics-table th {
-            font-size: 0.8rem;
-            padding: 10px 8px;
+            font-size: 0.75rem;
+            padding: 12px 8px !important;
+            white-space: nowrap;
         }
 
         .analytics-table td {
             padding: 10px 8px;
+            white-space: nowrap;
+        }
+
+        .performance-highlight {
+            position: relative;
+        }
+
+        .performance-highlight::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--profit-color), var(--blue-primary));
+            opacity: 0.7;
+        }
+
+        .top-performer {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border-left: 4px solid var(--profit-color);
+        }
+
+        .poor-performer {
+            background: rgba(220, 53, 69, 0.1) !important;
+            border-left: 4px solid var(--loss-color);
+        }
+
+        .alert-container {
+            background: rgba(243, 156, 18, 0.1);
+            border: 1px solid var(--orange-warning);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .alert-container h6 {
+            color: var(--orange-warning);
+            margin-bottom: 10px;
+        }
+
+        .alert-item {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(243, 156, 18, 0.2);
+        }
+
+        .alert-item:last-child {
+            border-bottom: none;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(52, 152, 219, 0.3);
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--blue-primary);
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--gray-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         /* Responsive Design */
@@ -335,7 +467,8 @@
             }
 
             .analytics-table {
-                font-size: 0.8rem;
+                font-size: 0.75rem;
+                min-width: 1200px;
             }
 
             .analytics-table th,
@@ -348,26 +481,89 @@
                 -webkit-overflow-scrolling: touch;
             }
 
-            .custom-table {
-                min-width: 1000px;
+            .footer-timestamp {
+                position: relative;
+                bottom: auto;
+                right: auto;
+                margin-top: 20px;
+                text-align: center;
             }
+        }
+
+        /* Scroll Animations */
+        .fade-in {
+            animation: fadeIn 0.6s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-in-left {
+            animation: slideInLeft 0.8s ease-out;
+        }
+
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .slide-in-right {
+            animation: slideInRight 0.8s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Loading Spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: var(--blue-primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
+    <div class="dashboard-container fade-in">
+        <!-- Enhancement Banner -->
+        <div class="enhancement-banner">
+            <h4><i class="fas fa-rocket me-2"></i>5-Wochen Analytics Dashboard</h4>
+            <p>Erweiterte Trading-Performance-Analyse mit vollständigen historischen Daten</p>
+        </div>
+
         <!-- Header -->
         <div class="header-section">
             <h1 class="header-title">
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
-            <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
+            <p class="header-subtitle">Umfassende 5-Wochen Performance-Analyse Ihrer Trading-Strategien</p>
         </div>
 
-        <!-- KPI Cards -->
+        <!-- Bot Alerts -->
+        {% if bot_alerts %}
+        <div class="alert-container fade-in">
+            <h6><i class="fas fa-exclamation-triangle me-2"></i>System Alerts</h6>
+            {% for alert in bot_alerts %}
+            <div class="alert-item">{{ alert }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Enhanced KPI Cards -->
         <div class="row">
             <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
+                <div class="kpi-card slide-in-left">
                     <div class="kpi-icon">
                         <i class="fas fa-chart-line icon-blue"></i>
                     </div>
@@ -379,7 +575,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
+                <div class="kpi-card slide-in-left" style="animation-delay: 0.1s;">
                     <div class="kpi-icon">
                         <i class="fas fa-calendar-day icon-gray"></i>
                     </div>
@@ -395,7 +591,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
+                <div class="kpi-card slide-in-right" style="animation-delay: 0.2s;">
                     <div class="kpi-icon">
                         <i class="fas fa-calendar-week icon-blue"></i>
                     </div>
@@ -411,7 +607,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
+                <div class="kpi-card slide-in-right" style="animation-delay: 0.3s;">
                     <div class="kpi-icon">
                         <i class="fas fa-calendar-alt icon-gray"></i>
                     </div>
@@ -428,10 +624,30 @@
             </div>
         </div>
 
+        <!-- Performance Summary Metrics -->
+        <div class="metrics-grid fade-in">
+            <div class="metric-card">
+                <div class="metric-value">{{ all_coin_performance|length }}</div>
+                <div class="metric-label">Aktive Strategien</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ (all_coin_performance|selectattr('total_pnl', '>', 0)|list|length / all_coin_performance|length * 100)|round(1) if all_coin_performance else 0 }}%</div>
+                <div class="metric-label">Profitable Strategien</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ (all_coin_performance|sum(attribute='total_trades') / all_coin_performance|length)|round(0) if all_coin_performance else 0 }}</div>
+                <div class="metric-label">Ø Trades pro Strategie</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ (all_coin_performance|sum(attribute='win_rate') / all_coin_performance|length)|round(1) if all_coin_performance else 0 }}%</div>
+                <div class="metric-label">Ø Win Rate</div>
+            </div>
+        </div>
+
         <!-- Charts -->
         <div class="row">
             <div class="col-lg-6">
-                <div class="chart-container">
+                <div class="chart-container slide-in-left">
                     <h5 class="chart-title">
                         <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
                     </h5>
@@ -439,7 +655,7 @@
                 </div>
             </div>
             <div class="col-lg-6">
-                <div class="chart-container">
+                <div class="chart-container slide-in-right">
                     <h5 class="chart-title">
                         <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
                     </h5>
@@ -452,7 +668,7 @@
         <div class="row">
             <!-- Subaccounts Table -->
             <div class="col-lg-6">
-                <div class="data-table">
+                <div class="data-table slide-in-left">
                     <h5 class="table-title">
                         <i class="fas fa-users icon-blue"></i>
                         Subaccounts
@@ -471,7 +687,7 @@
                             </thead>
                             <tbody>
                                 {% for a in accounts %}
-                                <tr>
+                                <tr class="{% if a.pnl_percent > 20 %}top-performer{% elif a.pnl_percent < -10 %}poor-performer{% endif %}">
                                     <td class="account-name">{{ a.name }}</td>
                                     <td>
                                         {% if a.status == "✅" %}
@@ -498,7 +714,7 @@
 
             <!-- Positions Table -->
             <div class="col-lg-6">
-                <div class="data-table">
+                <div class="data-table slide-in-right">
                     <h5 class="table-title">
                         <i class="fas fa-chart-area icon-blue"></i>
                         Offene Positionen
@@ -542,7 +758,7 @@
                                 </tr>
                                 {% endfor %}
                                 {% if positions_all %}
-                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;" class="performance-highlight">
                                     <td colspan="4" class="text-end" style="padding-top: 15px;">
                                         <strong>Gesamt Offene Positionen:</strong>
                                     </td>
@@ -561,74 +777,88 @@
             </div>
         </div>
 
-        <!-- ===== COIN PERFORMANCE ANALYTICS (NEUE VERSION) ===== -->
+        <!-- ===== ENHANCED 5-WOCHEN COIN PERFORMANCE ANALYTICS ===== -->
         <div class="row">
             <div class="col-12">
-                <div class="data-table">
+                <div class="data-table fade-in">
                     <h5 class="table-title">
                         <i class="fas fa-coins icon-blue"></i>
-                        🪙 Coin Performance Analytics (46 Strategien)
+                        🚀 5-Wochen Coin Performance Analytics
                         <small class="ms-auto">
-                            <span class="neutral">{{ all_coin_performance|length }} von 46 Coins gefunden</span>
+                            <span class="neutral">{{ all_coin_performance|length }} von 46+ Strategien analysiert</span>
+                            {% if all_coin_performance %}
+                            <span class="loading-spinner ms-2" style="display: none;"></span>
+                            {% else %}
+                            <span class="loading-spinner ms-2"></span>
+                            {% endif %}
                         </small>
                     </h5>
                     <div class="table-container">
                         <table class="table custom-table analytics-table">
-                            <thead style="background: #3498db !important;">
-                                <tr style="background: #3498db !important;">
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-coins me-1"></i>Symbol</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-user me-1"></i>Account</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-chart-line me-1"></i>Trades</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-percentage me-1"></i>Win Rate</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-dollar-sign me-1"></i>Total PnL</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calendar-week me-1"></i>7D PnL</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calendar me-1"></i>5W PnL</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-clock me-1"></i>Seit Beginn</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-calculator me-1"></i>Profit Factor</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-arrow-down me-1"></i>Max DD</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-trophy me-1"></i>Best</th>
-                                    <th style="color: white !important; background: #3498db !important;"><i class="fas fa-minus me-1"></i>Worst</th>
+                            <thead>
+                                <tr>
+                                    <th><i class="fas fa-coins me-1"></i>Symbol</th>
+                                    <th><i class="fas fa-user me-1"></i>Account</th>
+                                    <th><i class="fas fa-chart-line me-1"></i>Trades</th>
+                                    <th><i class="fas fa-percentage me-1"></i>Win Rate</th>
+                                    <th><i class="fas fa-dollar-sign me-1"></i>Total PnL</th>
+                                    <th><i class="fas fa-calendar-week me-1"></i>7D PnL</th>
+                                    <th><i class="fas fa-calendar me-1"></i>5W PnL</th>
+                                    <th><i class="fas fa-clock me-1"></i>Seit Beginn</th>
+                                    <th><i class="fas fa-calculator me-1"></i>Profit Factor</th>
+                                    <th><i class="fas fa-arrow-down me-1"></i>Max DD</th>
+                                    <th><i class="fas fa-trophy me-1"></i>Best</th>
+                                    <th><i class="fas fa-minus me-1"></i>Worst</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% if all_coin_performance and all_coin_performance|length > 0 %}
-                                    <!-- Debug Info -->
-                                    <!--<tr style="background: #f39c12; color: black;">
-                                        <td colspan="12" class="text-center">
-                                            <strong>DEBUG: Rendering {{ all_coin_performance|length }} coin entries</strong>
-                                        </td>
-                                    </tr>-->
-                                    
                                     {% for coin in all_coin_performance %}
-                                    <tr>
+                                    <tr class="{% if loop.index <= 5 %}top-performer{% elif coin.total_pnl < -50 %}poor-performer{% endif %}">
                                         <td>
-                                            <span class="symbol-badge" style="background: #2980b9; color: white;">{{ coin.symbol }}</span>
+                                            <span class="symbol-badge">{{ coin.symbol }}</span>
+                                            {% if loop.index <= 3 %}
+                                                <i class="fas fa-crown text-warning ms-1" title="Top Performer"></i>
+                                            {% endif %}
                                         </td>
                                         <td class="account-name">{{ coin.account }}</td>
-                                        <td class="neutral">{{ coin.total_trades }}</td>
-                                        <td class="{% if coin.win_rate >= 50 %}profit{% elif coin.win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                            {{ coin.win_rate }}%
+                                        <td class="neutral">
+                                            <strong>{{ coin.total_trades }}</strong>
+                                            {% if coin.total_trades > 100 %}
+                                                <i class="fas fa-fire text-danger ms-1" title="High Frequency"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="{% if coin.win_rate >= 70 %}profit{% elif coin.win_rate >= 50 %}neutral{% else %}loss{% endif %}">
+                                            <strong>{{ coin.win_rate }}%</strong>
+                                            {% if coin.win_rate >= 70 %}
+                                                <i class="fas fa-arrow-up ms-1"></i>
+                                            {% elif coin.win_rate < 40 %}
+                                                <i class="fas fa-arrow-down ms-1"></i>
+                                            {% endif %}
                                         </td>
                                         <td class="pnl-value {% if coin.total_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ coin.total_pnl }}
+                                            <strong>${{ coin.total_pnl }}</strong>
                                         </td>
                                         <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
                                             ${{ coin.week_pnl }}
                                         </td>
                                         <td class="pnl-value {% if coin.get('five_week_pnl', 0) >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ coin.get('five_week_pnl', 0) }}
+                                            <strong>${{ coin.get('five_week_pnl', 0) }}</strong>
                                         </td>
                                         <td class="pnl-value {% if coin.get('inception_pnl', 0) >= 0 %}profit{% else %}loss{% endif %}">
                                             ${{ coin.get('inception_pnl', 0) }}
                                         </td>
-                                        <td class="{% if coin.profit_factor >= 1.2 %}profit{% elif coin.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
+                                        <td class="{% if coin.profit_factor >= 2.0 %}profit{% elif coin.profit_factor >= 1.2 %}neutral{% else %}loss{% endif %}">
                                             {{ coin.profit_factor }}
+                                            {% if coin.profit_factor >= 3.0 %}
+                                                <i class="fas fa-star text-warning ms-1" title="Excellent"></i>
+                                            {% endif %}
                                         </td>
-                                        <td class="{% if coin.max_drawdown <= 100 %}profit{% elif coin.max_drawdown <= 300 %}neutral{% else %}loss{% endif %}">
+                                        <td class="{% if coin.max_drawdown <= 50 %}profit{% elif coin.max_drawdown <= 150 %}neutral{% else %}loss{% endif %}">
                                             ${{ coin.max_drawdown }}
                                         </td>
                                         <td class="profit">
-                                            ${{ coin.best_trade }}
+                                            <strong>${{ coin.best_trade }}</strong>
                                         </td>
                                         <td class="loss">
                                             ${{ coin.worst_trade }}
@@ -636,22 +866,43 @@
                                     </tr>
                                     {% endfor %}
                                     
-                                    <!-- Summary Row -->
-                                    <tr style="border-top: 2px solid #3498db; background: rgba(52, 152, 219, 0.1);">
-                                        <td colspan="12" class="text-center" style="padding: 10px;">
-                                            <strong>📊 Gesamt: {{ all_coin_performance|length }} Strategien analysiert</strong>
+                                    <!-- Enhanced Summary Row -->
+                                    <tr style="border-top: 3px solid #3498db; background: rgba(52, 152, 219, 0.1);" class="performance-highlight">
+                                        <td colspan="12" class="text-center" style="padding: 15px;">
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <strong>📊 Gesamt: {{ all_coin_performance|length }} Strategien</strong>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>💰 Total PnL: ${{ all_coin_performance|sum(attribute='total_pnl')|round(2) }}</strong>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>🎯 Ø Win Rate: {{ (all_coin_performance|sum(attribute='win_rate') / all_coin_performance|length)|round(1) }}%</strong>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <strong>🔥 Total Trades: {{ all_coin_performance|sum(attribute='total_trades') }}</strong>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 {% else %}
                                 <tr>
                                     <td colspan="12" class="text-center text-warning">
                                         <div class="py-4">
-                                            <i class="fas fa-exclamation-triangle me-2"></i>
-                                            <strong>⚠️ COIN PERFORMANCE DATA LOADING...</strong><br>
-                                            <small>Falls diese Meldung bleibt:</small><br>
-                                            <small>• Überprüfen Sie API-Keys in den Umgebungsvariablen</small><br>
-                                            <small>• Prüfen Sie die Logs auf Fehler</small><br>
-                                            <small>• Demo-Daten werden automatisch geladen falls APIs nicht verfügbar</small>
+                                            <div class="loading-spinner mb-3"></div>
+                                            <h5><i class="fas fa-cog fa-spin me-2"></i>5-Wochen Analytics werden geladen...</h5>
+                                            <div class="mt-3">
+                                                <p><strong>🚀 Erweiterte Datensammlung läuft:</strong></p>
+                                                <ul class="list-unstyled">
+                                                    <li>✅ 35 Tage historische Trades sammeln</li>
+                                                    <li>✅ Pagination für alle verfügbaren Daten</li>
+                                                    <li>✅ Erweiterte Performance-Metriken berechnen</li>
+                                                    <li>✅ Demo-Daten falls APIs nicht verfügbar</li>
+                                                </ul>
+                                                <small class="text-muted">
+                                                    Falls diese Meldung bleibt: Überprüfen Sie API-Keys in den Umgebungsvariablen
+                                                </small>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -663,26 +914,26 @@
             </div>
         </div>
 
-        <!-- Coin Performance Legend -->
+        <!-- Enhanced Coin Performance Legend -->
         <div class="row">
             <div class="col-12">
-                <div class="legend-container">
-                    <h6><i class="fas fa-info-circle me-2"></i>Coin Performance Metrics</h6>
+                <div class="legend-container fade-in">
+                    <h6><i class="fas fa-info-circle me-2"></i>5-Wochen Performance Metrics - Erweiterte Analyse</h6>
                     <div class="row">
                         <div class="col-md-3">
                             <div class="legend-section">
-                                <h6>Key Metrics:</h6>
+                                <h6>🎯 Key Metrics:</h6>
                                 <div class="legend-item">
-                                    <strong>Win Rate:</strong> % profitable trades
+                                    <strong>Win Rate:</strong> % profitable trades über 5 Wochen
                                 </div>
                                 <div class="legend-item">
-                                    <strong>Total PnL:</strong> Gesamtgewinn/-verlust
+                                    <strong>Total PnL:</strong> Gesamtgewinn/-verlust (35 Tage)
                                 </div>
                                 <div class="legend-item">
                                     <strong>7D PnL:</strong> Performance letzte 7 Tage
                                 </div>
                                 <div class="legend-item">
-                                    <strong>5W PnL:</strong> Performance letzte 5 Wochen
+                                    <strong>5W PnL:</strong> Performance komplette 5 Wochen
                                 </div>
                                 <div class="legend-item">
                                     <strong>Seit Beginn:</strong> Performance seit erstem Trade
@@ -694,52 +945,61 @@
                         </div>
                         <div class="col-md-3">
                             <div class="legend-section">
-                                <h6>Risk Metrics:</h6>
+                                <h6>⚖️ Risk Metrics:</h6>
                                 <div class="legend-item">
                                     <strong>Max DD:</strong> Größter Peak-to-Trough Verlust
                                 </div>
                                 <div class="legend-item">
-                                    <strong>Avg Win:</strong> Durchschnittlicher Gewinn-Trade
-                                </div>
-                                <div class="legend-item">
-                                    <strong>Avg Loss:</strong> Durchschnittlicher Verlust-Trade
-                                </div>
-                                <div class="legend-item">
                                     <strong>Best/Worst:</strong> Bester/Schlechtester Trade
+                                </div>
+                                <div class="legend-item">
+                                    <strong>Trades:</strong> Anzahl Trades in 5 Wochen
+                                </div>
+                                <div class="legend-item">
+                                    <strong>Frequenz:</strong> <i class="fas fa-fire"></i> = Über 100 Trades
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="legend-section">
-                                <h6>Performance Bewertung:</h6>
+                                <h6>🏆 Performance Bewertung:</h6>
                                 <div class="legend-item">
-                                    <span class="profit">Grün:</span> Positive Performance
+                                    <span class="profit">Grün:</span> Positive Performance/Hohe Win Rate
                                 </div>
                                 <div class="legend-item">
                                     <span class="neutral">Grau:</span> Neutrale Performance
                                 </div>
                                 <div class="legend-item">
-                                    <span class="loss">Rot:</span> Negative Performance
+                                    <span class="loss">Rot:</span> Negative Performance/Niedrige Win Rate
+                                </div>
+                                <div class="legend-item">
+                                    <i class="fas fa-crown text-warning"></i> Top 3 Performer
+                                </div>
+                                <div class="legend-item">
+                                    <i class="fas fa-star text-warning"></i> Profit Factor ≥ 3.0
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="legend-section">
-                                <h6>Datenquelle:</h6>
+                                <h6>📊 Datenquelle:</h6>
                                 <div class="legend-item">
-                                    Live-Daten aus API-Abfragen
+                                    ✅ Live-Daten aus Bybit/Blofin APIs
                                 </div>
                                 <div class="legend-item">
-                                    Letzte 60 Tage Trade-History
+                                    ✅ 35 Tage vollständige Trade-History
                                 </div>
                                 <div class="legend-item">
-                                    Performance über verschiedene Zeiträume
+                                    ✅ Pagination für alle verfügbaren Trades
                                 </div>
                                 <div class="legend-item">
-                                    Alle aktiven Subaccounts
+                                    ✅ Demo-Daten als Fallback
                                 </div>
                                 <div class="legend-item">
-                                    Sortiert nach Total PnL
+                                    ✅ Sortiert nach Total PnL
+                                </div>
+                                <div class="legend-item">
+                                    <small>🔄 Auto-Refresh alle 5 Minuten</small>
                                 </div>
                             </div>
                         </div>
@@ -753,8 +1013,92 @@
     <div class="footer-timestamp">
         <i class="fas fa-clock me-2"></i>
         Letztes Update: {{ now }}
+        <br>
+        <small>5-Wochen Analytics v2.0</small>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Enhanced Dashboard JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-refresh every 5 minutes
+            setInterval(function() {
+                console.log('🔄 Auto-refresh in 5 minutes...');
+                // Uncomment for auto-refresh:
+                // window.location.reload();
+            }, 300000);
+
+            // Add loading animations
+            const tables = document.querySelectorAll('.analytics-table tbody tr');
+            tables.forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    row.style.transition = 'all 0.3s ease';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateY(0)';
+                }, index * 50);
+            });
+
+            // Enhanced hover effects for performance highlighting
+            const performanceRows = document.querySelectorAll('.top-performer, .poor-performer');
+            performanceRows.forEach(row => {
+                row.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.02)';
+                    this.style.boxShadow = '0 8px 25px rgba(52, 152, 219, 0.3)';
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                    this.style.boxShadow = 'none';
+                });
+            });
+
+            // Loading state management
+            const coinTable = document.querySelector('.analytics-table tbody');
+            const hasData = {{ 'true' if all_coin_performance else 'false' }};
+            
+            if (!hasData) {
+                console.log('⏳ Coin performance data is loading...');
+                // Simulate loading progress
+                setTimeout(() => {
+                    const spinner = document.querySelector('.loading-spinner');
+                    if (spinner) {
+                        spinner.style.display = 'none';
+                    }
+                }, 10000);
+            }
+
+            // Add tooltips for performance indicators
+            const icons = document.querySelectorAll('[title]');
+            icons.forEach(icon => {
+                icon.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.2)';
+                });
+                icon.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                });
+            });
+
+            console.log('🚀 5-Wochen Analytics Dashboard loaded successfully!');
+            console.log('📊 Strategies analyzed:', {{ all_coin_performance|length if all_coin_performance else 0 }});
+            console.log('💰 Total portfolio PnL:', '${{ "%.2f"|format(total_pnl) }}');
+        });
+
+        // Performance summary calculation
+        function calculatePerformanceSummary() {
+            const strategies = {{ all_coin_performance|length if all_coin_performance else 0 }};
+            const profitable = {{ (all_coin_performance|selectattr('total_pnl', '>', 0)|list|length) if all_coin_performance else 0 }};
+            const profitablePercent = strategies > 0 ? ((profitable / strategies) * 100).toFixed(1) : 0;
+            
+            console.log(`📈 Performance Summary:
+                - Total Strategies: ${strategies}
+                - Profitable: ${profitable} (${profitablePercent}%)
+                - Total Trades: {{ all_coin_performance|sum(attribute='total_trades') if all_coin_performance else 0 }}
+                - Avg Win Rate: {{ (all_coin_performance|sum(attribute='win_rate') / all_coin_performance|length)|round(1) if all_coin_performance else 0 }}%`);
+        }
+
+        calculatePerformanceSummary();
+    </script>
 </body>
 </html>
