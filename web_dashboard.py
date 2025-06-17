@@ -787,159 +787,90 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
         
         today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
         
-        # Sammle alle aktuellen Strategien (auch die ohne Trades heute)
-        all_strategies = [
-            # Corestrategies
-            {"symbol": "HBAR", "account": "Corestrategies", "strategy": "Heiken-Ashi CE LSMA"},
-            {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-            {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag"},
-            {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-            {"symbol": "ICP", "account": "Corestrategies", "strategy": "ICP Core Strategy"},
-            {"symbol": "FIL", "account": "Corestrategies", "strategy": "FIL Core Strategy"},
-            
-            # Btcstrategies
-            {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-            {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge"},
-            {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-            {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA"},
-            {"symbol": "LTC", "account": "Btcstrategies", "strategy": "LTC Strategy"},
-            {"symbol": "BCH", "account": "Btcstrategies", "strategy": "BCH Strategy"},
-            {"symbol": "ETC", "account": "Btcstrategies", "strategy": "ETC Strategy"},
-            {"symbol": "ADA", "account": "Btcstrategies", "strategy": "ADA Strategy"},
-            
-            # Solstrategies
-            {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-            {"symbol": "BONK", "account": "Solstrategies", "strategy": "BONK Strategy"},
-            {"symbol": "JTO", "account": "Solstrategies", "strategy": "JTO Strategy"},
-            {"symbol": "RAY", "account": "Solstrategies", "strategy": "RAY Strategy"},
-            {"symbol": "PYTH", "account": "Solstrategies", "strategy": "PYTH Strategy"},
-            
-            # Ethapestrategies
-            {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "ETH Strategy"},
-            {"symbol": "LINK", "account": "Ethapestrategies", "strategy": "LINK Strategy"},
-            {"symbol": "UNI", "account": "Ethapestrategies", "strategy": "UNI Strategy"},
-            {"symbol": "AAVE", "account": "Ethapestrategies", "strategy": "AAVE Strategy"},
-            {"symbol": "MKR", "account": "Ethapestrategies", "strategy": "MKR Strategy"},
-            {"symbol": "CRV", "account": "Ethapestrategies", "strategy": "CRV Strategy"},
-            
-            # Memestrategies
-            {"symbol": "DOGE", "account": "Memestrategies", "strategy": "DOGE Strategy"},
-            {"symbol": "SHIB", "account": "Memestrategies", "strategy": "SHIB Strategy"},
-            {"symbol": "PEPE", "account": "Memestrategies", "strategy": "PEPE Strategy"},
-            {"symbol": "WIF", "account": "Memestrategies", "strategy": "WIF Strategy"},
-            {"symbol": "FLOKI", "account": "Memestrategies", "strategy": "FLOKI Strategy"},
-            {"symbol": "BONK", "account": "Memestrategies", "strategy": "BONK Meme Strategy"},
-            
-            # Altsstrategies
-            {"symbol": "MATIC", "account": "Altsstrategies", "strategy": "MATIC Strategy"},
-            {"symbol": "ATOM", "account": "Altsstrategies", "strategy": "ATOM Strategy"},
-            {"symbol": "FTM", "account": "Altsstrategies", "strategy": "FTM Strategy"},
-            {"symbol": "AVAX", "account": "Altsstrategies", "strategy": "AVAX Strategy"},
-            {"symbol": "ALGO", "account": "Altsstrategies", "strategy": "ALGO Strategy"},
-            {"symbol": "VET", "account": "Altsstrategies", "strategy": "VET Strategy"},
-            {"symbol": "XLM", "account": "Altsstrategies", "strategy": "XLM Strategy"},
-            {"symbol": "TRX", "account": "Altsstrategies", "strategy": "TRX Strategy"},
-            {"symbol": "THETA", "account": "Altsstrategies", "strategy": "THETA Alt Strategy"},
-            {"symbol": "XTZ", "account": "Altsstrategies", "strategy": "XTZ Alt Strategy"},
-            {"symbol": "EOS", "account": "Altsstrategies", "strategy": "EOS Alt Strategy"},
-            {"symbol": "NEO", "account": "Altsstrategies", "strategy": "NEO Alt Strategy"},
-            {"symbol": "QTUM", "account": "Altsstrategies", "strategy": "QTUM Alt Strategy"},
-            {"symbol": "ZIL", "account": "Altsstrategies", "strategy": "ZIL Alt Strategy"},
-            {"symbol": "ONE", "account": "Altsstrategies", "strategy": "ONE Alt Strategy"},
-            
-            # Incubatorzone
-            {"symbol": "LINK", "account": "Incubatorzone", "strategy": "LINK Incubator"},
-            {"symbol": "DOT", "account": "Incubatorzone", "strategy": "DOT Incubator"},
-            {"symbol": "KSM", "account": "Incubatorzone", "strategy": "KSM Strategy"},
-            {"symbol": "OCEAN", "account": "Incubatorzone", "strategy": "OCEAN Strategy"},
-            {"symbol": "FET", "account": "Incubatorzone", "strategy": "FET Strategy"},
-            
-            # 2k->10k Projekt
-            {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "BTC 2k Strategy"},
-            {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "ETH 2k Strategy"},
-            {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "SOL 2k Strategy"},
-            
-            # 1k->5k Projekt
-            {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "AVAX 1k Strategy"},
-            {"symbol": "NEAR", "account": "1k->5k Projekt", "strategy": "NEAR 1k Strategy"},
-            
-            # 7 Tage Performer
-            {"symbol": "MATIC", "account": "7 Tage Performer", "strategy": "MATIC 7D Strategy"},
-        ]
-        
-        # Für jede Strategie einen Eintrag erstellen
-        for strategy in all_strategies:
-            strategy_key = f"{strategy['symbol']}_{strategy['account']}"
-            
-            # Suche entsprechende Performance-Daten
-            coin_data = None
-            for coin in all_coin_performance:
-                if coin['symbol'] == strategy['symbol'] and coin['account'] == strategy['account']:
-                    coin_data = coin
-                    break
-            
-            # Falls keine aktuellen Daten, generiere realistische Daten
-            if not coin_data:
-                import random
-                daily_pnl = random.uniform(-20, 50)
-                if random.random() > 0.4:  # 60% positive days
-                    daily_pnl = abs(daily_pnl)
-                else:
-                    daily_pnl = -abs(daily_pnl)
-                
-                coin_data = {
-                    'symbol': strategy['symbol'],
-                    'account': strategy['account'],
-                    'total_trades': random.randint(0, 5),
-                    'win_rate': random.uniform(40, 80),
-                    'total_pnl': random.uniform(-200, 500),
-                    'best_trade': random.uniform(10, 100),
-                    'worst_trade': random.uniform(-50, -10),
-                    'daily_volume': random.uniform(500, 5000),
-                    'profit_factor': random.uniform(0.8, 2.5),
-                    'max_drawdown': random.uniform(20, 200)
-                }
-            
-            # Erstelle Zeile für Google Sheets
-            row_data = [
-                today,
-                strategy['symbol'],
-                strategy['account'], 
-                strategy['strategy'],
-                coin_data.get('week_pnl', coin_data.get('total_pnl', 0)),  # Daily PnL approximation
-                coin_data.get('total_trades', 0),
-                coin_data.get('win_rate', 0),
-                coin_data.get('total_pnl', 0),
-                coin_data.get('total_trades', 0),
-                coin_data.get('best_trade', 0),
-                coin_data.get('worst_trade', 0),
-                coin_data.get('daily_volume', 0),
-                coin_data.get('profit_factor', 0),
-                coin_data.get('max_drawdown', 0),
-                "Active" if coin_data.get('total_trades', 0) > 0 else "Inactive"
-            ]
-            
-            trade_sheet.append_row(row_data)
-        
-        logging.info(f"Tägliche Trade-Daten für {len(all_strategies)} Strategien am {today} gespeichert")
-        
-    except Exception as e:
-        logging.error(f"Fehler beim Speichern der täglichen Trade-Daten: {e}")
-
-def safe_timestamp_convert(timestamp_value):
-    """Sichere Konvertierung von Timestamps zu Integers"""
-    try:
-        if isinstance(timestamp_value, str):
-            return int(float(timestamp_value))
-        elif isinstance(timestamp_value, (int, float)):
-            return int(timestamp_value)
-        else:
-            return int(time.time() * 1000)  # Fallback zu aktuellem Timestamp
-    except (ValueError, TypeError):
-        return int(time.time() * 1000)  # Fallback zu aktuellem Timestamp
-
 def get_all_coin_performance(account_data):
-    """Alle Coin Performance aus allen Subaccounts sammeln und analysieren"""
+    """Alle Coin Performance aus allen Subaccounts sammeln und analysieren - INKLUSIVE INAKTIVER STRATEGIEN"""
+    
+    # Definiere ALLE 46 Strategien
+    ALL_STRATEGIES = [
+        # Corestrategies (6)
+        {"symbol": "HBAR", "account": "Corestrategies", "strategy": "Heiken-Ashi CE LSMA"},
+        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
+        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag"},
+        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
+        {"symbol": "ICP", "account": "Corestrategies", "strategy": "ICP Core Strategy"},
+        {"symbol": "FIL", "account": "Corestrategies", "strategy": "FIL Core Strategy"},
+        
+        # Btcstrategies (8)
+        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
+        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge"},
+        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
+        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA"},
+        {"symbol": "LTC", "account": "Btcstrategies", "strategy": "LTC Strategy"},
+        {"symbol": "BCH", "account": "Btcstrategies", "strategy": "BCH Strategy"},
+        {"symbol": "ETC", "account": "Btcstrategies", "strategy": "ETC Strategy"},
+        {"symbol": "ADA", "account": "Btcstrategies", "strategy": "ADA Strategy"},
+        
+        # Solstrategies (5)
+        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
+        {"symbol": "BONK", "account": "Solstrategies", "strategy": "BONK Strategy"},
+        {"symbol": "JTO", "account": "Solstrategies", "strategy": "JTO Strategy"},
+        {"symbol": "RAY", "account": "Solstrategies", "strategy": "RAY Strategy"},
+        {"symbol": "PYTH", "account": "Solstrategies", "strategy": "PYTH Strategy"},
+        
+        # Ethapestrategies (6)
+        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "ETH Strategy"},
+        {"symbol": "LINK", "account": "Ethapestrategies", "strategy": "LINK Strategy"},
+        {"symbol": "UNI", "account": "Ethapestrategies", "strategy": "UNI Strategy"},
+        {"symbol": "AAVE", "account": "Ethapestrategies", "strategy": "AAVE Strategy"},
+        {"symbol": "MKR", "account": "Ethapestrategies", "strategy": "MKR Strategy"},
+        {"symbol": "CRV", "account": "Ethapestrategies", "strategy": "CRV Strategy"},
+        
+        # Memestrategies (6)
+        {"symbol": "DOGE", "account": "Memestrategies", "strategy": "DOGE Strategy"},
+        {"symbol": "SHIB", "account": "Memestrategies", "strategy": "SHIB Strategy"},
+        {"symbol": "PEPE", "account": "Memestrategies", "strategy": "PEPE Strategy"},
+        {"symbol": "WIF", "account": "Memestrategies", "strategy": "WIF Strategy"},
+        {"symbol": "FLOKI", "account": "Memestrategies", "strategy": "FLOKI Strategy"},
+        {"symbol": "BONK", "account": "Memestrategies", "strategy": "BONK Meme Strategy"},
+        
+        # Altsstrategies (15)
+        {"symbol": "MATIC", "account": "Altsstrategies", "strategy": "MATIC Strategy"},
+        {"symbol": "ATOM", "account": "Altsstrategies", "strategy": "ATOM Strategy"},
+        {"symbol": "FTM", "account": "Altsstrategies", "strategy": "FTM Strategy"},
+        {"symbol": "AVAX", "account": "Altsstrategies", "strategy": "AVAX Strategy"},
+        {"symbol": "ALGO", "account": "Altsstrategies", "strategy": "ALGO Strategy"},
+        {"symbol": "VET", "account": "Altsstrategies", "strategy": "VET Strategy"},
+        {"symbol": "XLM", "account": "Altsstrategies", "strategy": "XLM Strategy"},
+        {"symbol": "TRX", "account": "Altsstrategies", "strategy": "TRX Strategy"},
+        {"symbol": "THETA", "account": "Altsstrategies", "strategy": "THETA Alt Strategy"},
+        {"symbol": "XTZ", "account": "Altsstrategies", "strategy": "XTZ Alt Strategy"},
+        {"symbol": "EOS", "account": "Altsstrategies", "strategy": "EOS Alt Strategy"},
+        {"symbol": "NEO", "account": "Altsstrategies", "strategy": "NEO Alt Strategy"},
+        {"symbol": "QTUM", "account": "Altsstrategies", "strategy": "QTUM Alt Strategy"},
+        {"symbol": "ZIL", "account": "Altsstrategies", "strategy": "ZIL Alt Strategy"},
+        {"symbol": "ONE", "account": "Altsstrategies", "strategy": "ONE Alt Strategy"},
+        
+        # Incubatorzone (5)
+        {"symbol": "LINK", "account": "Incubatorzone", "strategy": "LINK Incubator"},
+        {"symbol": "DOT", "account": "Incubatorzone", "strategy": "DOT Incubator"},
+        {"symbol": "KSM", "account": "Incubatorzone", "strategy": "KSM Strategy"},
+        {"symbol": "OCEAN", "account": "Incubatorzone", "strategy": "OCEAN Strategy"},
+        {"symbol": "FET", "account": "Incubatorzone", "strategy": "FET Strategy"},
+        
+        # 2k->10k Projekt (3)
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "BTC 2k Strategy"},
+        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "ETH 2k Strategy"},
+        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "SOL 2k Strategy"},
+        
+        # 1k->5k Projekt (2)
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "AVAX 1k Strategy"},
+        {"symbol": "NEAR", "account": "1k->5k Projekt", "strategy": "NEAR 1k Strategy"},
+        
+        # 7 Tage Performer (1)
+        {"symbol": "MATIC", "account": "7 Tage Performer", "strategy": "MATIC 7D Strategy"},
+    ]
+    
+    # Sammle Trade-Daten wie bisher
     all_coin_data = {}
     
     for account in account_data:
@@ -1013,76 +944,136 @@ def get_all_coin_performance(account_data):
             all_coin_data[coin_key]['total_volume'] += size * price
             all_coin_data[coin_key]['total_pnl'] += pnl
     
-    # Performance-Metriken pro Coin berechnen
+    # Performance-Metriken für ALLE Strategien berechnen
     coin_performance = []
     
-    for coin_key, data in all_coin_data.items():
-        trades = data['trades']
-        if len(trades) == 0:
-            continue
+    # Durchlaufe ALLE definierten Strategien
+    for strategy in ALL_STRATEGIES:
+        coin_key = f"{strategy['symbol']}_{strategy['account']}"
+        
+        # Prüfe ob Trade-Daten für diese Strategie existieren
+        if coin_key in all_coin_data:
+            data = all_coin_data[coin_key]
+            trades = data['trades']
             
-        # Basis-Metriken
-        pnl_list = [t['pnl'] for t in trades]
-        winning_trades = [pnl for pnl in pnl_list if pnl > 0]
-        losing_trades = [pnl for pnl in pnl_list if pnl < 0]
+            # Basis-Metriken
+            pnl_list = [t['pnl'] for t in trades]
+            winning_trades = [pnl for pnl in pnl_list if pnl > 0]
+            losing_trades = [pnl for pnl in pnl_list if pnl < 0]
+            
+            win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
+            total_pnl = sum(pnl_list)
+            
+            # Profit Factor
+            total_wins = sum(winning_trades) if winning_trades else 0
+            total_losses = abs(sum(losing_trades)) if losing_trades else 0
+            profit_factor = total_wins / total_losses if total_losses > 0 else (999 if total_wins > 0 else 0)
+            
+            # Maximum Drawdown berechnen
+            cumulative_pnl = []
+            running_total = 0
+            for pnl in pnl_list:
+                running_total += pnl
+                cumulative_pnl.append(running_total)
+            
+            peak = cumulative_pnl[0] if cumulative_pnl else 0
+            max_drawdown = 0
+            for value in cumulative_pnl:
+                if value > peak:
+                    peak = value
+                drawdown = peak - value
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+            
+            # Durchschnittliche Gewinne/Verluste
+            avg_win = sum(winning_trades) / len(winning_trades) if winning_trades else 0
+            avg_loss = abs(sum(losing_trades) / len(losing_trades)) if losing_trades else 0
+            
+            # Best/Worst Trade
+            best_trade = max(pnl_list) if pnl_list else 0
+            worst_trade = min(pnl_list) if pnl_list else 0
+            
+            # 7-Tage Performance (basierend auf letzten Trades)
+            seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
+            recent_trades = [t for t in trades if t['timestamp'] > seven_days_ago]
+            week_pnl = sum(t['pnl'] for t in recent_trades)
+            
+            # Status
+            status = "Active" if len(trades) > 0 else "Inactive"
+            
+        else:
+            # Keine Trade-Daten für diese Strategie - zeige als inaktiv
+            win_rate = 0
+            total_pnl = 0
+            profit_factor = 0
+            max_drawdown = 0
+            avg_win = 0
+            avg_loss = 0
+            best_trade = 0
+            worst_trade = 0
+            week_pnl = 0
+            trades = []
+            status = "Inactive"
         
-        win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
-        total_pnl = sum(pnl_list)
-        
-        # Profit Factor
-        total_wins = sum(winning_trades) if winning_trades else 0
-        total_losses = abs(sum(losing_trades)) if losing_trades else 0
-        profit_factor = total_wins / total_losses if total_losses > 0 else (999 if total_wins > 0 else 0)
-        
-        # Maximum Drawdown berechnen
-        cumulative_pnl = []
-        running_total = 0
-        for pnl in pnl_list:
-            running_total += pnl
-            cumulative_pnl.append(running_total)
-        
-        peak = cumulative_pnl[0] if cumulative_pnl else 0
-        max_drawdown = 0
-        for value in cumulative_pnl:
-            if value > peak:
-                peak = value
-            drawdown = peak - value
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-        
-        # Durchschnittliche Gewinne/Verluste
-        avg_win = sum(winning_trades) / len(winning_trades) if winning_trades else 0
-        avg_loss = abs(sum(losing_trades) / len(losing_trades)) if losing_trades else 0
-        
-        # Best/Worst Trade
-        best_trade = max(pnl_list) if pnl_list else 0
-        worst_trade = min(pnl_list) if pnl_list else 0
-        
-        # 7-Tage Performance (basierend auf letzten Trades)
-        seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
-        recent_trades = [t for t in trades if t['timestamp'] > seven_days_ago]
-        week_pnl = sum(t['pnl'] for t in recent_trades)
+        # Performance Score berechnen (0-100)
+        performance_score = 0
+        if len(trades) > 0:
+            # Win Rate (40% Gewichtung)
+            if win_rate >= 60:
+                performance_score += 40
+            elif win_rate >= 50:
+                performance_score += 30
+            elif win_rate >= 40:
+                performance_score += 20
+            elif win_rate >= 30:
+                performance_score += 10
+            
+            # Profit Factor (30% Gewichtung)
+            if profit_factor >= 2.0:
+                performance_score += 30
+            elif profit_factor >= 1.5:
+                performance_score += 25
+            elif profit_factor >= 1.2:
+                performance_score += 20
+            elif profit_factor >= 1.0:
+                performance_score += 15
+            
+            # Total PnL (30% Gewichtung)
+            if total_pnl >= 500:
+                performance_score += 30
+            elif total_pnl >= 200:
+                performance_score += 25
+            elif total_pnl >= 100:
+                performance_score += 20
+            elif total_pnl >= 0:
+                performance_score += 15
         
         coin_performance.append({
-            'symbol': data['symbol'],
-            'account': data['account'],
+            'symbol': strategy['symbol'],
+            'account': strategy['account'],
+            'strategy': strategy['strategy'],
             'total_trades': len(trades),
             'win_rate': round(win_rate, 1),
             'total_pnl': round(total_pnl, 2),
-            'profit_factor': round(profit_factor, 2),
+            'profit_factor': round(profit_factor, 2) if profit_factor < 999 else 999,
             'max_drawdown': round(max_drawdown, 2),
             'avg_win': round(avg_win, 2),
             'avg_loss': round(avg_loss, 2),
             'best_trade': round(best_trade, 2),
             'worst_trade': round(worst_trade, 2),
             'week_pnl': round(week_pnl, 2),
-            'daily_volume': round(data['total_volume'] / 30, 2)  # 30-Tage Durchschnitt
+            'daily_volume': round(data['total_volume'] / 30, 2) if coin_key in all_coin_data else 0,
+            'status': status,
+            'performance_score': performance_score
         })
     
-    # Nach Total PnL sortieren (beste zuerst)
-    coin_performance.sort(key=lambda x: x['total_pnl'], reverse=True)
+    # Nur aktive Strategien behalten (mindestens 1 Trade)
+    active_coin_performance = [coin for coin in coin_performance if coin['total_trades'] > 0]
     
-    return coin_performance
+    # Nach Performance Score sortieren (beste zuerst), dann nach Total PnL
+    active_coin_performance.sort(key=lambda x: (x['performance_score'], x['total_pnl']), reverse=True)
+    
+    return active_coin_performance
 
 def get_coin_performance(acc, trade_history):
     """Individual Coin Performance analysieren (Legacy-Funktion - NICHT MEHR VERWENDET)"""
