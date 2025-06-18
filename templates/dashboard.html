@@ -379,6 +379,14 @@
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
+
+            <!-- Trading-Journal-Button -->
+<li class="nav-item">
+    <a href="{{ url_for('trading_journal') }}"
+       class="btn btn-outline-light {% if request.path == url_for('trading_journal') %}active{% endif %}">
+        <i class="fa-solid fa-book me-2"></i>Trading&nbsp;Journal
+    </a>
+</li>
             
             <!-- NEUE NAVIGATION HIER EINFÜGEN -->
             <div class="btn-group mt-4" role="group">
