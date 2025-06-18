@@ -1483,6 +1483,53 @@ def dashboard():
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
+    @app.route('/trading-journal')
+    def trading_journal():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Google Sheets Setup
+    sheet = setup_google_sheets()
+    
+    # Alle Trades speichern und Journal generieren
+    save_all_trades_to_sheets(sheet)
+    
+    # Journal Summary aus Google Sheets laden
+    try:
+        summary_sheet = sheet.spreadsheet.worksheet("TradingJournalSummary")
+        summary_data = summary_sheet.get_all_records()
+        
+        # Nach Account gruppieren für bessere Anzeige
+        grouped_data = {}
+        for row in summary_data:
+            account = row['Account']
+            if account not in grouped_data:
+                grouped_data[account] = []
+            grouped_data[account].append(row)
+        
+        # Statistiken berechnen
+        total_stats = {
+            'total_trades': sum(row['Total_Trades'] for row in summary_data),
+            'total_pnl': sum(row['Net_PnL'] for row in summary_data),
+            'total_volume': sum(row['Total_Volume'] for row in summary_data),
+            'avg_win_rate': sum(row['Win_Rate'] * row['Total_Trades'] for row in summary_data) / sum(row['Total_Trades'] for row in summary_data) if summary_data else 0,
+            'total_fees': sum(row['Total_Fees'] for row in summary_data)
+        }
+        
+    except Exception as e:
+        logging.error(f"Fehler beim Laden des Trading Journals: {e}")
+        grouped_data = {}
+        total_stats = {}
+    
+    # Zeit
+    tz = timezone("Europe/Berlin")
+    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+    
+    return render_template("trading_journal.html",
+                         grouped_data=grouped_data,
+                         total_stats=total_stats,
+                         now=now)
+    
     # 🎯 Chart Strategien
     fig, ax = plt.subplots(figsize=(12, 6))
     labels = [a["name"] for a in account_data]
