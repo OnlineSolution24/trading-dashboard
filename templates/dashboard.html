@@ -383,7 +383,8 @@
             <!-- Trading-Journal-Button -->
 <li class="nav-item">
     <a href="{{ url_for('trading_journal') }}"
-       class="btn btn-outline-light {% if request.path == url_for('trading_journal') %}active{% endif %}">
+       class="btn btn-outline-light
+              {% if request.endpoint == 'trading_journal' %}active{% endif %}">
         <i class="fa-solid fa-book me-2"></i>Trading&nbsp;Journal
     </a>
 </li>
