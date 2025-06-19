@@ -1483,10 +1483,11 @@ def dashboard():
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
-    @app.route('/trading-journal')
-    def trading_journal():
-    if 'user' not in session:
-        return redirect(url_for('login'))
+    # app.py  – oder in deinem Blueprint
+    @app.route("/trading-journal")          # ← URL-Pfad
+    def trading_journal():                  # ← Endpunkt-Name
+        return render_template("trading_journal.html")
+
     
     # Google Sheets Setup
     sheet = setup_google_sheets()
