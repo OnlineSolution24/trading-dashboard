@@ -397,13 +397,11 @@
     </style>
 </head>
 <body>
-    <!-- Floating Trading Journal Button -->
     <a href="/trading-journal" class="floating-journal-btn">
-        <i class="fas fa-book"></i>
-        Trading Journal
+        <i class="fas fa-book me-2"></i>Trading Journal
     </a>
-    
     <div class="dashboard-container">
+        
         <!-- Header -->
         <div class="header-section">
             <h1 class="header-title">
@@ -621,23 +619,6 @@
                 </div>
             </div>
         </div>
-
-# Trading Journal HTML Section
-
-Fügen Sie diesen Code in Ihre `dashboard.html` vor dem Footer ein:
-
-```html
-<!-- Trading Journal -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="data-table">
-            <h5 class="table-title">
-                <i class="fas fa-book icon-blue"></i>
-                📊 Trading Journal
-                <small class="ms-auto">
-                    <span class="neutral">Gesamt: {{ journal_stats.total_trades }} Trades</span>
-                </small>
-            </h5>
             
             <!-- Journal Statistiken -->
             <div class="row mb-4">
