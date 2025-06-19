@@ -1485,14 +1485,6 @@ def dashboard():
     
     # Google Sheets Setup
     sheet = setup_google_sheets()
-    
-    # Alle Trades speichern und Journal generieren
-    save_all_trades_to_sheets(sheet)
-    
-    # Journal Summary aus Google Sheets laden
-    try:
-        summary_sheet = sheet.spreadsheet.worksheet("TradingJournalSummary")
-        summary_data = summary_sheet.get_all_records()
         
         # Nach Account gruppieren für bessere Anzeige
         grouped_data = {}
