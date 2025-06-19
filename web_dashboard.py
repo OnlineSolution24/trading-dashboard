@@ -769,26 +769,36 @@ def initialize_historical_demo_data(sheet=None, days_back=30):
 def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
     """Speichere tägliche Trade-Daten aller Strategien in Google Sheets"""
     if not sheet:
-        return
-    
+    return
+
+# ── korrigierter Block ─────────────────────────────────────────────────────────
+try:
+    # Trade-History-Sheet erstellen / öffnen
     try:
-        # Trade-History Sheet erstellen/öffnen
-        try:
-            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
-        except:
-            trade_sheet = sheet.spreadsheet.add_worksheet("TradeHistory", rows=5000, cols=15)
-            # Header hinzufügen
-            headers = [
-                'Datum', 'Symbol', 'Account', 'Strategie', 'Daily_PnL', 'Trades_Today', 
-                'Win_Rate', 'Total_PnL', 'Total_Trades', 'Best_Trade', 'Worst_Trade',
-                'Volume', 'Profit_Factor', 'Max_Drawdown', 'Status'
-            ]
-            trade_sheet.append_row(headers)
-        
-        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-        
+        trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
+    except Exception:
+        trade_sheet = sheet.spreadsheet.add_worksheet(
+            "TradeHistory", rows=5000, cols=15
+        )
+        headers = [
+            "Datum", "Symbol", "Account", "Strategie", "Daily_PnL", "Trades_Today",
+            "Win_Rate", "Total_PnL", "Total_Trades", "Best_Trade", "Worst_Trade",
+            "Volume", "Profit_Factor", "Max_Drawdown", "Status",
+        ]
+        trade_sheet.append_row(headers)
+
+    today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%y")
+
+except Exception as e:
+    logger.error(f"Error while preparing TradeHistory sheet: {e}")
+    # je nach Kontext ggf. return oder andere Fehlerbehandlung
+# ───────────────────────────────────────────────────────────────────────────────
+
+
 def get_all_coin_performance(account_data):
-    """Alle Coin Performance aus allen Subaccounts sammeln und analysieren - INKLUSIVE INAKTIVER STRATEGIEN"""
+    """Alle Coin-Performance aus allen Sub-Accounts sammeln und analysieren – inklusive inaktiver Strategien."""
+    ...
+
     
     # Definiere ALLE 46 Strategien
     ALL_STRATEGIES = [
