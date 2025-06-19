@@ -1482,12 +1482,6 @@ def dashboard():
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-
-    # app.py  – oder in deinem Blueprint
-    @app.route("/trading-journal")          # ← URL-Pfad
-    def trading_journal():                  # ← Endpunkt-Name
-        return render_template("trading_journal.html")
-
     
     # Google Sheets Setup
     sheet = setup_google_sheets()
@@ -1601,6 +1595,81 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-
+@app.route('/trading-journal')
+def trading_journal():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Google Sheets Setup
+    sheet = setup_google_sheets()
+    
+    # Trading Journal Daten laden
+    try:
+        # Alle Trades aus Google Sheets laden
+        journal_sheet = sheet.spreadsheet.worksheet("TradeHistory")
+        journal_entries = journal_sheet.get_all_records()
+        
+        # Nach Datum sortieren (neueste zuerst)
+        journal_entries.sort(key=lambda x: x.get('Datum', ''), reverse=True)
+        
+        # Statistiken berechnen
+        total_trades = len(journal_entries)
+        winning_trades = sum(1 for trade in journal_entries if float(trade.get('Daily_PnL', 0)) > 0)
+        losing_trades = sum(1 for trade in journal_entries if float(trade.get('Daily_PnL', 0)) < 0)
+        
+        journal_stats = {
+            'total_trades': total_trades,
+            'winning_trades': winning_trades,
+            'losing_trades': losing_trades,
+            'win_rate': (winning_trades / total_trades * 100) if total_trades > 0 else 0,
+            'total_pnl': sum(float(trade.get('Daily_PnL', 0)) for trade in journal_entries),
+            'avg_win': sum(float(trade.get('Daily_PnL', 0)) for trade in journal_entries if float(trade.get('Daily_PnL', 0)) > 0) / winning_trades if winning_trades > 0 else 0,
+            'avg_loss': sum(float(trade.get('Daily_PnL', 0)) for trade in journal_entries if float(trade.get('Daily_PnL', 0)) < 0) / losing_trades if losing_trades > 0 else 0,
+            'profit_factor': abs(sum(float(trade.get('Daily_PnL', 0)) for trade in journal_entries if float(trade.get('Daily_PnL', 0)) > 0) / sum(float(trade.get('Daily_PnL', 0)) for trade in journal_entries if float(trade.get('Daily_PnL', 0)) < 0)) if losing_trades > 0 else float('inf'),
+            'avg_rr': 1.5,  # Placeholder
+            'largest_win': max((float(trade.get('Daily_PnL', 0)) for trade in journal_entries), default=0),
+            'largest_loss': min((float(trade.get('Daily_PnL', 0)) for trade in journal_entries), default=0),
+            'best_strategy': {'name': 'N/A', 'pnl': 0},
+            'best_day': {'date': 'N/A', 'pnl': 0},
+            'worst_day': {'date': 'N/A', 'pnl': 0},
+            'most_traded': {'symbol': 'N/A', 'count': 0},
+            'total_volume': sum(float(trade.get('Volume', 0)) for trade in journal_entries),
+            'total_fees': 0,  # Placeholder
+            'strategy_performance': {}
+        }
+        
+    except Exception as e:
+        logging.error(f"Fehler beim Laden des Trading Journals: {e}")
+        journal_entries = []
+        journal_stats = {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0,
+            'total_pnl': 0,
+            'avg_win': 0,
+            'avg_loss': 0,
+            'profit_factor': 0,
+            'avg_rr': 0,
+            'largest_win': 0,
+            'largest_loss': 0,
+            'best_strategy': {'name': 'N/A', 'pnl': 0},
+            'best_day': {'date': 'N/A', 'pnl': 0},
+            'worst_day': {'date': 'N/A', 'pnl': 0},
+            'most_traded': {'symbol': 'N/A', 'count': 0},
+            'total_volume': 0,
+            'total_fees': 0,
+            'strategy_performance': {}
+        }
+    
+    # Zeit
+    tz = timezone("Europe/Berlin")
+    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+    
+    return render_template("trading_journal.html",
+                         journal_entries=journal_entries,
+                         journal_stats=journal_stats,
+                         now=now)
+    
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=10000)
