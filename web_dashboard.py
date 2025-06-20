@@ -1009,78 +1009,138 @@ def get_bybit_data(acc):
         return 0.0, [], "❌"
 
 def get_blofin_data(acc):
-    """Blofin Daten abrufen"""
+    """Blofin Daten abrufen - Verbesserte Version"""
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
-        # Verschiedene Balance-Endpunkte versuchen
         usdt = 0.0
-        balance_response = None
+        status = "❌"
         
-        # Versuch 1: Asset Balances
+        # Versuch 1: Account Balance
         try:
             balance_response = client.get_account_balance()
-            logging.info(f"Blofin Asset Balance Response: {balance_response}")
+            logging.info(f"Blofin Balance Response for {acc['name']}: {balance_response}")
             
             if balance_response.get('code') == '0' and balance_response.get('data'):
-                for balance in balance_response['data']:
-                    currency = balance.get('currency') or balance.get('ccy') or balance.get('coin')
-                    if currency == 'USDT':
-                        # Versuche verschiedene Feldnamen für verfügbares Guthaben
-                        available = float(balance.get('available', balance.get('availBal', balance.get('free', 0))))
-                        frozen = float(balance.get('frozen', balance.get('frozenBal', balance.get('locked', 0))))
-                        total = float(balance.get('total', balance.get('totalBal', balance.get('balance', 0))))
+                status = "✅"  # API funktioniert
+                data = balance_response['data']
+                
+                # Verschiedene Datenstrukturen handhaben
+                if isinstance(data, list):
+                    for balance_item in data:
+                        currency = balance_item.get('currency') or balance_item.get('ccy') or balance_item.get('coin')
+                        if currency == 'USDT':
+                            # Verschiedene Feldnamen für Balance
+                            equity_usd = float(balance_item.get('equityUsd', 0))
+                            equity = float(balance_item.get('equity', 0))
+                            total_eq = float(balance_item.get('totalEq', 0))
+                            available = float(balance_item.get('available', balance_item.get('availBal', 0)))
+                            frozen = float(balance_item.get('frozen', balance_item.get('frozenBal', 0)))
+                            total = float(balance_item.get('total', balance_item.get('balance', 0)))
+                            
+                            # Priorisierung: equity > total > available+frozen
+                            if equity_usd > 0:
+                                usdt = equity_usd
+                            elif equity > 0:
+                                usdt = equity
+                            elif total_eq > 0:
+                                usdt = total_eq
+                            elif total > 0:
+                                usdt = total
+                            else:
+                                usdt = available + frozen
+                            break
+                            
+                elif isinstance(data, dict):
+                    # Einzelnes Balance-Objekt
+                    if 'details' in data:
+                        for detail in data['details']:
+                            currency = detail.get('currency') or detail.get('ccy')
+                            if currency == 'USDT':
+                                usdt = float(detail.get('equity', detail.get('totalEq', detail.get('balance', 0))))
+                                break
+                    else:
+                        # Direkte Balance-Daten
+                        usdt = float(data.get('totalEq', data.get('equity', data.get('balance', 0))))
                         
-                        # Versuche zuerst equityUsd (der reale Wert inkl. PnL)
-                        equity_usd = float(balance.get('equityUsd', 0)) if balance.get('equityUsd') else 0
-                        equity = float(balance.get('equity', 0)) if balance.get('equity') else 0
-
-                        if equity_usd > 0:
-                            usdt = equity_usd
-                        elif equity > 0:
-                            usdt = equity
-                        elif total > 0:
-                            usdt = total
-                        else:
-                            usdt = available + frozen
-                        
-                        logging.info(f"Blofin USDT gefunden: available={available}, frozen={frozen}, total={total}, final={usdt}")
-                        break
         except Exception as e:
-            logging.error(f"Fehler bei Blofin Asset Balance {acc['name']}: {e}")
+            logging.error(f"Blofin balance error for {acc['name']}: {e}")
+        
+        # Versuch 2: Falls Balance 0, versuche andere Endpunkte
+        if usdt == 0.0:
+            try:
+                # Account Info versuchen
+                account_response = client._make_request('GET', '/api/v1/account/account')
+                logging.info(f"Blofin Account Info for {acc['name']}: {account_response}")
+                
+                if account_response.get('code') == '0':
+                    status = "✅"
+                    account_data = account_response.get('data', {})
+                    
+                    if isinstance(account_data, list) and len(account_data) > 0:
+                        account_data = account_data[0]
+                    
+                    # Verschiedene Felder versuchen
+                    usdt = float(account_data.get('totalEq', 
+                               account_data.get('totalEquity', 
+                               account_data.get('balance', 
+                               account_data.get('totalMarginBalance', 0)))))
+                               
+            except Exception as e:
+                logging.error(f"Blofin account info error for {acc['name']}: {e}")
+        
+        # Versuch 3: Wallet Balance
+        if usdt == 0.0:
+            try:
+                wallet_response = client._make_request('GET', '/api/v1/asset/balances')
+                logging.info(f"Blofin Wallet Response for {acc['name']}: {wallet_response}")
+                
+                if wallet_response.get('code') == '0':
+                    status = "✅"
+                    wallet_data = wallet_response.get('data', [])
+                    for wallet_item in wallet_data:
+                        if wallet_item.get('currency') == 'USDT':
+                            usdt = float(wallet_item.get('balance', wallet_item.get('available', 0)))
+                            break
+                            
+            except Exception as e:
+                logging.error(f"Blofin wallet error for {acc['name']}: {e}")
         
         # Positionen abrufen
         positions = []
         try:
             pos_response = client.get_positions()
-            logging.info(f"Blofin Positions Response: {pos_response}")
+            logging.info(f"Blofin Positions for {acc['name']}: {pos_response}")
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
+                    # Verschiedene Feldnamen für Position Size
                     pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
+                    
                     if pos_size != 0:
                         position = {
                             'symbol': pos.get('instId', pos.get('instrument_id', pos.get('symbol', ''))),
                             'size': str(abs(pos_size)),
-                            'avgPrice': pos.get('averagePrice', pos.get('avgPx', pos.get('avg_cost', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0'))),
+                            'avgPrice': str(pos.get('averagePrice', pos.get('avgPx', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0')))),
                             'side': 'Buy' if pos_size > 0 else 'Sell'
                         }
                         positions.append(position)
-                        logging.info(f"Blofin Position gefunden: {position}")
+                        
         except Exception as e:
-            logging.error(f"Fehler bei Blofin Positionen {acc['name']}: {e}")
+            logging.error(f"Blofin positions error for {acc['name']}: {e}")
+
+        # Fallback: Wenn alle APIs fehlschlagen aber wir eine Antwort bekommen haben
+        if usdt == 0.0 and status == "✅":
+            # Minimaler Fallback-Wert
+            usdt = 0.01  # Zeigt dass API erreichbar ist, aber kein Guthaben
         
-        # Debug-Output
-        if usdt == 0.0:
-            logging.warning(f"Blofin {acc['name']}: Kein USDT-Guthaben gefunden. Balance Response: {balance_response}")
-        else:
-            logging.info(f"Blofin {acc['name']}: Erfolgreich ${usdt} USDT gefunden")
+        logging.info(f"Blofin {acc['name']}: Status={status}, USDT={usdt}, Positions={len(positions)}")
         
-        return usdt, positions, "✅"
+        return usdt, positions, status
     
     except Exception as e:
-        logging.error(f"Fehler bei Blofin {acc['name']}: {e}")
+        logging.error(f"General Blofin error for {acc['name']}: {e}")
         return 0.0, [], "❌"
 
 def convert_trade_history_to_journal_format(all_coin_performance):
@@ -1131,7 +1191,236 @@ def convert_trade_history_to_journal_format(all_coin_performance):
     
     return journal_entries
 
-def calculate_journal_statistics(journal_entries):
+def get_seven_days_trading_history(account_data):
+    """Hole alle Trades der letzten 7 Tage von allen Accounts"""
+    seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
+    all_trades = []
+    
+    for account in account_data:
+        acc_name = account['name']
+        
+        # Trade History für dieses Account abrufen
+        if account['name'] == "7 Tage Performer":
+            acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
+                         "secret": os.environ.get("BLOFIN_API_SECRET"), 
+                         "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
+        else:
+            # Bybit Account - API Keys dynamisch zuordnen
+            key_map = {
+                "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
+                "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
+                "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
+                "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
+                "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
+                "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
+                "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
+                "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
+                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+            }
+            
+            if acc_name in key_map:
+                key_env, secret_env = key_map[acc_name]
+                acc_config = {"name": acc_name, "key": os.environ.get(key_env), 
+                             "secret": os.environ.get(secret_env), "exchange": "bybit"}
+            else:
+                continue
+        
+        trade_history = get_trade_history(acc_config)
+        
+        for trade in trade_history:
+            try:
+                # Symbol und andere Daten extrahieren
+                if acc_config["exchange"] == "blofin":
+                    symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+                    pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+                    size = float(trade.get('size', trade.get('sz', 0)))
+                    price = float(trade.get('price', trade.get('px', 0)))
+                    timestamp = trade.get('cTime', int(time.time() * 1000))
+                    side = trade.get('side', 'Buy')
+                else:  # bybit
+                    symbol = trade.get('symbol', '').replace('USDT', '')
+                    pnl = float(trade.get('closedPnl', 0))
+                    size = float(trade.get('execQty', 0))
+                    price = float(trade.get('execPrice', 0))
+                    timestamp = trade.get('execTime', int(time.time() * 1000))
+                    side = trade.get('side', 'Buy')
+                
+                # Timestamp normalisieren
+                timestamp = safe_timestamp_convert(timestamp)
+                
+                # Nur Trades der letzten 7 Tage
+                if timestamp > seven_days_ago and pnl != 0:
+                    # Datum und Zeit formatieren
+                    trade_datetime = datetime.fromtimestamp(timestamp / 1000)
+                    
+                    formatted_trade = {
+                        'date': trade_datetime.strftime('%d.%m.%Y'),
+                        'time': trade_datetime.strftime('%H:%M:%S'),
+                        'account': acc_name,
+                        'symbol': symbol,
+                        'side': side,
+                        'size': size,
+                        'price': price,
+                        'pnl': pnl,
+                        'pnl_percent': (pnl / (size * price)) * 100 if (size * price) > 0 else 0,
+                        'win_loss': 'Win' if pnl > 0 else 'Loss' if pnl < 0 else 'BE',
+                        'timestamp': timestamp
+                    }
+                    
+                    all_trades.append(formatted_trade)
+                    
+            except Exception as e:
+                logging.error(f"Error processing trade for {acc_name}: {e}")
+                continue
+    
+    # Sortiere nach Timestamp (neueste zuerst)
+    all_trades.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    logging.info(f"Found {len(all_trades)} trades in last 7 days")
+    return all_trades
+
+def get_csv_strategy_performance():
+    """Hole Gesamtperformance aller Strategien basierend auf CSV-Daten aus Google Sheets"""
+    try:
+        # Google Sheets Setup
+        sheet = setup_google_sheets()
+        if not sheet:
+            return []
+        
+        # TradeHistory Sheet öffnen
+        try:
+            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
+            records = trade_sheet.get_all_records()
+        except:
+            logging.warning("TradeHistory sheet not found, returning empty performance data")
+            return []
+        
+        if not records:
+            return []
+        
+        # Konvertiere zu DataFrame für einfachere Verarbeitung
+        df = pd.DataFrame(records)
+        
+        # Bereinige Daten
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df['Daily_PnL'] = pd.to_numeric(df['Daily_PnL'], errors='coerce').fillna(0)
+        df['Total_PnL'] = pd.to_numeric(df['Total_PnL'], errors='coerce').fillna(0)
+        df['Trades_Today'] = pd.to_numeric(df['Trades_Today'], errors='coerce').fillna(0)
+        df['Win_Rate'] = pd.to_numeric(df['Win_Rate'], errors='coerce').fillna(0)
+        df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce').fillna(0)
+        df['Profit_Factor'] = pd.to_numeric(df['Profit_Factor'], errors='coerce').fillna(0)
+        df['Max_Drawdown'] = pd.to_numeric(df['Max_Drawdown'], errors='coerce').fillna(0)
+        
+        # Entferne ungültige Daten
+        df = df.dropna(subset=['Datum'])
+        
+        # Gruppiere nach Strategie (Symbol + Account Kombination)
+        df['Strategy_Key'] = df['Symbol'] + '_' + df['Account']
+        strategy_groups = df.groupby('Strategy_Key')
+        
+        strategy_performance = []
+        
+        for strategy_key, group in strategy_groups:
+            try:
+                # Letzte verfügbare Daten für diese Strategie
+                latest_data = group.loc[group['Datum'].idxmax()]
+                
+                # Gesamtstatistiken berechnen
+                total_days = len(group)
+                total_trades = group['Trades_Today'].sum()
+                total_pnl = group['Daily_PnL'].sum()
+                
+                # Durchschnittliche Win Rate (gewichtet nach Trades)
+                if total_trades > 0:
+                    weighted_win_rate = 0
+                    weight_sum = 0
+                    for _, row in group.iterrows():
+                        if row['Trades_Today'] > 0:
+                            weighted_win_rate += row['Win_Rate'] * row['Trades_Today']
+                            weight_sum += row['Trades_Today']
+                    avg_win_rate = weighted_win_rate / weight_sum if weight_sum > 0 else 0
+                else:
+                    avg_win_rate = group['Win_Rate'].mean()
+                
+                # Performance in verschiedenen Zeiträumen
+                last_7_days = group[group['Datum'] >= (datetime.now() - timedelta(days=7))]
+                last_30_days = group[group['Datum'] >= (datetime.now() - timedelta(days=30))]
+                
+                week_pnl = last_7_days['Daily_PnL'].sum() if len(last_7_days) > 0 else 0
+                month_pnl = last_30_days['Daily_PnL'].sum() if len(last_30_days) > 0 else 0
+                
+                # Drawdown Berechnung
+                group_sorted = group.sort_values('Datum')
+                group_sorted['Cumulative_PnL'] = group_sorted['Daily_PnL'].cumsum()
+                running_max = group_sorted['Cumulative_PnL'].expanding().max()
+                drawdown = running_max - group_sorted['Cumulative_PnL']
+                max_drawdown = drawdown.max()
+                
+                # Konsistenz-Score (wie oft positiv vs negativ)
+                positive_days = len(group[group['Daily_PnL'] > 0])
+                consistency_score = (positive_days / len(group)) * 100 if len(group) > 0 else 0
+                
+                # Performance Grade basierend auf mehreren Faktoren
+                grade_score = 0
+                if avg_win_rate >= 60: grade_score += 25
+                elif avg_win_rate >= 50: grade_score += 20
+                elif avg_win_rate >= 40: grade_score += 10
+                
+                if total_pnl >= 200: grade_score += 25
+                elif total_pnl >= 100: grade_score += 20
+                elif total_pnl >= 0: grade_score += 15
+                
+                if consistency_score >= 60: grade_score += 25
+                elif consistency_score >= 50: grade_score += 20
+                elif consistency_score >= 40: grade_score += 10
+                
+                if max_drawdown <= 100: grade_score += 25
+                elif max_drawdown <= 200: grade_score += 15
+                elif max_drawdown <= 500: grade_score += 5
+                
+                # Grade zuweisen
+                if grade_score >= 80: grade = "A+"
+                elif grade_score >= 70: grade = "A"
+                elif grade_score >= 60: grade = "B+"
+                elif grade_score >= 50: grade = "B"
+                elif grade_score >= 40: grade = "C+"
+                elif grade_score >= 30: grade = "C"
+                else: grade = "D"
+                
+                strategy_info = {
+                    'symbol': latest_data['Symbol'],
+                    'account': latest_data['Account'],
+                    'strategy': latest_data.get('Strategie', f"{latest_data['Symbol']} Strategy"),
+                    'total_trades': int(total_trades),
+                    'total_days_active': total_days,
+                    'avg_win_rate': round(avg_win_rate, 1),
+                    'total_pnl': round(total_pnl, 2),
+                    'week_pnl': round(week_pnl, 2),
+                    'month_pnl': round(month_pnl, 2),
+                    'max_drawdown': round(max_drawdown, 2),
+                    'avg_profit_factor': round(latest_data.get('Profit_Factor', 0), 2),
+                    'consistency_score': round(consistency_score, 1),
+                    'performance_grade': grade,
+                    'avg_daily_volume': round(group['Volume'].mean(), 2),
+                    'status': latest_data.get('Status', 'Unknown'),
+                    'last_update': latest_data['Datum'].strftime('%d.%m.%Y')
+                }
+                
+                strategy_performance.append(strategy_info)
+                
+            except Exception as e:
+                logging.error(f"Error processing strategy {strategy_key}: {e}")
+                continue
+        
+        # Sortiere nach Total PnL (beste zuerst)
+        strategy_performance.sort(key=lambda x: x['total_pnl'], reverse=True)
+        
+        logging.info(f"Processed {len(strategy_performance)} strategies from CSV data")
+        return strategy_performance
+        
+    except Exception as e:
+        logging.error(f"Error getting CSV strategy performance: {e}")
+        return []
     """Berechne Trading Journal Statistiken"""
     if not journal_entries:
         return {
