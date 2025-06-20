@@ -443,7 +443,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for strategy_name, perf in journal_stats.strategy_performance.items() %}
+                        {% set strategy_items = journal_stats.strategy_performance.items() | list %}
+                        {% for strategy_name, perf in strategy_items %}
                         <tr>
                             <td style="font-weight: 600;">{{ strategy_name[:30] }}{% if strategy_name|length > 30 %}...{% endif %}</td>
                             <td>{{ perf.trades }}</td>
