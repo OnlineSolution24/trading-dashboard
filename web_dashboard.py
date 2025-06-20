@@ -1340,8 +1340,32 @@ def dashboard():
     all_coin_performance = get_all_coin_performance(account_data)
     
     # Trading Journal Daten für Dashboard vorbereiten
+    all_coin_performance = get_all_coin_performance(account_data)
     journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
     journal_stats = calculate_journal_statistics(journal_entries)
+    
+    # Sicherstellen dass journal_stats ein gültiges Dictionary ist
+    if not isinstance(journal_stats, dict):
+        journal_stats = {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0,
+            'total_pnl': 0,
+            'avg_win': 0,
+            'avg_loss': 0,
+            'profit_factor': 0,
+            'avg_rr': 1.5,
+            'largest_win': 0,
+            'largest_loss': 0,
+            'best_strategy': {'name': 'N/A', 'pnl': 0},
+            'best_day': {'date': 'N/A', 'pnl': 0},
+            'worst_day': {'date': 'N/A', 'pnl': 0},
+            'most_traded': {'symbol': 'N/A', 'count': 0},
+            'total_volume': 0,
+            'total_fees': 0,
+            'strategy_performance': {}
+        }
     
     # Speichere tägliche Trade-Daten in Google Sheets
     save_daily_trade_data_to_sheets(all_coin_performance, sheet)
@@ -1461,6 +1485,29 @@ def trading_journal():
     # Live Trading Journal Daten generieren
     journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
     journal_stats = calculate_journal_statistics(journal_entries)
+    
+    # Sicherstellen dass journal_stats ein gültiges Dictionary ist
+    if not isinstance(journal_stats, dict):
+        journal_stats = {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0,
+            'total_pnl': 0,
+            'avg_win': 0,
+            'avg_loss': 0,
+            'profit_factor': 0,
+            'avg_rr': 1.5,
+            'largest_win': 0,
+            'largest_loss': 0,
+            'best_strategy': {'name': 'N/A', 'pnl': 0},
+            'best_day': {'date': 'N/A', 'pnl': 0},
+            'worst_day': {'date': 'N/A', 'pnl': 0},
+            'most_traded': {'symbol': 'N/A', 'count': 0},
+            'total_volume': 0,
+            'total_fees': 0,
+            'strategy_performance': {}
+        }
     
     # Zeit
     tz = timezone("Europe/Berlin")
