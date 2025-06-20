@@ -63,14 +63,17 @@ def safe_timestamp_convert(timestamp):
     try:
         if isinstance(timestamp, str):
             timestamp = int(timestamp)
+        elif isinstance(timestamp, datetime):
+            return int(timestamp.timestamp() * 1000)  # Return as milliseconds
         
         # Check if timestamp is in milliseconds
         if timestamp > 1e12:
-            timestamp = timestamp / 1000
-        
-        return datetime.fromtimestamp(timestamp)
+            return timestamp  # Already in milliseconds
+        else:
+            return int(timestamp * 1000)  # Convert to milliseconds
+            
     except (ValueError, TypeError, OSError):
-        return datetime.now()
+        return int(time.time() * 1000)  # Current time in milliseconds
 
 # 📊 Google Sheets Integration
 def setup_google_sheets():
@@ -307,7 +310,7 @@ def get_bybit_trade_history(acc):
                             'avgEntryPrice': pnl_record.get('avgEntryPrice', '0'),
                             'qty': pnl_record.get('qty', '0'),
                             'createdTime': pnl_record.get('createdTime', str(int(time.time() * 1000))),
-                            'execTime': safe_timestamp_convert(pnl_record.get('createdTime', str(int(time.time() * 1000))))
+                            'execTime': int(pnl_record.get('createdTime', str(int(time.time() * 1000))))
                         })
             except Exception as e:
                 logging.error(f"Error with get_closed_pnl for {acc['name']}: {e}")
@@ -344,7 +347,7 @@ def get_bybit_trade_history(acc):
                                 'closedPnl': pos.get('unrealisedPnl', '0'),
                                 'execPrice': pos.get('avgPrice', '0'),
                                 'execQty': pos.get('size', '0'),
-                                'execTime': safe_timestamp_convert(int(time.time() * 1000))
+                                'execTime': int(time.time() * 1000)
                             })
             except Exception as e:
                 logging.error(f"Error getting positions fallback for {acc['name']}: {e}")
@@ -769,12 +772,16 @@ def get_all_coin_performance(account_data):
                 size = float(trade.get('size', trade.get('sz', 0)))
                 price = float(trade.get('price', trade.get('px', 0)))
                 timestamp = trade.get('cTime', int(time.time() * 1000))
+                # Sicherstellen dass timestamp ein int ist
+                timestamp = safe_timestamp_convert(timestamp)
             else:  # bybit
                 symbol = trade.get('symbol', '').replace('USDT', '')
                 pnl = float(trade.get('closedPnl', 0))
                 size = float(trade.get('execQty', 0))
                 price = float(trade.get('execPrice', 0))
                 timestamp = trade.get('execTime', int(time.time() * 1000))
+                # Sicherstellen dass timestamp ein int ist
+                timestamp = safe_timestamp_convert(timestamp)
             
             if not symbol or symbol == '' or pnl == 0:
                 continue
@@ -794,7 +801,7 @@ def get_all_coin_performance(account_data):
             all_coin_data[coin_key]['trades'].append({
                 'pnl': pnl,
                 'volume': size * price,
-                'timestamp': timestamp,
+                'timestamp': timestamp,  # Jetzt garantiert ein int
                 'size': size,
                 'price': price
             })
@@ -852,7 +859,21 @@ def get_all_coin_performance(account_data):
             
             # 7-Tage Performance (basierend auf letzten Trades)
             seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
-            recent_trades = [t for t in trades if t['timestamp'] > seven_days_ago]
+            recent_trades = []
+            for t in trades:
+                try:
+                    # Konvertiere timestamp zu int falls es ein datetime-Objekt ist
+                    if isinstance(t['timestamp'], datetime):
+                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
+                    else:
+                        t_timestamp = int(t['timestamp'])
+                    
+                    if t_timestamp > seven_days_ago:
+                        recent_trades.append(t)
+                except (ValueError, TypeError, AttributeError):
+                    # Falls Timestamp nicht konvertierbar ist, nehme alle Trades
+                    recent_trades.append(t)
+                    
             week_pnl = sum(t['pnl'] for t in recent_trades)
             
             # Status
