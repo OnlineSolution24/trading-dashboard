@@ -1545,6 +1545,9 @@ def get_csv_strategy_performance():
     except Exception as e:
         logging.error(f"Error getting CSV strategy performance: {e}")
         return []
+
+# WICHTIG: Entferne alle verbleibenden Debug-Zeilen die csv_strategy_performance verwenden
+# Suche nach Zeile 1773 und entferne sie komplett
     """Berechne Trading Journal Statistiken"""
     if not journal_entries:
         return {
