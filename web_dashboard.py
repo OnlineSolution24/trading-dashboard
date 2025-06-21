@@ -1191,6 +1191,130 @@ def convert_trade_history_to_journal_format(all_coin_performance):
     
     return journal_entries
 
+def calculate_journal_statistics(journal_entries):
+    """Berechne Trading Journal Statistiken"""
+    if not journal_entries:
+        return {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0,
+            'total_pnl': 0,
+            'avg_win': 0,
+            'avg_loss': 0,
+            'profit_factor': 0,
+            'avg_rr': 1.5,
+            'largest_win': 0,
+            'largest_loss': 0,
+            'best_strategy': {'name': 'N/A', 'pnl': 0},
+            'best_day': {'date': 'N/A', 'pnl': 0},
+            'worst_day': {'date': 'N/A', 'pnl': 0},
+            'most_traded': {'symbol': 'N/A', 'count': 0},
+            'total_volume': 0,
+            'total_fees': 0,
+            'strategy_performance': {}
+        }
+    
+    # Basis-Statistiken
+    total_trades = len(journal_entries)
+    winning_trades = sum(1 for trade in journal_entries if trade['pnl'] > 0)
+    losing_trades = sum(1 for trade in journal_entries if trade['pnl'] < 0)
+    
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+    total_pnl = sum(trade['pnl'] for trade in journal_entries)
+    
+    # Durchschnittliche Gewinne/Verluste
+    wins = [trade['pnl'] for trade in journal_entries if trade['pnl'] > 0]
+    losses = [trade['pnl'] for trade in journal_entries if trade['pnl'] < 0]
+    
+    avg_win = sum(wins) / len(wins) if wins else 0
+    avg_loss = sum(losses) / len(losses) if losses else 0
+    
+    # Profit Factor
+    total_wins = sum(wins) if wins else 0
+    total_losses = abs(sum(losses)) if losses else 0
+    profit_factor = total_wins / total_losses if total_losses > 0 else float('inf')
+    
+    # Best/Worst Trades
+    largest_win = max((trade['pnl'] for trade in journal_entries), default=0)
+    largest_loss = min((trade['pnl'] for trade in journal_entries), default=0)
+    
+    # Beste Strategie
+    strategy_pnl = {}
+    for trade in journal_entries:
+        strategy = trade.get('strategy', 'Unknown')
+        if strategy not in strategy_pnl:
+            strategy_pnl[strategy] = 0
+        strategy_pnl[strategy] += trade['pnl']
+    
+    best_strategy = max(strategy_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
+    
+    # Beste/Schlechteste Tage
+    daily_pnl = {}
+    for trade in journal_entries:
+        date = trade['date']
+        if date not in daily_pnl:
+            daily_pnl[date] = 0
+        daily_pnl[date] += trade['pnl']
+    
+    best_day = max(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
+    worst_day = min(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
+    
+    # Meist gehandeltes Symbol
+    symbol_counts = {}
+    for trade in journal_entries:
+        symbol = trade['symbol']
+        symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
+    
+    most_traded = max(symbol_counts.items(), key=lambda x: x[1], default=('N/A', 0))
+    
+    # Strategie Performance
+    strategy_performance = {}
+    for trade in journal_entries:
+        strategy = trade.get('strategy', 'Unknown')
+        if strategy not in strategy_performance:
+            strategy_performance[strategy] = {
+                'trades': 0,
+                'wins': 0,
+                'losses': 0,
+                'pnl': 0,
+                'win_rate': 0
+            }
+        
+        strategy_performance[strategy]['trades'] += 1
+        strategy_performance[strategy]['pnl'] += trade['pnl']
+        
+        if trade['pnl'] > 0:
+            strategy_performance[strategy]['wins'] += 1
+        elif trade['pnl'] < 0:
+            strategy_performance[strategy]['losses'] += 1
+    
+    # Win Rate für jede Strategie berechnen
+    for strategy in strategy_performance:
+        perf = strategy_performance[strategy]
+        perf['win_rate'] = (perf['wins'] / perf['trades'] * 100) if perf['trades'] > 0 else 0
+    
+    return {
+        'total_trades': total_trades,
+        'winning_trades': winning_trades,
+        'losing_trades': losing_trades,
+        'win_rate': round(win_rate, 1),
+        'total_pnl': round(total_pnl, 2),
+        'avg_win': round(avg_win, 2),
+        'avg_loss': round(avg_loss, 2),
+        'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 999,
+        'avg_rr': round(abs(avg_win / avg_loss), 2) if avg_loss != 0 else 1.5,
+        'largest_win': round(largest_win, 2),
+        'largest_loss': round(largest_loss, 2),
+        'best_strategy': {'name': best_strategy[0], 'pnl': round(best_strategy[1], 2)},
+        'best_day': {'date': best_day[0], 'pnl': round(best_day[1], 2)},
+        'worst_day': {'date': worst_day[0], 'pnl': round(worst_day[1], 2)},
+        'most_traded': {'symbol': most_traded[0], 'count': most_traded[1]},
+        'total_volume': sum(abs(trade['pnl']) * 10 for trade in journal_entries),  # Geschätztes Volume
+        'total_fees': round(total_pnl * 0.02, 2),  # Geschätzte Fees (2% von PnL)
+        'strategy_performance': strategy_performance
+    }
+
 def get_seven_days_trading_history(account_data):
     """Hole alle Trades der letzten 7 Tage von allen Accounts"""
     seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
