@@ -1756,9 +1756,14 @@ def dashboard():
     all_coin_performance = get_all_coin_performance(account_data)
     
     # Trading Journal Daten für Dashboard vorbereiten
-    all_coin_performance = get_all_coin_performance(account_data)
     journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
     journal_stats = calculate_journal_statistics(journal_entries)
+    
+    # CSV Strategy Performance (optional, nur wenn benötigt)
+    csv_strategy_performance = get_csv_strategy_performance()
+    
+    # 7-Tage Trading History
+    seven_days_trades = get_seven_days_trading_history(account_data)
     
     # Speichere tägliche Trade-Daten in Google Sheets
     save_daily_trade_data_to_sheets(all_coin_performance, sheet)
@@ -1767,7 +1772,7 @@ def dashboard():
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
     
-    # Debug-Ausgabe
+    # Debug-Ausgabe (jetzt mit definierten Variablen)
     logging.info(f"Dashboard Debug:")
     logging.info(f"Total accounts: {len(account_data)}")
     logging.info(f"Total balance: {total_balance}")
