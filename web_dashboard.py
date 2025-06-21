@@ -1787,6 +1787,15 @@ def dashboard():
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
     
+    # Debug-Ausgabe
+    logging.info(f"Dashboard Debug:")
+    logging.info(f"Total accounts: {len(account_data)}")
+    logging.info(f"Total balance: {total_balance}")
+    logging.info(f"Historical performance: {historical_performance}")
+    logging.info(f"Journal entries: {len(journal_entries) if journal_entries else 0}")
+    logging.info(f"CSV strategies: {len(csv_strategy_performance) if csv_strategy_performance else 0}")
+    logging.info(f"7-day trades: {len(seven_days_trades) if seven_days_trades else 0}")
+    
     # 🎯 Chart Strategien
     fig, ax = plt.subplots(figsize=(12, 6))
     labels = [a["name"] for a in account_data]
