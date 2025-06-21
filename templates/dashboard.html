@@ -13,15 +13,11 @@
             --neutral-color: #6c757d;
             --bg-dark: #2c3e50;
             --bg-card: #34495e;
-            --bg-light: #ecf0f1;
             --text-light: #ffffff;
-            --text-dark: #2c3e50;
-            --text-muted: #95a5a6;
             --border-color: #7f8c8d;
             --blue-primary: #3498db;
             --blue-secondary: #2980b9;
             --gray-light: #bdc3c7;
-            --gray-dark: #95a5a6;
         }
         
         body {
@@ -390,8 +386,19 @@
             </div>
         </div>
         
-        <!-- KPI Cards -->
-        <div class="row">
+        <!-- Debug Info -->
+        <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
+            <h6><i class="fas fa-info-circle me-2"></i>Debug Informationen:</h6>
+            <p><strong>Accounts:</strong> {{ accounts|length }} | 
+               <strong>Positionen:</strong> {{ positions_all|length }} | 
+               <strong>Journal Entries:</strong> {{ journal_entries|length if journal_entries else 0 }} | 
+               <strong>CSV Strategien:</strong> {{ csv_strategy_performance|length if csv_strategy_performance else 0 }} |
+               <strong>7-Tage Trades:</strong> {{ seven_days_trades|length if seven_days_trades else 0 }}
+            </p>
+        </div>
+        
+        <!-- KPI Cards - Erste Reihe (Performance) -->
+        <div class="row mb-4">
             <div class="col-lg-3 col-md-6">
                 <div class="kpi-card">
                     <div class="kpi-icon">
@@ -420,3 +427,326 @@
                     </div>
                 </div>
             </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-calendar-week icon-blue"></i>
+                    </div>
+                    <div class="kpi-title">7-Tages Performance</div>
+                    <div class="kpi-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ "%.2f"|format(historical_performance['7_day']) }}
+                    </div>
+                    <div class="pnl-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                        {% if total_start > 0 %}
+                            ({{ "%.2f"|format((historical_performance['7_day'] / total_start) * 100) }}%)
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-icon">
+                        <i class="fas fa-calendar-alt icon-gray"></i>
+                    </div>
+                    <div class="kpi-title">30-Tages Performance</div>
+                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                        ${{ "%.2f"|format(historical_performance['30_day']) }}
+                    </div>
+                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                        {% if total_start > 0 %}
+                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Journal KPIs - Zweite Reihe -->
+        {% if journal_stats %}
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card" style="padding: 15px;">
+                    <div class="kpi-title" style="font-size: 0.8rem;">Win Rate</div>
+                    <div class="kpi-value {% if journal_stats.win_rate >= 50 %}profit{% else %}loss{% endif %}" style="font-size: 1.5rem;">
+                        {{ "%.1f"|format(journal_stats.win_rate) }}%
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--gray-light);">
+                        {{ journal_stats.winning_trades }}W / {{ journal_stats.losing_trades }}L
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card" style="padding: 15px;">
+                    <div class="kpi-title" style="font-size: 0.8rem;">Journal PnL</div>
+                    <div class="kpi-value {% if journal_stats.total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.5rem;">
+                        ${{ "%.2f"|format(journal_stats.total_pnl) }}
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--gray-light);">
+                        Avg: ${{ "%.2f"|format(journal_stats.total_pnl / journal_stats.total_trades) if journal_stats.total_trades > 0 else 0 }}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card" style="padding: 15px;">
+                    <div class="kpi-title" style="font-size: 0.8rem;">Profit Factor</div>
+                    <div class="kpi-value {% if journal_stats.profit_factor >= 1.2 %}profit{% elif journal_stats.profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}" style="font-size: 1.5rem;">
+                        {{ "%.2f"|format(journal_stats.profit_factor) if journal_stats.profit_factor < 999 else '∞' }}
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--gray-light);">
+                        RR: {{ "%.2f"|format(journal_stats.avg_rr) }}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="kpi-card" style="padding: 15px;">
+                    <div class="kpi-title" style="font-size: 0.8rem;">Beste Strategie</div>
+                    <div class="kpi-value profit" style="font-size: 1rem;">
+                        {{ journal_stats.best_strategy.name[:15] }}{% if journal_stats.best_strategy.name|length > 15 %}...{% endif %}
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--gray-light);">
+                        ${{ "%.2f"|format(journal_stats.best_strategy.pnl) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="fas fa-chart-bar me-2 icon-blue"></i>Subaccount Performance
+                    </h5>
+                    <img src="{{ chart_path_strategien }}" class="chart-img" alt="Strategien Chart">
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="chart-title">
+                        <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance
+                    </h5>
+                    <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables -->
+        <div class="row">
+            <!-- Subaccounts Table -->
+            <div class="col-lg-6">
+                <div class="data-table">
+                    <h5 class="table-title">
+                        <i class="fas fa-users icon-blue"></i>
+                        Subaccounts
+                    </h5>
+                    <div class="table-container">
+                        <table class="table custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Status</th>
+                                    <th>Start</th>
+                                    <th>Balance</th>
+                                    <th>PnL</th>
+                                    <th>PnL %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for a in accounts %}
+                                <tr>
+                                    <td class="account-name">{{ a.name }}</td>
+                                    <td>
+                                        {% if a.status == "✅" %}
+                                            <span class="status-badge status-online">Online</span>
+                                        {% else %}
+                                            <span class="status-badge status-offline">Offline</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="neutral">${{ "%.2f"|format(a.start) }}</td>
+                                    <td class="neutral">${{ "%.2f"|format(a.balance) }}</td>
+                                    <td class="pnl-value {% if a.pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                        ${{ "%.2f"|format(a.pnl) }}
+                                    </td>
+                                    <td class="pnl-value {% if a.pnl_percent >= 0 %}profit{% else %}loss{% endif %}">
+                                        {{ "%.2f"|format(a.pnl_percent) }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Positions Table -->
+            <div class="col-lg-6">
+                <div class="data-table">
+                    <h5 class="table-title">
+                        <i class="fas fa-chart-area icon-blue"></i>
+                        Offene Positionen
+                        <span class="ms-auto">
+                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
+                            </small>
+                        </span>
+                    </h5>
+                    <div class="table-container">
+                        <table class="table custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Account</th>
+                                    <th>Symbol</th>
+                                    <th>Größe</th>
+                                    <th>Einstieg</th>
+                                    <th>PnL</th>
+                                    <th>Seite</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for name, pos in positions_all %}
+                                <tr>
+                                    <td class="account-name">{{ name }}</td>
+                                    <td>
+                                        <span class="symbol-badge">{{ pos.symbol }}</span>
+                                    </td>
+                                    <td class="neutral">{{ pos.size }}</td>
+                                    <td class="neutral">${{ pos.avgPrice }}</td>
+                                    <td class="pnl-value {% if pos.unrealisedPnl|float >= 0 %}profit{% else %}loss{% endif %}">
+                                        ${{ "%.2f"|format(pos.unrealisedPnl|float) }}
+                                    </td>
+                                    <td>
+                                        {% if pos.side == "Buy" %}
+                                            <span class="side-long">Long</span>
+                                        {% else %}
+                                            <span class="side-short">Short</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% if positions_all %}
+                                <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                                    <td colspan="4" class="text-end" style="padding-top: 15px;">
+                                        <strong>Gesamt Offene Positionen:</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
+                                    </td>
+                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
+                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Erweiterte Trading Statistiken -->
+        {% if journal_stats %}
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div style="background: var(--bg-card); padding: 15px; border-radius: 10px; border: 1px solid var(--border-color);">
+                    <h6 style="color: var(--blue-primary); font-size: 0.9rem; margin-bottom: 10px;">
+                        <i class="fas fa-chart-bar me-2"></i>Trading Übersicht
+                    </h6>
+                    <div style="font-size: 0.85rem; color: var(--gray-light);">
+                        <div class="mb-2">
+                            <strong>Avg Win:</strong> 
+                            <span class="profit">${{ "%.2f"|format(journal_stats.avg_win) }}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Avg Loss:</strong> 
+                            <span class="loss">${{ "%.2f"|format(journal_stats.avg_loss) }}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Größter Gewinn:</strong> 
+                            <span class="profit">${{ "%.2f"|format(journal_stats.largest_win) }}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Größter Verlust:</strong> 
+                            <span class="loss">${{ "%.2f"|format(journal_stats.largest_loss) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div style="background: var(--bg-card); padding: 15px; border-radius: 10px; border: 1px solid var(--border-color);">
+                    <h6 style="color: var(--blue-primary); font-size: 0.9rem; margin-bottom: 10px;">
+                        <i class="fas fa-calendar-day me-2"></i>Tages-Performance
+                    </h6>
+                    <div style="font-size: 0.85rem; color: var(--gray-light);">
+                        <div class="mb-2">
+                            <strong>Bester Tag:</strong><br>
+                            <span class="profit">{{ journal_stats.best_day.date }} (+${{ "%.2f"|format(journal_stats.best_day.pnl) }})</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Schlechtester Tag:</strong><br>
+                            <span class="loss">{{ journal_stats.worst_day.date }} (${{ "%.2f"|format(journal_stats.worst_day.pnl) }})</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div style="background: var(--bg-card); padding: 15px; border-radius: 10px; border: 1px solid var(--border-color);">
+                    <h6 style="color: var(--blue-primary); font-size: 0.9rem; margin-bottom: 10px;">
+                        <i class="fas fa-coins me-2"></i>Handelsaktivität
+                    </h6>
+                    <div style="font-size: 0.85rem; color: var(--gray-light);">
+                        <div class="mb-2">
+                            <strong>Meist gehandelt:</strong><br>
+                            <span class="symbol-badge">{{ journal_stats.most_traded.symbol }}</span> 
+                            ({{ journal_stats.most_traded.count }} Trades)
+                        </div>
+                        <div class="mb-2">
+                            <strong>Total Volume:</strong> 
+                            ${{ "{:,.0f}".format(journal_stats.total_volume) }}
+                        </div>
+                        <div class="mb-2">
+                            <strong>Geschätzte Fees:</strong> 
+                            <span class="loss">${{ "%.2f"|format(journal_stats.total_fees) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer Timestamp -->
+    <div class="footer-timestamp">
+        <i class="fas fa-clock me-2"></i>
+        Letztes Update: {{ now }}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleCollapsible(elementId) {
+            const content = document.getElementById(elementId);
+            const icon = document.getElementById(elementId + 'Icon');
+            const collapsible = content.previousElementSibling;
+            
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                content.classList.add('show');
+                collapsible.classList.add('active');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                content.style.display = 'none';
+                content.classList.remove('show');
+                collapsible.classList.remove('active');
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            }
+        }
+    </script>
+</body>
+</html>
