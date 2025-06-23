@@ -650,84 +650,70 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
 def get_all_coin_performance(account_data):
     """Alle Coin-Performance aus allen Sub-Accounts sammeln und analysieren – inklusive 30-Tage-Auswertung."""
     
-    # Definiere ALLE 46 Strategien in der gewünschten Account-Reihenfolge
+    # Echte Strategien basierend auf der PDF - nach Subaccount sortiert
     ALL_STRATEGIES = [
-        # Incubatorzone (5)
-        {"symbol": "LINK", "account": "Incubatorzone", "strategy": "LINK Incubator"},
-        {"symbol": "DOT", "account": "Incubatorzone", "strategy": "DOT Incubator"},
-        {"symbol": "KSM", "account": "Incubatorzone", "strategy": "KSM Strategy"},
-        {"symbol": "OCEAN", "account": "Incubatorzone", "strategy": "OCEAN Strategy"},
-        {"symbol": "FET", "account": "Incubatorzone", "strategy": "FET Strategy"},
+        # Incubatorzone (3)
+        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
+        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
+        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
         
-        # Memestrategies (6)
-        {"symbol": "DOGE", "account": "Memestrategies", "strategy": "DOGE Strategy"},
-        {"symbol": "SHIB", "account": "Memestrategies", "strategy": "SHIB Strategy"},
-        {"symbol": "PEPE", "account": "Memestrategies", "strategy": "PEPE Strategy"},
-        {"symbol": "WIF", "account": "Memestrategies", "strategy": "WIF Strategy"},
-        {"symbol": "FLOKI", "account": "Memestrategies", "strategy": "FLOKI Strategy"},
-        {"symbol": "BONK", "account": "Memestrategies", "strategy": "BONK Meme Strategy"},
+        # Memestrategies (3)
+        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
+        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
+        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
         
-        # Ethapestrategies (6)
-        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "ETH Strategy"},
-        {"symbol": "LINK", "account": "Ethapestrategies", "strategy": "LINK Strategy"},
-        {"symbol": "UNI", "account": "Ethapestrategies", "strategy": "UNI Strategy"},
-        {"symbol": "AAVE", "account": "Ethapestrategies", "strategy": "AAVE Strategy"},
-        {"symbol": "MKR", "account": "Ethapestrategies", "strategy": "MKR Strategy"},
-        {"symbol": "CRV", "account": "Ethapestrategies", "strategy": "CRV Strategy"},
+        # Ethapestrategies (3)
+        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
+        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
+        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
         
-        # Altsstrategies (15)
-        {"symbol": "MATIC", "account": "Altsstrategies", "strategy": "MATIC Strategy"},
-        {"symbol": "ATOM", "account": "Altsstrategies", "strategy": "ATOM Strategy"},
-        {"symbol": "FTM", "account": "Altsstrategies", "strategy": "FTM Strategy"},
-        {"symbol": "AVAX", "account": "Altsstrategies", "strategy": "AVAX Strategy"},
-        {"symbol": "ALGO", "account": "Altsstrategies", "strategy": "ALGO Strategy"},
-        {"symbol": "VET", "account": "Altsstrategies", "strategy": "VET Strategy"},
-        {"symbol": "XLM", "account": "Altsstrategies", "strategy": "XLM Strategy"},
-        {"symbol": "TRX", "account": "Altsstrategies", "strategy": "TRX Strategy"},
-        {"symbol": "THETA", "account": "Altsstrategies", "strategy": "THETA Alt Strategy"},
-        {"symbol": "XTZ", "account": "Altsstrategies", "strategy": "XTZ Alt Strategy"},
-        {"symbol": "EOS", "account": "Altsstrategies", "strategy": "EOS Alt Strategy"},
-        {"symbol": "NEO", "account": "Altsstrategies", "strategy": "NEO Alt Strategy"},
-        {"symbol": "QTUM", "account": "Altsstrategies", "strategy": "QTUM Alt Strategy"},
-        {"symbol": "ZIL", "account": "Altsstrategies", "strategy": "ZIL Alt Strategy"},
-        {"symbol": "ONE", "account": "Altsstrategies", "strategy": "ONE Alt Strategy"},
+        # Altsstrategies (5)
+        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
+        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
+        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "PTM ETH"},
         
-        # Solstrategies (5)
+        # Solstrategies (4)
         {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-        {"symbol": "BONK", "account": "Solstrategies", "strategy": "BONK Strategy"},
-        {"symbol": "JTO", "account": "Solstrategies", "strategy": "JTO Strategy"},
-        {"symbol": "RAY", "account": "Solstrategies", "strategy": "RAY Strategy"},
-        {"symbol": "PYTH", "account": "Solstrategies", "strategy": "PYTH Strategy"},
+        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
+        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
+        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
         
-        # Btcstrategies (8)
+        # Btcstrategies (4)
         {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge"},
+        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
         {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA"},
-        {"symbol": "LTC", "account": "Btcstrategies", "strategy": "LTC Strategy"},
-        {"symbol": "BCH", "account": "Btcstrategies", "strategy": "BCH Strategy"},
-        {"symbol": "ETC", "account": "Btcstrategies", "strategy": "ETC Strategy"},
-        {"symbol": "ADA", "account": "Btcstrategies", "strategy": "ADA Strategy"},
+        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
         
-        # Corestrategies (6)
-        {"symbol": "HBAR", "account": "Corestrategies", "strategy": "Heiken-Ashi CE LSMA"},
+        # Corestrategies (4)
+        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
         {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag"},
+        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
         {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-        {"symbol": "ICP", "account": "Corestrategies", "strategy": "ICP Core Strategy"},
-        {"symbol": "FIL", "account": "Corestrategies", "strategy": "FIL Core Strategy"},
         
-        # 2k->10k Projekt (3)
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "BTC 2k Strategy"},
-        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "ETH 2k Strategy"},
-        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "SOL 2k Strategy"},
+        # 2k->10k Projekt (6)
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "DynamicPrecision BTC 30M"},
+        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT ETH 1H"},
+        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
+        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "TrendHoov5 SOL 90M"},
+        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
         
-        # 1k->5k Projekt (2)
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "AVAX 1k Strategy"},
-        {"symbol": "NEAR", "account": "1k->5k Projekt", "strategy": "NEAR 1k Strategy"},
+        # 1k->5k Projekt (5)
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
+        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
+        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
+        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
         
-        # 7 Tage Performer (1)
-        {"symbol": "MATIC", "account": "7 Tage Performer", "strategy": "MATIC 7D Strategy"},
+        # 7 Tage Performer (6)
+        {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
+        {"symbol": "INJ", "account": "7 Tage Performer", "strategy": "TRIGGERHAPPY2 INJ"},
+        {"symbol": "ARB", "account": "7 Tage Performer", "strategy": "STIFFSURGE ARB"},
+        {"symbol": "RUNE", "account": "7 Tage Performer", "strategy": "MACD LIQUIDITY SPECTRUM RUNE"},
+        {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
+        {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
     ]
     
     # Sammle Trade-Daten wie bisher
