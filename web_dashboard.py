@@ -648,42 +648,16 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
         logging.error(f"Error while saving trade data to sheets: {e}")
 
 def get_all_coin_performance(account_data):
-    """Alle Coin-Performance aus allen Sub-Accounts sammeln und analysieren – inklusive inaktiver Strategien."""
+    """Alle Coin-Performance aus allen Sub-Accounts sammeln und analysieren – inklusive 30-Tage-Auswertung."""
     
-    # Definiere ALLE 46 Strategien
+    # Definiere ALLE 46 Strategien in der gewünschten Account-Reihenfolge
     ALL_STRATEGIES = [
-        # Corestrategies (6)
-        {"symbol": "HBAR", "account": "Corestrategies", "strategy": "Heiken-Ashi CE LSMA"},
-        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag"},
-        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-        {"symbol": "ICP", "account": "Corestrategies", "strategy": "ICP Core Strategy"},
-        {"symbol": "FIL", "account": "Corestrategies", "strategy": "FIL Core Strategy"},
-        
-        # Btcstrategies (8)
-        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge"},
-        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA"},
-        {"symbol": "LTC", "account": "Btcstrategies", "strategy": "LTC Strategy"},
-        {"symbol": "BCH", "account": "Btcstrategies", "strategy": "BCH Strategy"},
-        {"symbol": "ETC", "account": "Btcstrategies", "strategy": "ETC Strategy"},
-        {"symbol": "ADA", "account": "Btcstrategies", "strategy": "ADA Strategy"},
-        
-        # Solstrategies (5)
-        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-        {"symbol": "BONK", "account": "Solstrategies", "strategy": "BONK Strategy"},
-        {"symbol": "JTO", "account": "Solstrategies", "strategy": "JTO Strategy"},
-        {"symbol": "RAY", "account": "Solstrategies", "strategy": "RAY Strategy"},
-        {"symbol": "PYTH", "account": "Solstrategies", "strategy": "PYTH Strategy"},
-        
-        # Ethapestrategies (6)
-        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "ETH Strategy"},
-        {"symbol": "LINK", "account": "Ethapestrategies", "strategy": "LINK Strategy"},
-        {"symbol": "UNI", "account": "Ethapestrategies", "strategy": "UNI Strategy"},
-        {"symbol": "AAVE", "account": "Ethapestrategies", "strategy": "AAVE Strategy"},
-        {"symbol": "MKR", "account": "Ethapestrategies", "strategy": "MKR Strategy"},
-        {"symbol": "CRV", "account": "Ethapestrategies", "strategy": "CRV Strategy"},
+        # Incubatorzone (5)
+        {"symbol": "LINK", "account": "Incubatorzone", "strategy": "LINK Incubator"},
+        {"symbol": "DOT", "account": "Incubatorzone", "strategy": "DOT Incubator"},
+        {"symbol": "KSM", "account": "Incubatorzone", "strategy": "KSM Strategy"},
+        {"symbol": "OCEAN", "account": "Incubatorzone", "strategy": "OCEAN Strategy"},
+        {"symbol": "FET", "account": "Incubatorzone", "strategy": "FET Strategy"},
         
         # Memestrategies (6)
         {"symbol": "DOGE", "account": "Memestrategies", "strategy": "DOGE Strategy"},
@@ -692,6 +666,14 @@ def get_all_coin_performance(account_data):
         {"symbol": "WIF", "account": "Memestrategies", "strategy": "WIF Strategy"},
         {"symbol": "FLOKI", "account": "Memestrategies", "strategy": "FLOKI Strategy"},
         {"symbol": "BONK", "account": "Memestrategies", "strategy": "BONK Meme Strategy"},
+        
+        # Ethapestrategies (6)
+        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "ETH Strategy"},
+        {"symbol": "LINK", "account": "Ethapestrategies", "strategy": "LINK Strategy"},
+        {"symbol": "UNI", "account": "Ethapestrategies", "strategy": "UNI Strategy"},
+        {"symbol": "AAVE", "account": "Ethapestrategies", "strategy": "AAVE Strategy"},
+        {"symbol": "MKR", "account": "Ethapestrategies", "strategy": "MKR Strategy"},
+        {"symbol": "CRV", "account": "Ethapestrategies", "strategy": "CRV Strategy"},
         
         # Altsstrategies (15)
         {"symbol": "MATIC", "account": "Altsstrategies", "strategy": "MATIC Strategy"},
@@ -710,12 +692,30 @@ def get_all_coin_performance(account_data):
         {"symbol": "ZIL", "account": "Altsstrategies", "strategy": "ZIL Alt Strategy"},
         {"symbol": "ONE", "account": "Altsstrategies", "strategy": "ONE Alt Strategy"},
         
-        # Incubatorzone (5)
-        {"symbol": "LINK", "account": "Incubatorzone", "strategy": "LINK Incubator"},
-        {"symbol": "DOT", "account": "Incubatorzone", "strategy": "DOT Incubator"},
-        {"symbol": "KSM", "account": "Incubatorzone", "strategy": "KSM Strategy"},
-        {"symbol": "OCEAN", "account": "Incubatorzone", "strategy": "OCEAN Strategy"},
-        {"symbol": "FET", "account": "Incubatorzone", "strategy": "FET Strategy"},
+        # Solstrategies (5)
+        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
+        {"symbol": "BONK", "account": "Solstrategies", "strategy": "BONK Strategy"},
+        {"symbol": "JTO", "account": "Solstrategies", "strategy": "JTO Strategy"},
+        {"symbol": "RAY", "account": "Solstrategies", "strategy": "RAY Strategy"},
+        {"symbol": "PYTH", "account": "Solstrategies", "strategy": "PYTH Strategy"},
+        
+        # Btcstrategies (8)
+        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
+        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge"},
+        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
+        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA"},
+        {"symbol": "LTC", "account": "Btcstrategies", "strategy": "LTC Strategy"},
+        {"symbol": "BCH", "account": "Btcstrategies", "strategy": "BCH Strategy"},
+        {"symbol": "ETC", "account": "Btcstrategies", "strategy": "ETC Strategy"},
+        {"symbol": "ADA", "account": "Btcstrategies", "strategy": "ADA Strategy"},
+        
+        # Corestrategies (6)
+        {"symbol": "HBAR", "account": "Corestrategies", "strategy": "Heiken-Ashi CE LSMA"},
+        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
+        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag"},
+        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
+        {"symbol": "ICP", "account": "Corestrategies", "strategy": "ICP Core Strategy"},
+        {"symbol": "FIL", "account": "Corestrategies", "strategy": "FIL Core Strategy"},
         
         # 2k->10k Projekt (3)
         {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "BTC 2k Strategy"},
@@ -772,7 +772,6 @@ def get_all_coin_performance(account_data):
                 size = float(trade.get('size', trade.get('sz', 0)))
                 price = float(trade.get('price', trade.get('px', 0)))
                 timestamp = trade.get('cTime', int(time.time() * 1000))
-                # Sicherstellen dass timestamp ein int ist
                 timestamp = safe_timestamp_convert(timestamp)
             else:  # bybit
                 symbol = trade.get('symbol', '').replace('USDT', '')
@@ -780,7 +779,6 @@ def get_all_coin_performance(account_data):
                 size = float(trade.get('execQty', 0))
                 price = float(trade.get('execPrice', 0))
                 timestamp = trade.get('execTime', int(time.time() * 1000))
-                # Sicherstellen dass timestamp ein int ist
                 timestamp = safe_timestamp_convert(timestamp)
             
             if not symbol or symbol == '' or pnl == 0:
@@ -801,7 +799,7 @@ def get_all_coin_performance(account_data):
             all_coin_data[coin_key]['trades'].append({
                 'pnl': pnl,
                 'volume': size * price,
-                'timestamp': timestamp,  # Jetzt garantiert ein int
+                'timestamp': timestamp,
                 'size': size,
                 'price': price
             })
@@ -810,6 +808,10 @@ def get_all_coin_performance(account_data):
     
     # Performance-Metriken für ALLE Strategien berechnen
     coin_performance = []
+    
+    # Zeitstempel für 30 Tage und 7 Tage
+    thirty_days_ago = int(time.time() * 1000) - (30 * 24 * 60 * 60 * 1000)
+    seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
     
     # Durchlaufe ALLE definierten Strategien
     for strategy in ALL_STRATEGIES:
@@ -820,7 +822,7 @@ def get_all_coin_performance(account_data):
             data = all_coin_data[coin_key]
             trades = data['trades']
             
-            # Basis-Metriken
+            # Basis-Metriken (Gesamtzeit)
             pnl_list = [t['pnl'] for t in trades]
             winning_trades = [pnl for pnl in pnl_list if pnl > 0]
             losing_trades = [pnl for pnl in pnl_list if pnl < 0]
@@ -828,12 +830,60 @@ def get_all_coin_performance(account_data):
             win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
             total_pnl = sum(pnl_list)
             
-            # Profit Factor
+            # Profit Factor (Gesamt)
             total_wins = sum(winning_trades) if winning_trades else 0
             total_losses = abs(sum(losing_trades)) if losing_trades else 0
             profit_factor = total_wins / total_losses if total_losses > 0 else (999 if total_wins > 0 else 0)
             
-            # Maximum Drawdown berechnen
+            # 30-Tage-Metriken
+            month_trades = []
+            for t in trades:
+                try:
+                    if isinstance(t['timestamp'], datetime):
+                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
+                    else:
+                        t_timestamp = int(t['timestamp'])
+                    
+                    if t_timestamp > thirty_days_ago:
+                        month_trades.append(t)
+                except (ValueError, TypeError, AttributeError):
+                    month_trades.append(t)
+            
+            # 30-Tage Performance berechnen
+            if month_trades:
+                month_pnl_list = [t['pnl'] for t in month_trades]
+                month_winning = [pnl for pnl in month_pnl_list if pnl > 0]
+                month_losing = [pnl for pnl in month_pnl_list if pnl < 0]
+                
+                month_win_rate = (len(month_winning) / len(month_trades)) * 100
+                month_pnl = sum(month_pnl_list)
+                
+                # 30-Tage Profit Factor
+                month_wins_total = sum(month_winning) if month_winning else 0
+                month_losses_total = abs(sum(month_losing)) if month_losing else 0
+                month_profit_factor = month_wins_total / month_losses_total if month_losses_total > 0 else (999 if month_wins_total > 0 else 0)
+            else:
+                month_win_rate = 0
+                month_pnl = 0
+                month_profit_factor = 0
+            
+            # 7-Tage Performance
+            week_trades = []
+            for t in trades:
+                try:
+                    if isinstance(t['timestamp'], datetime):
+                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
+                    else:
+                        t_timestamp = int(t['timestamp'])
+                    
+                    if t_timestamp > seven_days_ago:
+                        week_trades.append(t)
+                except (ValueError, TypeError, AttributeError):
+                    week_trades.append(t)
+                    
+            week_pnl = sum(t['pnl'] for t in week_trades)
+            
+            # Maximum Drawdown berechnen (Gesamt)
             cumulative_pnl = []
             running_total = 0
             for pnl in pnl_list:
@@ -849,145 +899,93 @@ def get_all_coin_performance(account_data):
                 if drawdown > max_drawdown:
                     max_drawdown = drawdown
             
-            # Durchschnittliche Gewinne/Verluste
-            avg_win = sum(winning_trades) / len(winning_trades) if winning_trades else 0
-            avg_loss = abs(sum(losing_trades) / len(losing_trades)) if losing_trades else 0
-            
             # Best/Worst Trade
             best_trade = max(pnl_list) if pnl_list else 0
             worst_trade = min(pnl_list) if pnl_list else 0
             
-            # 7-Tage Performance (basierend auf letzten Trades)
-            seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
-            recent_trades = []
-            for t in trades:
-                try:
-                    # Konvertiere timestamp zu int falls es ein datetime-Objekt ist
-                    if isinstance(t['timestamp'], datetime):
-                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
-                    else:
-                        t_timestamp = int(t['timestamp'])
-                    
-                    if t_timestamp > seven_days_ago:
-                        recent_trades.append(t)
-                except (ValueError, TypeError, AttributeError):
-                    # Falls Timestamp nicht konvertierbar ist, nehme alle Trades
-                    recent_trades.append(t)
-                    
-            week_pnl = sum(t['pnl'] for t in recent_trades)
-            
             # Status
-            status = "Active" if len(trades) > 0 else "Inactive"
+            status = "Active" if len(month_trades) > 0 else "Inactive"
             
+            # 30-Tage Performance Score berechnen (0-100)
+            month_performance_score = 0
+            if len(month_trades) > 0:
+                # Win Rate (40% Gewichtung)
+                if month_win_rate >= 60:
+                    month_performance_score += 40
+                elif month_win_rate >= 50:
+                    month_performance_score += 30
+                elif month_win_rate >= 40:
+                    month_performance_score += 20
+                elif month_win_rate >= 30:
+                    month_performance_score += 10
+                
+                # Profit Factor (30% Gewichtung)
+                if month_profit_factor >= 2.0:
+                    month_performance_score += 30
+                elif month_profit_factor >= 1.5:
+                    month_performance_score += 25
+                elif month_profit_factor >= 1.2:
+                    month_performance_score += 20
+                elif month_profit_factor >= 1.0:
+                    month_performance_score += 15
+                
+                # 30-Tage PnL (30% Gewichtung)
+                if month_pnl >= 200:
+                    month_performance_score += 30
+                elif month_pnl >= 100:
+                    month_performance_score += 25
+                elif month_pnl >= 50:
+                    month_performance_score += 20
+                elif month_pnl >= 0:
+                    month_performance_score += 15
+        
         else:
-            # Keine Trade-Daten für diese Strategie - zeige als inaktiv
+            # Keine Trade-Daten für diese Strategie
             win_rate = 0
             total_pnl = 0
             profit_factor = 0
             max_drawdown = 0
-            avg_win = 0
-            avg_loss = 0
             best_trade = 0
             worst_trade = 0
             week_pnl = 0
+            month_pnl = 0
+            month_win_rate = 0
+            month_profit_factor = 0
+            month_performance_score = 0
             trades = []
+            month_trades = []
             status = "Inactive"
-        
-        # Performance Score berechnen (0-100)
-        performance_score = 0
-        if len(trades) > 0:
-            # Win Rate (40% Gewichtung)
-            if win_rate >= 60:
-                performance_score += 40
-            elif win_rate >= 50:
-                performance_score += 30
-            elif win_rate >= 40:
-                performance_score += 20
-            elif win_rate >= 30:
-                performance_score += 10
-            
-            # Profit Factor (30% Gewichtung)
-            if profit_factor >= 2.0:
-                performance_score += 30
-            elif profit_factor >= 1.5:
-                performance_score += 25
-            elif profit_factor >= 1.2:
-                performance_score += 20
-            elif profit_factor >= 1.0:
-                performance_score += 15
-            
-            # Total PnL (30% Gewichtung)
-            if total_pnl >= 500:
-                performance_score += 30
-            elif total_pnl >= 200:
-                performance_score += 25
-            elif total_pnl >= 100:
-                performance_score += 20
-            elif total_pnl >= 0:
-                performance_score += 15
         
         coin_performance.append({
             'symbol': strategy['symbol'],
             'account': strategy['account'],
             'strategy': strategy['strategy'],
+            
+            # Gesamt-Metriken
             'total_trades': len(trades),
             'win_rate': round(win_rate, 1),
             'total_pnl': round(total_pnl, 2),
             'profit_factor': round(profit_factor, 2) if profit_factor < 999 else 999,
             'max_drawdown': round(max_drawdown, 2),
-            'avg_win': round(avg_win, 2),
-            'avg_loss': round(avg_loss, 2),
             'best_trade': round(best_trade, 2),
             'worst_trade': round(worst_trade, 2),
+            
+            # 30-Tage Metriken
+            'month_trades': len(month_trades),
+            'month_win_rate': round(month_win_rate, 1),
+            'month_pnl': round(month_pnl, 2),
+            'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
+            'month_performance_score': month_performance_score,
+            
+            # 7-Tage Metriken
             'week_pnl': round(week_pnl, 2),
+            
+            # Status
             'daily_volume': round(data['total_volume'] / 30, 2) if coin_key in all_coin_data else 0,
-            'status': status,
-            'performance_score': performance_score
+            'status': status
         })
     
-    # Nur aktive Strategien behalten (mindestens 1 Trade)
-    active_coin_performance = [coin for coin in coin_performance if coin['total_trades'] > 0]
-    
-    # Nach Performance Score sortieren (beste zuerst), dann nach Total PnL
-    active_coin_performance.sort(key=lambda x: (x['performance_score'], x['total_pnl']), reverse=True)
-    
-    return active_coin_performance
-
-def check_bot_alerts(account_data):
-    """Bot-Alerts überprüfen"""
-    alerts = []
-    
-    for account in account_data:
-        metrics = account.get('trading_metrics', {})
-        name = account['name']
-        
-        # Kritische Alerts
-        if metrics.get('win_rate', 0) < 30 and metrics.get('total_trades', 0) > 10:
-            alerts.append(f"🔴 {name}: Win Rate unter 30%!")
-        
-        if metrics.get('max_drawdown', 0) > 500:
-            alerts.append(f"🔴 {name}: Max Drawdown über $500!")
-        
-        if metrics.get('profit_factor', 0) < 0.8 and metrics.get('total_trades', 0) > 5:
-            alerts.append(f"🔴 {name}: Profit Factor unter 0.8!")
-        
-        # Performance-Alerts
-        grade = account.get('performance_grade', 'N/A')
-        if grade in ['C', 'D'] and metrics.get('total_trades', 0) > 5:
-            alerts.append(f"⚠️ {name}: Performance Grade {grade} - Bot prüfen!")
-        
-        # Balance-Alerts
-        if account['pnl_percent'] < -20:
-            alerts.append(f"🔴 {name}: ROI unter -20%!")
-        
-        # Coin-spezifische Alerts
-        coin_performance = account.get('coin_performance', [])
-        poor_coins = [coin for coin in coin_performance if coin.get('win_rate', 0) < 30 and coin.get('total_trades', 0) > 5]
-        if poor_coins:
-            coin_names = [coin['symbol'] for coin in poor_coins[:3]]  # Top 3 schlechteste
-            alerts.append(f"⚠️ {name}: Schlechte Coin Performance - {', '.join(coin_names)}")
-    
-    return alerts
+    return coin_performance
 
 def get_bybit_data(acc):
     """Bybit Daten abrufen"""
