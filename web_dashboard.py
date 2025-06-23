@@ -1752,18 +1752,8 @@ def dashboard():
     # Bot-Alerts generieren
     bot_alerts = check_bot_alerts(account_data)
     
-    # Alle Coin Performance sammeln
+    # Alle Coin Performance sammeln - WICHTIG: Diese Daten für Template
     all_coin_performance = get_all_coin_performance(account_data)
-    
-    # Trading Journal Daten für Dashboard vorbereiten
-    journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
-    journal_stats = calculate_journal_statistics(journal_entries)
-    
-    # CSV Strategy Performance (optional, nur wenn benötigt)
-    csv_strategy_performance = get_csv_strategy_performance()
-    
-    # 7-Tage Trading History
-    seven_days_trades = get_seven_days_trading_history(account_data)
     
     # Speichere tägliche Trade-Daten in Google Sheets
     save_daily_trade_data_to_sheets(all_coin_performance, sheet)
@@ -1771,15 +1761,6 @@ def dashboard():
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-    
-    # Debug-Ausgabe (jetzt mit definierten Variablen)
-    logging.info(f"Dashboard Debug:")
-    logging.info(f"Total accounts: {len(account_data)}")
-    logging.info(f"Total balance: {total_balance}")
-    logging.info(f"Historical performance: {historical_performance}")
-    logging.info(f"Journal entries: {len(journal_entries) if journal_entries else 0}")
-    logging.info(f"CSV strategies: {len(csv_strategy_performance) if csv_strategy_performance else 0}")
-    logging.info(f"7-day trades: {len(seven_days_trades) if seven_days_trades else 0}")
     
     # 🎯 Chart Strategien
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -1843,8 +1824,7 @@ def dashboard():
                            total_positions_pnl=total_positions_pnl,
                            total_positions_pnl_percent=total_positions_pnl_percent,
                            bot_alerts=bot_alerts,
-                           journal_entries=journal_entries,
-                           journal_stats=journal_stats,
+                           all_coin_performance=all_coin_performance,  # WICHTIG: Coin Performance Daten
                            now=now)
 
 @app.route('/logout')
