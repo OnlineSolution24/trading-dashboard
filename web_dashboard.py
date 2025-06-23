@@ -1806,20 +1806,20 @@ def dashboard():
     fig2.savefig(chart_path_projekte)
     plt.close(fig2)
 
-return render_template("dashboard.html",
-                       accounts=account_data,
-                       total_start=total_start,
-                       total_balance=total_balance,
-                       total_pnl=total_pnl,
-                       total_pnl_percent=total_pnl_percent,
-                       historical_performance=historical_performance,
-                       chart_path_strategien=chart_path_strategien,
-                       chart_path_projekte=chart_path_projekte,
-                       positions_all=positions_all,
-                       total_positions_pnl=total_positions_pnl,
-                       total_positions_pnl_percent=total_positions_pnl_percent,
-                       all_coin_performance=all_coin_performance,
-                       now=now)
+    return render_template("dashboard.html",
+                           accounts=account_data,
+                           total_start=total_start,
+                           total_balance=total_balance,
+                           total_pnl=total_pnl,
+                           total_pnl_percent=total_pnl_percent,
+                           historical_performance=historical_performance,
+                           chart_path_strategien=chart_path_strategien,
+                           chart_path_projekte=chart_path_projekte,
+                           positions_all=positions_all,
+                           total_positions_pnl=total_positions_pnl,
+                           total_positions_pnl_percent=total_positions_pnl_percent,
+                           all_coin_performance=all_coin_performance,
+                           now=now)
 
 @app.route('/logout')
 def logout():
