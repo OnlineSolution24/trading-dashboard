@@ -647,8 +647,8 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
     except Exception as e:
         logging.error(f"Error while saving trade data to sheets: {e}")
 
-def get_all_coin_performance(account_data):
-    """Alle Coin-Performance aus allen Sub-Accounts sammeln und analysieren – inklusive 30-Tage-Auswertung."""
+def get_all_coin_performance_extended(account_data, days=90):
+    """Coin Performance mit erweiterten historischen Daten"""
     
     # Echte Strategien basierend auf der PDF - nach Subaccount sortiert
     ALL_STRATEGIES = [
@@ -716,19 +716,18 @@ def get_all_coin_performance(account_data):
         {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
     ]
     
-    # Sammle Trade-Daten wie bisher
+    # Sammle erweiterte Trade-Daten
     all_coin_data = {}
     
     for account in account_data:
         acc_name = account['name']
         
-        # Trade History für dieses Account abrufen
+        # Account Config erstellen
         if account['name'] == "7 Tage Performer":
             acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
                          "secret": os.environ.get("BLOFIN_API_SECRET"), 
                          "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
         else:
-            # Bybit Account - muss API Keys dynamisch zuordnen basierend auf Account Name
             key_map = {
                 "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
                 "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
@@ -748,29 +747,30 @@ def get_all_coin_performance(account_data):
             else:
                 continue
         
-        trade_history = get_trade_history(acc_config)
+        # Erweiterte Trade History abrufen
+        logging.info(f"Fetching {days}-day history for {acc_name}...")
+        trade_history = get_extended_trade_history(acc_config, days)
         
         for trade in trade_history:
-            # Symbol extrahieren
+            # Symbol extrahieren und normalisieren
             if acc_config["exchange"] == "blofin":
                 symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-                pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+                pnl = float(trade.get('pnl', trade.get('realizedPnl', trade.get('fee', 0))))
                 size = float(trade.get('size', trade.get('sz', 0)))
                 price = float(trade.get('price', trade.get('px', 0)))
-                timestamp = trade.get('cTime', int(time.time() * 1000))
-                timestamp = safe_timestamp_convert(timestamp)
+                timestamp = trade.get('cTime', trade.get('ts', int(time.time() * 1000)))
             else:  # bybit
                 symbol = trade.get('symbol', '').replace('USDT', '')
                 pnl = float(trade.get('closedPnl', 0))
                 size = float(trade.get('execQty', 0))
                 price = float(trade.get('execPrice', 0))
                 timestamp = trade.get('execTime', int(time.time() * 1000))
-                timestamp = safe_timestamp_convert(timestamp)
+            
+            timestamp = safe_timestamp_convert(timestamp)
             
             if not symbol or symbol == '' or pnl == 0:
                 continue
                 
-            # Eindeutiger Key: Symbol + Account
             coin_key = f"{symbol}_{acc_name}"
             
             if coin_key not in all_coin_data:
@@ -792,154 +792,96 @@ def get_all_coin_performance(account_data):
             all_coin_data[coin_key]['total_volume'] += size * price
             all_coin_data[coin_key]['total_pnl'] += pnl
     
-    # Performance-Metriken für ALLE Strategien berechnen
+    # Performance-Metriken berechnen
     coin_performance = []
     
-    # Zeitstempel für 30 Tage und 7 Tage
-    thirty_days_ago = int(time.time() * 1000) - (30 * 24 * 60 * 60 * 1000)
-    seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
+    # Zeitstempel für verschiedene Perioden
+    now = int(time.time() * 1000)
+    thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
+    seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
+    ninety_days_ago = now - (90 * 24 * 60 * 60 * 1000)
     
-    # Durchlaufe ALLE definierten Strategien
     for strategy in ALL_STRATEGIES:
         coin_key = f"{strategy['symbol']}_{strategy['account']}"
         
-        # Prüfe ob Trade-Daten für diese Strategie existieren
         if coin_key in all_coin_data:
             data = all_coin_data[coin_key]
             trades = data['trades']
             
-            # Basis-Metriken (Gesamtzeit)
-            pnl_list = [t['pnl'] for t in trades]
-            winning_trades = [pnl for pnl in pnl_list if pnl > 0]
-            losing_trades = [pnl for pnl in pnl_list if pnl < 0]
+            # Verschiedene Zeitperioden filtern
+            trades_90d = [t for t in trades if t['timestamp'] > ninety_days_ago]
+            trades_30d = [t for t in trades if t['timestamp'] > thirty_days_ago]
+            trades_7d = [t for t in trades if t['timestamp'] > seven_days_ago]
             
-            win_rate = (len(winning_trades) / len(trades)) * 100 if trades else 0
-            total_pnl = sum(pnl_list)
+            # 90-Tage Metriken (Gesamt-Performance)
+            total_pnl = sum(t['pnl'] for t in trades_90d)
+            total_trades = len(trades_90d)
             
-            # Profit Factor (Gesamt)
-            total_wins = sum(winning_trades) if winning_trades else 0
-            total_losses = abs(sum(losing_trades)) if losing_trades else 0
-            profit_factor = total_wins / total_losses if total_losses > 0 else (999 if total_wins > 0 else 0)
-            
-            # 30-Tage-Metriken
-            month_trades = []
-            for t in trades:
-                try:
-                    if isinstance(t['timestamp'], datetime):
-                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
-                    else:
-                        t_timestamp = int(t['timestamp'])
-                    
-                    if t_timestamp > thirty_days_ago:
-                        month_trades.append(t)
-                except (ValueError, TypeError, AttributeError):
-                    month_trades.append(t)
-            
-            # 30-Tage Performance berechnen
-            if month_trades:
-                month_pnl_list = [t['pnl'] for t in month_trades]
-                month_winning = [pnl for pnl in month_pnl_list if pnl > 0]
-                month_losing = [pnl for pnl in month_pnl_list if pnl < 0]
+            if total_trades > 0:
+                winning_trades_90d = [t['pnl'] for t in trades_90d if t['pnl'] > 0]
+                losing_trades_90d = [t['pnl'] for t in trades_90d if t['pnl'] < 0]
                 
-                month_win_rate = (len(month_winning) / len(month_trades)) * 100
-                month_pnl = sum(month_pnl_list)
+                win_rate_90d = (len(winning_trades_90d) / total_trades) * 100
+                profit_factor_90d = (sum(winning_trades_90d) / abs(sum(losing_trades_90d))) if losing_trades_90d else 999
+            else:
+                win_rate_90d = 0
+                profit_factor_90d = 0
+            
+            # 30-Tage Metriken
+            month_pnl = sum(t['pnl'] for t in trades_30d)
+            month_trades_count = len(trades_30d)
+            
+            if month_trades_count > 0:
+                winning_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] > 0]
+                losing_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] < 0]
                 
-                # 30-Tage Profit Factor
-                month_wins_total = sum(month_winning) if month_winning else 0
-                month_losses_total = abs(sum(month_losing)) if month_losing else 0
-                month_profit_factor = month_wins_total / month_losses_total if month_losses_total > 0 else (999 if month_wins_total > 0 else 0)
+                month_win_rate = (len(winning_trades_30d) / month_trades_count) * 100
+                month_profit_factor = (sum(winning_trades_30d) / abs(sum(losing_trades_30d))) if losing_trades_30d else 999
             else:
                 month_win_rate = 0
-                month_pnl = 0
                 month_profit_factor = 0
             
-            # 7-Tage Performance
-            week_trades = []
-            for t in trades:
-                try:
-                    if isinstance(t['timestamp'], datetime):
-                        t_timestamp = int(t['timestamp'].timestamp() * 1000)
-                    else:
-                        t_timestamp = int(t['timestamp'])
-                    
-                    if t_timestamp > seven_days_ago:
-                        week_trades.append(t)
-                except (ValueError, TypeError, AttributeError):
-                    week_trades.append(t)
-                    
-            week_pnl = sum(t['pnl'] for t in week_trades)
+            # 7-Tage Metriken
+            week_pnl = sum(t['pnl'] for t in trades_7d)
             
-            # Maximum Drawdown berechnen (Gesamt)
-            cumulative_pnl = []
-            running_total = 0
-            for pnl in pnl_list:
-                running_total += pnl
-                cumulative_pnl.append(running_total)
-            
-            peak = cumulative_pnl[0] if cumulative_pnl else 0
-            max_drawdown = 0
-            for value in cumulative_pnl:
-                if value > peak:
-                    peak = value
-                drawdown = peak - value
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
-            
-            # Best/Worst Trade
-            best_trade = max(pnl_list) if pnl_list else 0
-            worst_trade = min(pnl_list) if pnl_list else 0
-            
-            # Status
-            status = "Active" if len(month_trades) > 0 else "Inactive"
-            
-            # 30-Tage Performance Score berechnen (0-100)
+            # Performance Score (basiert auf 30-Tage-Daten)
             month_performance_score = 0
-            if len(month_trades) > 0:
-                # Win Rate (40% Gewichtung)
-                if month_win_rate >= 60:
+            if month_trades_count > 0:
+                if month_win_rate >= 60: 
                     month_performance_score += 40
-                elif month_win_rate >= 50:
+                elif month_win_rate >= 50: 
                     month_performance_score += 30
-                elif month_win_rate >= 40:
+                elif month_win_rate >= 40: 
                     month_performance_score += 20
-                elif month_win_rate >= 30:
-                    month_performance_score += 10
                 
-                # Profit Factor (30% Gewichtung)
-                if month_profit_factor >= 2.0:
+                if month_profit_factor >= 2.0: 
                     month_performance_score += 30
-                elif month_profit_factor >= 1.5:
+                elif month_profit_factor >= 1.5: 
                     month_performance_score += 25
-                elif month_profit_factor >= 1.2:
+                elif month_profit_factor >= 1.2: 
                     month_performance_score += 20
-                elif month_profit_factor >= 1.0:
-                    month_performance_score += 15
                 
-                # 30-Tage PnL (30% Gewichtung)
-                if month_pnl >= 200:
+                if month_pnl >= 200: 
                     month_performance_score += 30
-                elif month_pnl >= 100:
+                elif month_pnl >= 100: 
                     month_performance_score += 25
-                elif month_pnl >= 50:
-                    month_performance_score += 20
-                elif month_pnl >= 0:
+                elif month_pnl >= 0: 
                     month_performance_score += 15
-        
+            
+            status = "Active" if month_trades_count > 0 else "Inactive"
+            
         else:
-            # Keine Trade-Daten für diese Strategie
-            win_rate = 0
+            # Keine Daten für diese Strategie
             total_pnl = 0
-            profit_factor = 0
-            max_drawdown = 0
-            best_trade = 0
-            worst_trade = 0
-            week_pnl = 0
+            total_trades = 0
+            win_rate_90d = 0
+            profit_factor_90d = 0
             month_pnl = 0
+            month_trades_count = 0
             month_win_rate = 0
             month_profit_factor = 0
+            week_pnl = 0
             month_performance_score = 0
-            trades = []
-            month_trades = []
             status = "Inactive"
         
         coin_performance.append({
@@ -947,19 +889,16 @@ def get_all_coin_performance(account_data):
             'account': strategy['account'],
             'strategy': strategy['strategy'],
             
-            # Gesamt-Metriken
-            'total_trades': len(trades),
-            'win_rate': round(win_rate, 1),
+            # 90-Tage (Gesamt) Metriken
+            'total_trades': total_trades,
             'total_pnl': round(total_pnl, 2),
-            'profit_factor': round(profit_factor, 2) if profit_factor < 999 else 999,
-            'max_drawdown': round(max_drawdown, 2),
-            'best_trade': round(best_trade, 2),
-            'worst_trade': round(worst_trade, 2),
+            'win_rate_90d': round(win_rate_90d, 1),
+            'profit_factor_90d': round(profit_factor_90d, 2) if profit_factor_90d < 999 else 999,
             
             # 30-Tage Metriken
-            'month_trades': len(month_trades),
-            'month_win_rate': round(month_win_rate, 1),
+            'month_trades': month_trades_count,
             'month_pnl': round(month_pnl, 2),
+            'month_win_rate': round(month_win_rate, 1),
             'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
             'month_performance_score': month_performance_score,
             
@@ -967,8 +906,8 @@ def get_all_coin_performance(account_data):
             'week_pnl': round(week_pnl, 2),
             
             # Status
-            'daily_volume': round(data['total_volume'] / 30, 2) if coin_key in all_coin_data else 0,
-            'status': status
+            'status': status,
+            'daily_volume': round(data['total_volume'] / days, 2) if coin_key in all_coin_data else 0
         })
     
     return coin_performance
