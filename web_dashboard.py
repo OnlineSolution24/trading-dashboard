@@ -973,6 +973,215 @@ def get_all_coin_performance(account_data):
     
     return coin_performance
 
+def get_extended_bybit_trade_history(acc, days=90):
+    """Erweiterte Bybit Trade History - umgeht 7-Tage-Limit"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        all_trades = []
+        
+        # Teile in 6-Tage-Blöcke auf (sicherer als 7 Tage)
+        block_days = 6
+        num_blocks = (days + block_days - 1) // block_days  # Aufrunden
+        
+        end_time = int(time.time() * 1000)
+        
+        for block in range(num_blocks):
+            block_start_time = end_time - (block_days * 24 * 60 * 60 * 1000)
+            
+            logging.info(f"Fetching block {block+1}/{num_blocks} for {acc['name']}: {block_start_time} to {end_time}")
+            
+            try:
+                # Methode 1: Executions
+                executions_response = client.get_executions(
+                    category="linear",
+                    startTime=block_start_time,
+                    endTime=end_time,
+                    limit=200
+                )
+                
+                if executions_response.get("result") and executions_response["result"].get("list"):
+                    block_trades = executions_response["result"]["list"]
+                    all_trades.extend(block_trades)
+                    logging.info(f"Block {block+1}: Found {len(block_trades)} executions")
+                
+                # Für nächsten Block
+                end_time = block_start_time
+                
+                # Rate Limiting
+                time.sleep(0.2)
+                
+            except Exception as block_error:
+                logging.error(f"Block {block+1} error for {acc['name']}: {block_error}")
+                end_time = block_start_time  # Trotzdem weiter
+                continue
+        
+        # Entferne Duplikate basierend auf execTime + symbol
+        unique_trades = []
+        seen = set()
+        
+        for trade in all_trades:
+            trade_key = f"{trade.get('execTime', '')}-{trade.get('symbol', '')}"
+            if trade_key not in seen:
+                seen.add(trade_key)
+                unique_trades.append(trade)
+        
+        logging.info(f"Extended history for {acc['name']}: {len(unique_trades)} unique trades from {days} days")
+        return unique_trades
+        
+    except Exception as e:
+        logging.error(f"Extended Bybit history error for {acc['name']}: {e}")
+        return []
+
+def get_extended_blofin_trade_history(acc, days=90):
+    """Erweiterte Blofin Trade History"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        end_time = int(time.time() * 1000)
+        start_time = end_time - (days * 24 * 60 * 60 * 1000)
+        
+        all_trades = []
+        
+        # Trade Fills
+        try:
+            fills_response = client._make_request('GET', '/api/v1/trade/fills', {
+                'begin': str(start_time),
+                'end': str(end_time),
+                'limit': '500'
+            })
+            
+            if fills_response.get('code') == '0':
+                fills = fills_response.get('data', [])
+                all_trades.extend(fills)
+                logging.info(f"Blofin {acc['name']}: Found {len(fills)} trade fills")
+                
+        except Exception as fills_error:
+            logging.error(f"Blofin fills error for {acc['name']}: {fills_error}")
+        
+        logging.info(f"Extended Blofin history for {acc['name']}: {len(all_trades)} total trades from {days} days")
+        return all_trades
+        
+    except Exception as e:
+        logging.error(f"Extended Blofin history error for {acc['name']}: {e}")
+        return []
+
+def get_extended_trade_history(acc, days=90):
+    """Erweiterte Trade History für längere Zeiträume"""
+    if acc["exchange"] == "blofin":
+        return get_extended_blofin_trade_history(acc, days)
+    else:
+        return get_extended_bybit_trade_history(acc, days)
+
+def get_all_coin_performance_extended(account_data, days=90):
+    """Coin Performance mit erweiterten historischen Daten"""
+    
+    # Echte Strategien basierend auf der PDF - nach Subaccount sortiert
+    ALL_STRATEGIES = [
+        # Incubatorzone (3)
+        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
+        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
+        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
+        
+        # Memestrategies (3)
+        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
+        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
+        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
+        
+        # Ethapestrategies (3)
+        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
+        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
+        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
+        
+        # Altsstrategies (5)
+        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
+        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
+        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "PTM ETH"},
+        
+        # Solstrategies (4)
+        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
+        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
+        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
+        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
+        
+        # Btcstrategies (4)
+        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
+        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
+        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
+        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
+        
+        # Corestrategies (4)
+        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
+        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
+        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
+        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
+        
+        # 2k->10k Projekt (6)
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "DynamicPrecision BTC 30M"},
+        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT ETH 1H"},
+        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
+        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "TrendHoov5 SOL 90M"},
+        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
+        
+        # 1k->5k Projekt (5)
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
+        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
+        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
+        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
+        
+        # 7 Tage Performer (6)
+        {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
+        {"symbol": "INJ", "account": "7 Tage Performer", "strategy": "TRIGGERHAPPY2 INJ"},
+        {"symbol": "ARB", "account": "7 Tage Performer", "strategy": "STIFFSURGE ARB"},
+        {"symbol": "RUNE", "account": "7 Tage Performer", "strategy": "MACD LIQUIDITY SPECTRUM RUNE"},
+        {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
+        {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
+    ]
+    
+    # [REST DER FUNKTION - siehe das vorherige Artifact...]
+    # Sammle erweiterte Trade-Daten
+    all_coin_data = {}
+    
+    for account in account_data:
+        acc_name = account['name']
+        
+        # Account Config erstellen
+        if account['name'] == "7 Tage Performer":
+            acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
+                         "secret": os.environ.get("BLOFIN_API_SECRET"), 
+                         "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
+        else:
+            key_map = {
+                "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
+                "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
+                "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
+                "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
+                "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
+                "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
+                "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
+                "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
+                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+            }
+            
+            if acc_name in key_map:
+                key_env, secret_env = key_map[acc_name]
+                acc_config = {"name": acc_name, "key": os.environ.get(key_env), 
+                             "secret": os.environ.get(secret_env), "exchange": "bybit"}
+            else:
+                continue
+        
+        # Erweiterte Trade History abrufen
+        logging.info(f"Fetching {days}-day history for {acc_name}...")
+        trade_history = get_extended_trade_history(acc_config, days)
+        
+        # [REST DER IMPLEMENTIERUNG...]
+        # ... (Rest der Funktion wie im Artifact gezeigt)
+    
+    return coin_performance
+
 def get_bybit_data(acc):
     """Bybit Daten abrufen"""
     try:
