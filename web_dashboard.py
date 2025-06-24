@@ -1795,7 +1795,8 @@ def trading_journal():
         })
     
     # Alle Coin Performance sammeln
-    all_coin_performance = get_all_coin_performance(account_data)
+    days = int(request.args.get('days', 90))  # Standard: 90 Tage
+    all_coin_performance = get_all_coin_performance_extended(account_data, days=days)
     
     # Live Trading Journal Daten generieren
     journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
