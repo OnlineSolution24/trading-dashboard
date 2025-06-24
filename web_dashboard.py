@@ -748,10 +748,10 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
     except Exception as e:
         logging.error(f"Error while saving trade data to sheets: {e}")
 
-def get_all_coin_performance_extended(account_data, days=90):
-    """Coin Performance mit erweiterten historischen Daten"""
+def get_all_coin_performance(account_data):
+    """Minimale funktionierende Coin Performance Funktion"""
     
-    # Echte Strategien basierend auf der PDF - nach Subaccount sortiert
+    # Echte Strategien basierend auf der PDF
     ALL_STRATEGIES = [
         # Incubatorzone (3)
         {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
@@ -816,6 +816,29 @@ def get_all_coin_performance_extended(account_data, days=90):
         {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
         {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
     ]
+    
+    # Erstelle Coin Performance Liste mit Basis-Daten
+    coin_performance = []
+    
+    for strategy in ALL_STRATEGIES:
+        coin_performance.append({
+            'symbol': strategy['symbol'],
+            'account': strategy['account'],
+            'strategy': strategy['strategy'],
+            'total_trades': 0,
+            'month_trades': 0,
+            'month_win_rate': 0,
+            'month_pnl': 0,
+            'week_pnl': 0,
+            'total_pnl': 0,
+            'month_profit_factor': 0,
+            'month_performance_score': 0,
+            'status': 'Inactive',
+            'daily_volume': 0
+        })
+    
+    logging.info(f"Created minimal coin performance with {len(coin_performance)} strategies")
+    return coin_performance
     
     # Sammle erweiterte Trade-Daten
     all_coin_data = {}
