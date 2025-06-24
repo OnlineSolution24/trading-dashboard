@@ -1879,7 +1879,7 @@ def dashboard():
     all_coin_performance = get_all_coin_performance_extended(account_data, days=90)
     
     # Speichere tägliche Trade-Daten in Google Sheets
-    save_daily_trade_data_to_sheets(all_coin_performance, sheet)
+    all_coin_performance = get_all_coin_performance(account_data)
     
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
