@@ -261,6 +261,107 @@ def get_trade_history(acc):
     else:
         return get_bybit_trade_history(acc)
 
+def get_extended_trade_history(acc, days=90):
+    """Erweiterte Trade History für längere Zeiträume mit Fehlerbehandlung"""
+    try:
+        if acc["exchange"] == "blofin":
+            return get_extended_blofin_trade_history(acc, days)
+        else:
+            return get_extended_bybit_trade_history(acc, days)
+    except Exception as e:
+        logging.error(f"Error in extended trade history for {acc['name']}: {e}")
+        # Fallback zur normalen Trade History
+        return get_trade_history(acc)
+
+def get_extended_bybit_trade_history(acc, days=90):
+    """Erweiterte Bybit Trade History - umgeht 7-Tage-Limit"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        all_trades = []
+        
+        # Begrenze auf maximal 30 Tage für Stabilität
+        days = min(days, 30)
+        
+        # Teile in 6-Tage-Blöcke auf (sicherer als 7 Tage)
+        block_days = 6
+        num_blocks = min((days + block_days - 1) // block_days, 5)  # Max 5 Blöcke
+        
+        end_time = int(time.time() * 1000)
+        
+        for block in range(num_blocks):
+            block_start_time = end_time - (block_days * 24 * 60 * 60 * 1000)
+            
+            try:
+                # Executions abrufen
+                executions_response = client.get_executions(
+                    category="linear",
+                    startTime=block_start_time,
+                    endTime=end_time,
+                    limit=200
+                )
+                
+                if executions_response.get("result") and executions_response["result"].get("list"):
+                    block_trades = executions_response["result"]["list"]
+                    all_trades.extend(block_trades)
+                
+                # Für nächsten Block
+                end_time = block_start_time
+                
+                # Rate Limiting
+                time.sleep(0.1)
+                
+            except Exception as block_error:
+                logging.warning(f"Block {block+1} error for {acc['name']}: {block_error}")
+                end_time = block_start_time  # Trotzdem weiter
+                continue
+        
+        # Entferne Duplikate
+        unique_trades = []
+        seen = set()
+        
+        for trade in all_trades:
+            trade_key = f"{trade.get('execTime', '')}-{trade.get('symbol', '')}-{trade.get('execQty', '')}"
+            if trade_key not in seen:
+                seen.add(trade_key)
+                unique_trades.append(trade)
+        
+        logging.info(f"Extended Bybit history for {acc['name']}: {len(unique_trades)} unique trades")
+        return unique_trades
+        
+    except Exception as e:
+        logging.error(f"Extended Bybit history error for {acc['name']}: {e}")
+        # Fallback zur normalen Trade History
+        return get_trade_history(acc)
+
+def get_extended_blofin_trade_history(acc, days=90):
+    """Erweiterte Blofin Trade History"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        end_time = int(time.time() * 1000)
+        start_time = end_time - (min(days, 90) * 24 * 60 * 60 * 1000)  # Max 90 Tage
+        
+        all_trades = []
+        
+        # Trade Fills abrufen
+        fills_response = client._make_request('GET', '/api/v1/trade/fills', {
+            'begin': str(start_time),
+            'end': str(end_time),
+            'limit': '500'
+        })
+        
+        if fills_response.get('code') == '0':
+            fills = fills_response.get('data', [])
+            all_trades.extend(fills)
+        
+        logging.info(f"Extended Blofin history for {acc['name']}: {len(all_trades)} trades")
+        return all_trades
+        
+    except Exception as e:
+        logging.error(f"Extended Blofin history error for {acc['name']}: {e}")
+        # Fallback zur normalen Trade History
+        return get_trade_history(acc)
+
 def get_bybit_trade_history(acc):
     """Bybit Trade History abrufen"""
     try:
