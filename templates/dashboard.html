@@ -631,7 +631,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set account_order = ['Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt', '7 Tage Performer'] %}
+                            {% set account_order = ['Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt', 'Claude Projekt', '7 Tage Performer'] %}
                             
                             {% for account_name in account_order %}
                                 {% set account_coins = all_coin_performance | selectattr('account', 'equalto', account_name) | list %}
