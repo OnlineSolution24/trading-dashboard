@@ -41,6 +41,7 @@ subaccounts = [
     {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET"), "exchange": "bybit"},
     {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET"), "exchange": "bybit"},
     {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET"), "exchange": "bybit"},
+    {"name": "Claude Projekt", "key": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY"), "secret": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET"), "exchange": "bybit"},  # NEU
     {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
 ]
 
@@ -55,6 +56,7 @@ startkapital = {
     "Corestrategies": 2000.56,
     "2k->10k Projekt": 2000.00,
     "1k->5k Projekt": 1000.00,
+    "Claude Projekt": 1000.00,
     "7 Tage Performer": 1492.00
 }
 
@@ -807,6 +809,13 @@ def get_all_coin_performance(account_data):
         {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
         {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
         {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
+
+        # Claude Projekt (5)
+        {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
+        {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
+        {"symbol": "SOL", "account": "Claude Projekt", "strategy": "Super FVMA + Zero Lag"},
+        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
+        {"symbol": "ETH", "account": "Claude Projekt", "strategy": "Vector Candles V5"},
         
         # 7 Tage Performer (6)
         {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
@@ -861,7 +870,8 @@ def get_all_coin_performance(account_data):
                 "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
                 "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
                 "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
+                "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
             }
             
             if acc_name in key_map:
@@ -1194,6 +1204,13 @@ def get_all_coin_performance_extended(account_data, days=90):
         {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
         {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
         {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
+
+        # Claude Projekt (5)
+        {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
+        {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
+        {"symbol": "SOL", "account": "Claude Projekt", "strategy": "Super FVMA + Zero Lag"},
+        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
+        {"symbol": "ETH", "account": "Claude Projekt", "strategy": "Vector Candles V5"},
         
         # 7 Tage Performer (6)
         {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
@@ -1236,7 +1253,8 @@ def get_all_coin_performance_extended(account_data, days=90):
                         "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
                         "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
                         "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                        "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+                        "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
+                        "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
                     }
                     
                     if acc_name in key_map:
@@ -1782,7 +1800,8 @@ def get_seven_days_trading_history(account_data):
                 "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
                 "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
                 "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
+                "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
             }
             
             if acc_name in key_map:
@@ -2221,6 +2240,7 @@ def dashboard():
             "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
             "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
             "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
             "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
         }
 
