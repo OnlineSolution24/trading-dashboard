@@ -1012,9 +1012,9 @@ def get_extended_trade_history(acc, days=90):
         return get_extended_bybit_trade_history(acc, days)
 
 def get_all_coin_performance_extended(account_data, days=90):
-    """Coin Performance mit erweiterten historischen Daten"""
+    """Robuste erweiterte Coin Performance mit Fehlerbehandlung"""
     
-    # Echte Strategien basierend auf der PDF - nach Subaccount sortiert
+    # Echte Strategien basierend auf der PDF
     ALL_STRATEGIES = [
         # Incubatorzone (3)
         {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
@@ -1080,46 +1080,233 @@ def get_all_coin_performance_extended(account_data, days=90):
         {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
     ]
     
-    # [REST DER FUNKTION - siehe das vorherige Artifact...]
-    # Sammle erweiterte Trade-Daten
-    all_coin_data = {}
-    
-    for account in account_data:
-        acc_name = account['name']
+    try:
+        # Sammle Trade-Daten mit erweiterten APIs
+        all_coin_data = {}
         
-        # Account Config erstellen
-        if account['name'] == "7 Tage Performer":
-            acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
-                         "secret": os.environ.get("BLOFIN_API_SECRET"), 
-                         "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
-        else:
-            key_map = {
-                "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
-                "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
-                "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
-                "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
-                "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
-                "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
-                "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
-                "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
-            }
+        # Zeitstempel für Perioden
+        now = int(time.time() * 1000)
+        thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
+        seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
+        
+        for account in account_data:
+            acc_name = account['name']
             
-            if acc_name in key_map:
-                key_env, secret_env = key_map[acc_name]
-                acc_config = {"name": acc_name, "key": os.environ.get(key_env), 
-                             "secret": os.environ.get(secret_env), "exchange": "bybit"}
-            else:
+            try:
+                # Account Config erstellen
+                if account['name'] == "7 Tage Performer":
+                    acc_config = {
+                        "name": acc_name, 
+                        "key": os.environ.get("BLOFIN_API_KEY"), 
+                        "secret": os.environ.get("BLOFIN_API_SECRET"), 
+                        "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), 
+                        "exchange": "blofin"
+                    }
+                else:
+                    key_map = {
+                        "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
+                        "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
+                        "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
+                        "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
+                        "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
+                        "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
+                        "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
+                        "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
+                        "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET")
+                    }
+                    
+                    if acc_name in key_map:
+                        key_env, secret_env = key_map[acc_name]
+                        acc_config = {
+                            "name": acc_name, 
+                            "key": os.environ.get(key_env), 
+                            "secret": os.environ.get(secret_env), 
+                            "exchange": "bybit"
+                        }
+                    else:
+                        continue
+                
+                # Trade History abrufen (erweitert falls verfügbar, sonst standard)
+                try:
+                    if hasattr(self, 'get_extended_trade_history'):
+                        trade_history = get_extended_trade_history(acc_config, days)
+                        logging.info(f"Using extended trade history for {acc_name}: {len(trade_history)} trades")
+                    else:
+                        trade_history = get_trade_history(acc_config)
+                        logging.info(f"Using standard trade history for {acc_name}: {len(trade_history)} trades")
+                except Exception as trade_error:
+                    logging.warning(f"Error getting trade history for {acc_name}: {trade_error}")
+                    trade_history = get_trade_history(acc_config)  # Fallback
+                
+                # Trade-Daten verarbeiten
+                for trade in trade_history:
+                    try:
+                        # Symbol extrahieren
+                        if acc_config["exchange"] == "blofin":
+                            symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+                            pnl = float(trade.get('pnl', trade.get('realizedPnl', trade.get('fee', 0))))
+                            size = float(trade.get('size', trade.get('sz', 0)))
+                            price = float(trade.get('price', trade.get('px', 0)))
+                            timestamp = trade.get('cTime', trade.get('ts', int(time.time() * 1000)))
+                        else:  # bybit
+                            symbol = trade.get('symbol', '').replace('USDT', '')
+                            pnl = float(trade.get('closedPnl', 0))
+                            size = float(trade.get('execQty', 0))
+                            price = float(trade.get('execPrice', 0))
+                            timestamp = trade.get('execTime', int(time.time() * 1000))
+                        
+                        timestamp = safe_timestamp_convert(timestamp)
+                        
+                        if not symbol or symbol == '' or pnl == 0:
+                            continue
+                            
+                        coin_key = f"{symbol}_{acc_name}"
+                        
+                        if coin_key not in all_coin_data:
+                            all_coin_data[coin_key] = {
+                                'symbol': symbol,
+                                'account': acc_name,
+                                'trades': [],
+                                'total_volume': 0,
+                                'total_pnl': 0
+                            }
+                        
+                        all_coin_data[coin_key]['trades'].append({
+                            'pnl': pnl,
+                            'volume': size * price,
+                            'timestamp': timestamp,
+                            'size': size,
+                            'price': price
+                        })
+                        all_coin_data[coin_key]['total_volume'] += size * price
+                        all_coin_data[coin_key]['total_pnl'] += pnl
+                        
+                    except Exception as trade_parse_error:
+                        logging.warning(f"Error parsing trade for {acc_name}: {trade_parse_error}")
+                        continue
+                        
+            except Exception as account_error:
+                logging.error(f"Error processing account {acc_name}: {account_error}")
                 continue
         
-        # Erweiterte Trade History abrufen
-        logging.info(f"Fetching {days}-day history for {acc_name}...")
-        trade_history = get_extended_trade_history(acc_config, days)
+        # Performance-Metriken berechnen
+        coin_performance = []
         
-        # [REST DER IMPLEMENTIERUNG...]
-        # ... (Rest der Funktion wie im Artifact gezeigt)
-    
-    return coin_performance
+        for strategy in ALL_STRATEGIES:
+            coin_key = f"{strategy['symbol']}_{strategy['account']}"
+            
+            try:
+                if coin_key in all_coin_data:
+                    data = all_coin_data[coin_key]
+                    trades = data['trades']
+                    
+                    # Zeitperioden filtern
+                    trades_30d = [t for t in trades if t['timestamp'] > thirty_days_ago]
+                    trades_7d = [t for t in trades if t['timestamp'] > seven_days_ago]
+                    
+                    # 30-Tage Metriken
+                    month_pnl = sum(t['pnl'] for t in trades_30d)
+                    month_trades_count = len(trades_30d)
+                    
+                    if month_trades_count > 0:
+                        winning_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] > 0]
+                        losing_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] < 0]
+                        
+                        month_win_rate = (len(winning_trades_30d) / month_trades_count) * 100
+                        month_profit_factor = (sum(winning_trades_30d) / abs(sum(losing_trades_30d))) if losing_trades_30d else 999
+                    else:
+                        month_win_rate = 0
+                        month_profit_factor = 0
+                    
+                    # 7-Tage Metriken
+                    week_pnl = sum(t['pnl'] for t in trades_7d)
+                    
+                    # Gesamt-Metriken
+                    total_pnl = sum(t['pnl'] for t in trades)
+                    total_trades = len(trades)
+                    
+                    # Performance Score
+                    month_performance_score = 0
+                    if month_trades_count > 0:
+                        if month_win_rate >= 60: month_performance_score += 40
+                        elif month_win_rate >= 50: month_performance_score += 30
+                        elif month_win_rate >= 40: month_performance_score += 20
+                        
+                        if month_profit_factor >= 2.0: month_performance_score += 30
+                        elif month_profit_factor >= 1.5: month_performance_score += 25
+                        elif month_profit_factor >= 1.2: month_performance_score += 20
+                        
+                        if month_pnl >= 200: month_performance_score += 30
+                        elif month_pnl >= 100: month_performance_score += 25
+                        elif month_pnl >= 0: month_performance_score += 15
+                    
+                    status = "Active" if month_trades_count > 0 else "Inactive"
+                    
+                else:
+                    # Keine Daten für diese Strategie
+                    total_pnl = 0
+                    total_trades = 0
+                    month_pnl = 0
+                    month_trades_count = 0
+                    month_win_rate = 0
+                    month_profit_factor = 0
+                    week_pnl = 0
+                    month_performance_score = 0
+                    status = "Inactive"
+                
+                coin_performance.append({
+                    'symbol': strategy['symbol'],
+                    'account': strategy['account'],
+                    'strategy': strategy['strategy'],
+                    'total_trades': total_trades,
+                    'total_pnl': round(total_pnl, 2),
+                    'month_trades': month_trades_count,
+                    'month_pnl': round(month_pnl, 2),
+                    'month_win_rate': round(month_win_rate, 1),
+                    'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
+                    'month_performance_score': month_performance_score,
+                    'week_pnl': round(week_pnl, 2),
+                    'status': status,
+                    'daily_volume': round(data['total_volume'] / days, 2) if coin_key in all_coin_data else 0
+                })
+                
+            except Exception as strategy_error:
+                logging.warning(f"Error processing strategy {strategy['symbol']}-{strategy['account']}: {strategy_error}")
+                
+                # Fallback für fehlerhafte Strategien
+                coin_performance.append({
+                    'symbol': strategy['symbol'],
+                    'account': strategy['account'],
+                    'strategy': strategy['strategy'],
+                    'total_trades': 0,
+                    'total_pnl': 0,
+                    'month_trades': 0,
+                    'month_pnl': 0,
+                    'month_win_rate': 0,
+                    'month_profit_factor': 0,
+                    'month_performance_score': 0,
+                    'week_pnl': 0,
+                    'status': "Error",
+                    'daily_volume': 0
+                })
+                continue
+        
+        logging.info(f"Successfully processed {len(coin_performance)} strategies with extended data")
+        return coin_performance
+        
+    except Exception as main_error:
+        logging.error(f"Critical error in extended coin performance: {main_error}")
+        
+        # Fallback zur ursprünglichen Funktion
+        try:
+            logging.info("Falling back to standard coin performance function")
+            fallback_performance = get_all_coin_performance(account_data)
+            return fallback_performance
+        except Exception as fallback_error:
+            logging.error(f"Fallback function also failed: {fallback_error}")
+            
+            # Ultima Ratio: Leere Liste mit korrekter Struktur
+            return []
 
 def get_bybit_data(acc):
     """Bybit Daten abrufen"""
