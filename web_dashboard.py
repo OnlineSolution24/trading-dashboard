@@ -2185,20 +2185,73 @@ def dashboard():
     # Tägliche Daten speichern
     save_daily_data(total_balance, total_pnl, sheet)
     
-    # ERWEITERTE Coin Performance mit 90 Tagen Historie
-    logging.info("Starting extended coin performance analysis...")
-    all_coin_performance = get_all_coin_performance_extended(account_data, days=90)
+    # Coin Performance sammeln
+    all_coin_performance = get_all_coin_performance(account_data)
     
     # Speichere tägliche Trade-Daten in Google Sheets
-    all_coin_performance = get_all_coin_performance(account_data)
+    save_daily_trade_data_to_sheets(all_coin_performance, sheet)
     
     # 🎯 Zeit
     tz = timezone("Europe/Berlin")
     now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
     
-    # Charts erstellen...
-    # [Chart-Code bleibt gleich]
-    
+    # 🎯 Chart Strategien erstellen
+    try:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
+        ax.axhline(0, color='black')
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
+                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
+        fig.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien)
+        plt.close(fig)
+    except Exception as e:
+        logging.error(f"Error creating strategien chart: {e}")
+        chart_path_strategien = "static/placeholder_strategien.png"
+
+    # 🎯 Chart Projekte erstellen
+    try:
+        projekte = {
+            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []  # Für absolute PnL-Werte
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
+        ax2.axhline(0, color='black')
+        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars2):
+            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
+                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
+        fig2.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte)
+        plt.close(fig2)
+    except Exception as e:
+        logging.error(f"Error creating projekte chart: {e}")
+        chart_path_projekte = "static/placeholder_projekte.png"
+
     return render_template("dashboard.html",
                            accounts=account_data,
                            total_start=total_start,
