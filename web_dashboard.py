@@ -19,6 +19,15 @@ import uuid
 import gspread
 import random
 from google.oauth2.service_account import Credentials
+from functools import wraps
+from threading import Lock
+
+# Globale Cache-Variablen hinzufügen
+cache_lock = Lock()
+dashboard_cache = {}
+last_full_refresh = None
+CACHE_DURATION = 300  # 5 Minuten Cache
+INCREMENTAL_UPDATE_INTERVAL = 60  # 1 Minute für Updates
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
@@ -60,6 +69,36 @@ startkapital = {
     "7 Tage Performer": 1492.00
 }
 
+def cache_key_generator(*args, **kwargs):
+    """Erstelle einen eindeutigen Cache-Key"""
+    key_data = str(args) + str(sorted(kwargs.items()))
+    return hashlib.md5(key_data.encode()).hexdigest()
+
+def cached_function(cache_duration=300):
+    """Decorator für Caching von Funktionen"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = f"{func.__name__}_{cache_key_generator(*args, **kwargs)}"
+            
+            with cache_lock:
+                # Prüfe Cache
+                if cache_key in dashboard_cache:
+                    cached_data, timestamp = dashboard_cache[cache_key]
+                    if datetime.now() - timestamp < timedelta(seconds=cache_duration):
+                        logging.info(f"Cache hit for {func.__name__}")
+                        return cached_data
+                
+                # Cache miss - Funktion ausführen
+                logging.info(f"Cache miss for {func.__name__} - executing")
+                result = func(*args, **kwargs)
+                
+                # Ergebnis cachen
+                dashboard_cache[cache_key] = (result, datetime.now())
+                return result
+        return wrapper
+    return decorator
+    
 def safe_timestamp_convert(timestamp):
     """Sichere Timestamp-Konvertierung"""
     try:
@@ -677,6 +716,163 @@ def get_performance_grade(metrics):
         return "C"
     else:
         return "D"
+
+def optimized_save_to_sheets(coin_performance, sheet=None):
+    """Optimiertes Speichern in Google Sheets mit Rate Limiting"""
+    if not sheet or not coin_performance:
+        return
+
+    try:
+        # Nur einmal pro Stunde in Sheets speichern
+        cache_key = "last_sheets_save"
+        if cache_key in dashboard_cache:
+            last_save, _ = dashboard_cache[cache_key]
+            if datetime.now() - last_save < timedelta(hours=1):
+                logging.info("Skipping sheets save - too recent")
+                return
+
+        # Trade-History-Sheet erstellen / öffnen
+        try:
+            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
+        except Exception:
+            # Sheet erstellen falls nicht vorhanden
+            trade_sheet = sheet.spreadsheet.add_worksheet("TradeHistory", rows=5000, cols=15)
+            headers = [
+                "Datum", "Symbol", "Account", "Strategie", "Daily_PnL", "Trades_Today",
+                "Win_Rate", "Total_PnL", "Total_Trades", "Best_Trade", "Worst_Trade",
+                "Volume", "Profit_Factor", "Max_Drawdown", "Status",
+            ]
+            trade_sheet.append_row(headers)
+            time.sleep(2)  # Rate limiting
+
+        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
+
+        # Batch-Update: Sammle alle Daten erst, dann ein Update
+        update_data = []
+        
+        # Nur aktive Strategien (mit Trades) speichern
+        active_strategies = [coin for coin in coin_performance if coin.get('total_trades', 0) > 0 or coin.get('month_trades', 0) > 0]
+        
+        for coin_perf in active_strategies[:10]:  # Limitiere auf 10 Strategien pro Update
+            try:
+                daily_pnl = coin_perf.get('week_pnl', 0) / 7 if coin_perf.get('week_pnl') else 0
+                
+                row_data = [
+                    today,
+                    coin_perf['symbol'],
+                    coin_perf['account'],
+                    coin_perf.get('strategy', f"{coin_perf['symbol']} Strategy")[:30],  # Kürzen
+                    round(daily_pnl, 2),
+                    coin_perf.get('month_trades', 0),
+                    coin_perf.get('month_win_rate', 0),
+                    coin_perf.get('total_pnl', 0),
+                    coin_perf.get('total_trades', 0),
+                    coin_perf.get('best_trade', 0),
+                    coin_perf.get('worst_trade', 0),
+                    coin_perf.get('daily_volume', 0),
+                    coin_perf.get('month_profit_factor', 0),
+                    coin_perf.get('max_drawdown', 0),
+                    coin_perf.get('status', 'Active')
+                ]
+                
+                update_data.append(row_data)
+                
+            except Exception as e:
+                logging.warning(f"Error preparing data for {coin_perf.get('symbol', 'Unknown')}: {e}")
+                continue
+
+        # Batch-Insert in Sheets (nur einmal pro Update)
+        if update_data:
+            try:
+                # Füge alle Daten in einem Batch hinzu
+                trade_sheet.append_rows(update_data)
+                logging.info(f"Successfully saved {len(update_data)} strategies to sheets")
+                time.sleep(3)  # Rate limiting nach Batch-Update
+                
+                # Cache den letzten Speicher-Zeitpunkt
+                dashboard_cache[cache_key] = (datetime.now(), datetime.now())
+                
+            except Exception as batch_error:
+                logging.error(f"Batch update failed: {batch_error}")
+
+    except Exception as e:
+        logging.error(f"Error in optimized sheets save: {e}")
+
+def create_cached_charts(account_data):
+    """Erstelle Charts mit Caching"""
+    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
+    
+    if cache_key in dashboard_cache:
+        cached_charts, timestamp = dashboard_cache[cache_key]
+        if datetime.now() - timestamp < timedelta(minutes=5):
+            return cached_charts
+
+    try:
+        # Chart Strategien erstellen
+        fig, ax = plt.subplots(figsize=(12, 6))
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
+        ax.axhline(0, color='black')
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
+                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
+        fig.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien)
+        plt.close(fig)
+
+        # Chart Projekte erstellen
+        projekte = {
+            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
+            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
+        ax2.axhline(0, color='black')
+        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars2):
+            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
+                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
+        fig2.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte)
+        plt.close(fig2)
+
+        chart_paths = {
+            'strategien': chart_path_strategien,
+            'projekte': chart_path_projekte
+        }
+        
+        # Cache die Charts
+        dashboard_cache[cache_key] = (chart_paths, datetime.now())
+        return chart_paths
+
+    except Exception as e:
+        logging.error(f"Error creating charts: {e}")
+        return {
+            'strategien': "static/placeholder_strategien.png",
+            'projekte': "static/placeholder_projekte.png"
+        }
 
 def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
     """Speichere tägliche Trade-Daten aller Strategien in Google Sheets"""
@@ -1449,7 +1645,69 @@ def get_all_coin_performance_extended(account_data, days=90):
             
             # Ultima Ratio: Leere Liste mit korrekter Struktur
             return []
+@cached_function(cache_duration=600)  # 10 Minuten Cache für Account-Daten
+def get_cached_account_data():
+    """Gecachte Account-Daten abrufen"""
+    account_data = []
+    total_balance = 0.0
+    positions_all = []
+    total_positions_pnl = 0.0
 
+    for acc in subaccounts:
+        name = acc["name"]
+        
+        try:
+            # Je nach Exchange unterschiedliche API verwenden
+            if acc["exchange"] == "blofin":
+                usdt, positions, status = get_blofin_data(acc)
+            else:  # bybit
+                usdt, positions, status = get_bybit_data(acc)
+            
+            # Positionen zur Gesamtliste hinzufügen und PnL summieren
+            for p in positions:
+                positions_all.append((name, p))
+                try:
+                    pos_pnl = float(p.get('unrealisedPnl', 0))
+                    total_positions_pnl += pos_pnl
+                except (ValueError, TypeError):
+                    pass
+
+            pnl = usdt - startkapital.get(name, 0)
+            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
+
+            account_data.append({
+                "name": name,
+                "status": status,
+                "balance": usdt,
+                "start": startkapital.get(name, 0),
+                "pnl": pnl,
+                "pnl_percent": pnl_percent,
+                "positions": positions
+            })
+
+            total_balance += usdt
+            
+        except Exception as e:
+            logging.error(f"Error getting data for {name}: {e}")
+            continue
+
+    return {
+        'account_data': account_data,
+        'total_balance': total_balance,
+        'positions_all': positions_all,
+        'total_positions_pnl': total_positions_pnl
+    }
+
+@cached_function(cache_duration=900)  # 15 Minuten Cache für Coin Performance
+def get_cached_coin_performance(account_data):
+    """Gecachte Coin Performance abrufen"""
+    return get_all_coin_performance(account_data)
+
+@cached_function(cache_duration=1800)  # 30 Minuten Cache für historische Performance
+def get_cached_historical_performance(total_pnl, sheet):
+    """Gecachte historische Performance"""
+    return get_historical_performance(total_pnl, sheet)
+    
 def get_bybit_data(acc):
     """Bybit Daten abrufen"""
     try:
@@ -2150,142 +2408,86 @@ def dashboard():
     if 'user' not in session:
         return redirect(url_for('login'))
 
-    # Google Sheets Setup
-    sheet = setup_google_sheets()
-
-    account_data = []
-    total_balance = 0.0
-    total_start = sum(startkapital.values())
-    positions_all = []
-    total_positions_pnl = 0.0
-
-    for acc in subaccounts:
-        name = acc["name"]
-        
-        # Je nach Exchange unterschiedliche API verwenden
-        if acc["exchange"] == "blofin":
-            usdt, positions, status = get_blofin_data(acc)
-        else:  # bybit
-            usdt, positions, status = get_bybit_data(acc)
-        
-        # Positionen zur Gesamtliste hinzufügen und PnL summieren
-        for p in positions:
-            positions_all.append((name, p))
-            try:
-                pos_pnl = float(p.get('unrealisedPnl', 0))
-                total_positions_pnl += pos_pnl
-            except (ValueError, TypeError):
-                pass
-
-        pnl = usdt - startkapital.get(name, 0)
-        pnl_percent = (pnl / startkapital.get(name, 1)) * 100
-
-        account_data.append({
-            "name": name,
-            "status": status,
-            "balance": usdt,
-            "start": startkapital.get(name, 0),
-            "pnl": pnl,
-            "pnl_percent": pnl_percent,
-            "positions": positions
-        })
-
-        total_balance += usdt
-
-    total_pnl = total_balance - total_start
-    total_pnl_percent = (total_pnl / total_start) * 100
-    
-    # Berechne PnL Prozent für offene Positionen basierend auf Gesamtkapital
-    total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
-
-    # Historische Performance abrufen
-    historical_performance = get_historical_performance(total_pnl, sheet)
-    
-    # Tägliche Daten speichern
-    save_daily_data(total_balance, total_pnl, sheet)
-    
-    # Coin Performance sammeln
-    all_coin_performance = get_all_coin_performance(account_data)
-    
-    # Speichere tägliche Trade-Daten in Google Sheets
-    save_daily_trade_data_to_sheets(all_coin_performance, sheet)
-    
-    # 🎯 Zeit
-    tz = timezone("Europe/Berlin")
-    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-    
-    # 🎯 Chart Strategien erstellen
     try:
-        fig, ax = plt.subplots(figsize=(12, 6))
-        labels = [a["name"] for a in account_data]
-        values = [a["pnl_percent"] for a in account_data]
-        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
-        ax.axhline(0, color='black')
-        ax.set_xticklabels(labels, rotation=45, ha="right")
-        for i, bar in enumerate(bars):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
-                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
-        fig.tight_layout()
-        chart_path_strategien = "static/chart_strategien.png"
-        fig.savefig(chart_path_strategien)
-        plt.close(fig)
-    except Exception as e:
-        logging.error(f"Error creating strategien chart: {e}")
-        chart_path_strategien = "static/placeholder_strategien.png"
+        # 1. Gecachte Account-Daten abrufen
+        cached_data = get_cached_account_data()
+        account_data = cached_data['account_data']
+        total_balance = cached_data['total_balance']
+        positions_all = cached_data['positions_all']
+        total_positions_pnl = cached_data['total_positions_pnl']
+        
+        # 2. Berechnungen
+        total_start = sum(startkapital.values())
+        total_pnl = total_balance - total_start
+        total_pnl_percent = (total_pnl / total_start) * 100
+        total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
 
-    # 🎯 Chart Projekte erstellen
-    try:
-        projekte = {
-            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
-            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
-            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
-            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
-            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
+        # 3. Google Sheets Setup (nur wenn nötig)
+        sheet = None
+        try:
+            sheet = setup_google_sheets()
+        except Exception as e:
+            logging.warning(f"Google Sheets setup failed: {e}")
+
+        # 4. Historische Performance (gecacht)
+        historical_performance = get_cached_historical_performance(total_pnl, sheet) if sheet else {
+            '1_day': 0.0, '7_day': 0.0, '30_day': 0.0
         }
+        
+        # 5. Coin Performance (gecacht)
+        all_coin_performance = get_cached_coin_performance(account_data)
+        
+        # 6. Charts erstellen (gecacht)
+        chart_paths = create_cached_charts(account_data)
+        
+        # 7. Optimiertes Speichern in Sheets (rate limited)
+        if sheet and all_coin_performance:
+            try:
+                # Tägliche Daten speichern (rate limited)
+                save_daily_data(total_balance, total_pnl, sheet)
+                time.sleep(1)
+                
+                # Trade-Daten speichern (optimiert)
+                optimized_save_to_sheets(all_coin_performance, sheet)
+            except Exception as sheets_error:
+                logging.warning(f"Sheets operations failed: {sheets_error}")
 
-        proj_labels = []
-        proj_values = []
-        proj_pnl_values = []  # Für absolute PnL-Werte
-        for pname, members in projekte.items():
-            start_sum = sum(startkapital.get(m, 0) for m in members)
-            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
-            pnl_absolute = curr_sum - start_sum
-            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
-            proj_labels.append(pname)
-            proj_values.append(pnl_percent)
-            proj_pnl_values.append(pnl_absolute)
+        # 8. Zeit
+        tz = timezone("Europe/Berlin")
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
-        fig2, ax2 = plt.subplots(figsize=(12, 6))
-        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
-        ax2.axhline(0, color='black')
-        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
-        for i, bar in enumerate(bars2):
-            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
-                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
-        fig2.tight_layout()
-        chart_path_projekte = "static/chart_projekte.png"
-        fig2.savefig(chart_path_projekte)
-        plt.close(fig2)
+        return render_template("dashboard.html",
+                               accounts=account_data,
+                               total_start=total_start,
+                               total_balance=total_balance,
+                               total_pnl=total_pnl,
+                               total_pnl_percent=total_pnl_percent,
+                               historical_performance=historical_performance,
+                               chart_path_strategien=chart_paths['strategien'],
+                               chart_path_projekte=chart_paths['projekte'],
+                               positions_all=positions_all,
+                               total_positions_pnl=total_positions_pnl,
+                               total_positions_pnl_percent=total_positions_pnl_percent,
+                               all_coin_performance=all_coin_performance,
+                               now=now)
+
     except Exception as e:
-        logging.error(f"Error creating projekte chart: {e}")
-        chart_path_projekte = "static/placeholder_projekte.png"
-
-    return render_template("dashboard.html",
-                           accounts=account_data,
-                           total_start=total_start,
-                           total_balance=total_balance,
-                           total_pnl=total_pnl,
-                           total_pnl_percent=total_pnl_percent,
-                           historical_performance=historical_performance,
-                           chart_path_strategien=chart_path_strategien,
-                           chart_path_projekte=chart_path_projekte,
-                           positions_all=positions_all,
-                           total_positions_pnl=total_positions_pnl,
-                           total_positions_pnl_percent=total_positions_pnl_percent,
-                           all_coin_performance=all_coin_performance,
-                           now=now)
+        logging.error(f"Critical dashboard error: {e}")
+        # Fallback für den Fall, dass alles fehlschlägt
+        return render_template("dashboard.html",
+                               accounts=[],
+                               total_start=0,
+                               total_balance=0,
+                               total_pnl=0,
+                               total_pnl_percent=0,
+                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               chart_path_strategien="static/placeholder_strategien.png",
+                               chart_path_projekte="static/placeholder_projekte.png",
+                               positions_all=[],
+                               total_positions_pnl=0,
+                               total_positions_pnl_percent=0,
+                               all_coin_performance=[],
+                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
 
 @app.route('/logout')
 def logout():
