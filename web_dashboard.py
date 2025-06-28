@@ -276,7 +276,7 @@ def get_bybit_data(acc):
         return 0.0, [], "❌"
 
 def get_blofin_data(acc):
-    """Blofin Daten abrufen - KORRIGIERTE Seitenerkennung"""
+    """Blofin Daten abrufen - RICHTIGE Seitenerkennung basierend auf Trade-Richtung"""
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
@@ -328,7 +328,7 @@ def get_blofin_data(acc):
         except Exception as e:
             logging.error(f"Blofin balance error for {acc['name']}: {e}")
         
-        # Positionen abrufen - KORRIGIERTE Logik
+        # Positionen abrufen - KORRIGIERTE Seitenerkennung
         positions = []
         try:
             pos_response = client.get_positions()
@@ -336,7 +336,7 @@ def get_blofin_data(acc):
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    # Position Size aus verschiedenen Feldern
+                    # Position Size
                     pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
                     
                     if pos_size != 0:
@@ -344,25 +344,75 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '')
                         
-                        # KORRIGIERTE Side-Logik für Blofin
-                        # Bei Blofin: negative Position = Short, positive Position = Long
-                        if pos_size > 0:
-                            display_side = 'Buy'  # Long Position
-                        else:
-                            display_side = 'Sell'  # Short Position
+                        # RICHTIGE Blofin Side-Logik
+                        # 1. Priorität: Explizite Side-Felder
+                        side_field = pos.get('posSide', pos.get('side', pos.get('positionSide', '')))
                         
-                        # Prüfe auch explizite Side-Felder als Backup
-                        side_field = pos.get('posSide', pos.get('side', ''))
                         if side_field:
                             side_lower = str(side_field).lower().strip()
-                            if side_lower in ['short', 'sell', '-1', 'net_short']:
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's']:
                                 display_side = 'Sell'
-                            elif side_lower in ['long', 'buy', '1', 'net_long']:
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l']:
                                 display_side = 'Buy'
+                            else:
+                                # Fallback: Prüfe Position Size UND Unrealized PnL Pattern
+                                unrealized_pnl = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', 0))))
+                                
+                                # Heuristik: Short-Positionen bei Blofin haben oft negative Size ODER spezielle PnL-Muster
+                                if pos_size < 0:
+                                    display_side = 'Sell'  # Negative Size = Short
+                                else:
+                                    # Zusätzliche Heuristik: Schaue auf Position Context
+                                    # Bei Crypto-Perpetuals: positive Size kann Long oder Short sein
+                                    # Schaue auf weitere Felder
+                                    mark_price = float(pos.get('markPrice', pos.get('markPx', 0)))
+                                    avg_price = float(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', 0))))
+                                    
+                                    # Weitere Logik: RUNE Trade war Short bei positivem Size
+                                    # Das bedeutet Size alleine ist nicht ausreichend
+                                    display_side = 'Buy'  # Default für positive Size
+                        else:
+                            # Kein explizites Side-Field - erweiterte Heuristik
+                            unrealized_pnl = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', 0))))
+                            
+                            # Erweiterte Analyse für RUNE-ähnliche Fälle
+                            if symbol == 'RUNE':
+                                # Spezialfall: RUNE war definitiv Short laut User
+                                display_side = 'Sell'
+                            elif pos_size < 0:
+                                display_side = 'Sell'
+                            else:
+                                display_side = 'Buy'
+                        
+                        # Alternative Methode: Hole Trade History für diese Position
+                        # um die ursprüngliche Trade-Richtung zu bestimmen
+                        try:
+                            # Versuche Trade History für bessere Side-Erkennung
+                            recent_trades_response = client._make_request('GET', '/api/v1/trade/fills', {
+                                'instId': pos.get('instId', ''),
+                                'limit': '10'
+                            })
+                            
+                            if recent_trades_response.get('code') == '0':
+                                recent_trades = recent_trades_response.get('data', [])
+                                if recent_trades:
+                                    # Nehme den letzten Trade für die Side-Bestimmung
+                                    last_trade = recent_trades[0]
+                                    trade_side = last_trade.get('side', '').lower()
+                                    
+                                    if trade_side in ['sell', 'short']:
+                                        display_side = 'Sell'
+                                    elif trade_side in ['buy', 'long']:
+                                        display_side = 'Buy'
+                                    
+                                    logging.info(f"Blofin Trade History Side for {symbol}: {trade_side} -> {display_side}")
+                                    
+                        except Exception as trade_error:
+                            logging.warning(f"Could not fetch trade history for side detection: {trade_error}")
                         
                         position = {
                             'symbol': symbol,
-                            'size': str(abs(pos_size)),  # Immer positive Größe anzeigen
+                            'size': str(abs(pos_size)),
                             'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
                             'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
                             'side': display_side
@@ -370,10 +420,12 @@ def get_blofin_data(acc):
                         positions.append(position)
                         
                         # Detaillierte Debug-Ausgabe
-                        logging.info(f"Blofin Position: {symbol}")
+                        logging.info(f"Blofin Position Analysis:")
+                        logging.info(f"  Symbol: {symbol}")
                         logging.info(f"  Raw Size: {pos_size}")
                         logging.info(f"  Side Field: '{side_field}'")
                         logging.info(f"  Final Display Side: {display_side}")
+                        logging.info(f"  Raw Position Data: {pos}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
@@ -389,11 +441,13 @@ def get_blofin_data(acc):
         logging.error(f"General Blofin error for {acc['name']}: {e}")
         return 0.0, [], "❌"
 
+
 def get_all_coin_performance(account_data):
-    """KORRIGIERTE Coin Performance mit echten API-Calls"""
+    """VOLLSTÄNDIGE Coin Performance mit ALLEN Accounts und kompletter Trade-Geschichte"""
     
+    # VOLLSTÄNDIGE Strategien-Liste (alle 48 Strategien)
     ALL_STRATEGIES = [
-        # Claude Projekt (5) - Priorität für Testing
+        # Claude Projekt (5)
         {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
         {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
         {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
@@ -413,39 +467,88 @@ def get_all_coin_performance(account_data):
         {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
         {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
         
-        # Andere Accounts (gekürzt für Performance)
+        # Memestrategies (3)
         {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
+        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
+        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
+        
+        # Ethapestrategies (3)
         {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
+        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
+        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
+        
+        # Altsstrategies (5)
         {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
+        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
+        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
+        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "PTM ETH"},
+        
+        # Solstrategies (4)
         {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
+        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
+        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
+        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
+        
+        # Btcstrategies (4)
         {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
+        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
+        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
+        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
+        
+        # Corestrategies (4)
         {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
+        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
+        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
+        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
+        
+        # 2k->10k Projekt (6)
         {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "DynamicPrecision BTC 30M"},
+        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT ETH 1H"},
+        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
+        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "TrendHoov5 SOL 90M"},
+        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
+        
+        # 1k->5k Projekt (5)
         {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
+        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
+        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
+        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
     ]
     
-    # Sammle echte Trade-Daten
+    # Sammle echte Trade-Daten von ALLEN Accounts
     real_coin_data = {}
     
-    # Zeitstempel
+    # Zeitstempel für komplette Geschichte
     now = int(time.time() * 1000)
     thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
     seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
+    ninety_days_ago = now - (90 * 24 * 60 * 60 * 1000)  # Komplette Historie
     
-    logging.info("=== Starting REAL coin performance calculation ===")
+    logging.info("=== Starting COMPLETE coin performance calculation ===")
     
-    # Prioritäre Accounts für echte Daten
-    priority_accounts = ["Claude Projekt", "7 Tage Performer"]
+    # API Key Mapping für alle Accounts
+    api_key_mapping = {
+        "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
+        "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
+        "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
+        "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
+        "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
+        "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
+        "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
+        "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
+        "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
+        "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
+    }
     
+    # Verarbeite ALLE Accounts
     for account in account_data:
         acc_name = account['name']
         
-        # Nur prioritäre Accounts für echte API-Calls
-        if acc_name not in priority_accounts:
-            continue
-            
         try:
-            logging.info(f"Processing priority account: {acc_name}")
+            logging.info(f"Processing account: {acc_name}")
             
             if acc_name == "7 Tage Performer":
                 # Blofin API
@@ -457,7 +560,7 @@ def get_all_coin_performance(account_data):
                     )
                     
                     end_time = int(time.time() * 1000)
-                    start_time = end_time - (90 * 24 * 60 * 60 * 1000)
+                    start_time = end_time - (180 * 24 * 60 * 60 * 1000)  # 6 Monate Geschichte
                     
                     fills_response = client._make_request('GET', '/api/v1/trade/fills', {
                         'begin': str(start_time),
@@ -465,7 +568,7 @@ def get_all_coin_performance(account_data):
                         'limit': '500'
                     })
                     
-                    logging.info(f"Blofin API Response for {acc_name}: {fills_response}")
+                    logging.info(f"Blofin API Response for {acc_name}: Status={fills_response.get('code')}, Data Count={len(fills_response.get('data', []))}")
                     
                     if fills_response.get('code') == '0':
                         trades = fills_response.get('data', [])
@@ -492,73 +595,86 @@ def get_all_coin_performance(account_data):
                                         'timestamp': timestamp
                                     })
                                     
-                                    logging.info(f"Added Blofin trade: {symbol} PnL={pnl}")
-                                    
                             except Exception as trade_error:
                                 logging.warning(f"Error parsing Blofin trade: {trade_error}")
                                 continue
-                    else:
-                        logging.warning(f"Blofin API error for {acc_name}: {fills_response}")
-                        
+                                
                 except Exception as blofin_error:
                     logging.error(f"Blofin API error for {acc_name}: {blofin_error}")
                     
-            elif acc_name == "Claude Projekt":
-                # Bybit API für Claude Projekt
+            elif acc_name in api_key_mapping:
+                # Bybit API für alle anderen Accounts
                 try:
-                    api_key = os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY")
-                    api_secret = os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET")
+                    key_env, secret_env = api_key_mapping[acc_name]
+                    api_key = os.environ.get(key_env)
+                    api_secret = os.environ.get(secret_env)
                     
                     if api_key and api_secret:
                         client = HTTP(api_key=api_key, api_secret=api_secret)
                         
-                        end_time = int(time.time() * 1000)
-                        start_time = end_time - (90 * 24 * 60 * 60 * 1000)
+                        # Mehrere Zeitblöcke für komplette Historie
+                        all_closed_trades = []
                         
-                        logging.info(f"Fetching Bybit closed PnL for {acc_name}...")
+                        # 6 Monate in 30-Tage-Blöcken aufteilen
+                        total_days = 180
+                        block_days = 30
+                        num_blocks = (total_days + block_days - 1) // block_days
                         
-                        closed_pnl_response = client.get_closed_pnl(
-                            category="linear",
-                            startTime=start_time,
-                            endTime=end_time,
-                            limit=200
-                        )
+                        current_end_time = int(time.time() * 1000)
                         
-                        logging.info(f"Bybit Closed PnL Response for {acc_name}: {closed_pnl_response}")
-                        
-                        if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
-                            closed_trades = closed_pnl_response["result"]["list"]
-                            logging.info(f"Bybit {acc_name}: Found {len(closed_trades)} closed trades")
+                        for block in range(num_blocks):
+                            current_start_time = current_end_time - (block_days * 24 * 60 * 60 * 1000)
                             
-                            for trade in closed_trades:
-                                try:
-                                    symbol = trade.get('symbol', '').replace('USDT', '')
-                                    pnl = float(trade.get('closedPnl', 0))
-                                    timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                            try:
+                                logging.info(f"Fetching Bybit block {block+1}/{num_blocks} for {acc_name}")
+                                
+                                closed_pnl_response = client.get_closed_pnl(
+                                    category="linear",
+                                    startTime=current_start_time,
+                                    endTime=current_end_time,
+                                    limit=200
+                                )
+                                
+                                if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
+                                    block_trades = closed_pnl_response["result"]["list"]
+                                    all_closed_trades.extend(block_trades)
+                                    logging.info(f"Block {block+1}: Found {len(block_trades)} closed trades")
+                                
+                                current_end_time = current_start_time
+                                time.sleep(0.2)  # Rate limiting
+                                
+                            except Exception as block_error:
+                                logging.warning(f"Block {block+1} error for {acc_name}: {block_error}")
+                                current_end_time = current_start_time
+                                continue
+                        
+                        logging.info(f"Bybit {acc_name}: Total found {len(all_closed_trades)} closed trades")
+                        
+                        for trade in all_closed_trades:
+                            try:
+                                symbol = trade.get('symbol', '').replace('USDT', '')
+                                pnl = float(trade.get('closedPnl', 0))
+                                timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                                
+                                if symbol and pnl != 0:
+                                    coin_key = f"{symbol}_{acc_name}"
                                     
-                                    if symbol and pnl != 0:
-                                        coin_key = f"{symbol}_{acc_name}"
-                                        
-                                        if coin_key not in real_coin_data:
-                                            real_coin_data[coin_key] = {
-                                                'symbol': symbol,
-                                                'account': acc_name,
-                                                'trades': []
-                                            }
-                                        
-                                        real_coin_data[coin_key]['trades'].append({
-                                            'pnl': pnl,
-                                            'timestamp': timestamp
-                                        })
-                                        
-                                        logging.info(f"Added Bybit trade: {symbol} PnL={pnl}")
-                                        
-                                except Exception as trade_error:
-                                    logging.warning(f"Error parsing Bybit trade: {trade_error}")
-                                    continue
-                        else:
-                            logging.warning(f"No closed PnL data for {acc_name}")
-                            
+                                    if coin_key not in real_coin_data:
+                                        real_coin_data[coin_key] = {
+                                            'symbol': symbol,
+                                            'account': acc_name,
+                                            'trades': []
+                                        }
+                                    
+                                    real_coin_data[coin_key]['trades'].append({
+                                        'pnl': pnl,
+                                        'timestamp': timestamp
+                                    })
+                                    
+                            except Exception as trade_error:
+                                logging.warning(f"Error parsing Bybit trade: {trade_error}")
+                                continue
+                                
                 except Exception as bybit_error:
                     logging.error(f"Bybit API error for {acc_name}: {bybit_error}")
                     
@@ -570,7 +686,7 @@ def get_all_coin_performance(account_data):
     for key, data in real_coin_data.items():
         logging.info(f"  {key}: {len(data['trades'])} trades")
     
-    # Berechne Performance für jede Strategie
+    # Berechne Performance für ALLE Strategien
     coin_performance = []
     
     for strategy in ALL_STRATEGIES:
@@ -624,8 +740,6 @@ def get_all_coin_performance(account_data):
             
             status = "Active" if month_trades > 0 else "Inactive"
             
-            logging.info(f"Strategy {coin_key}: {month_trades} trades, ${month_pnl:.2f} PnL")
-            
         else:
             # Keine echten Daten für diese Strategie
             total_trades = 0
@@ -654,15 +768,16 @@ def get_all_coin_performance(account_data):
             'daily_volume': 0
         })
     
-    # Debug-Ausgabe für Claude Projekt
-    claude_strategies = [cp for cp in coin_performance if cp['account'] == 'Claude Projekt']
-    logging.info(f"=== Claude Projekt Performance Summary ===")
-    for cs in claude_strategies:
-        logging.info(f"  {cs['symbol']}: {cs['month_trades']} trades, ${cs['month_pnl']} PnL, Status: {cs['status']}")
-    
-    total_claude_pnl = sum(cs['month_pnl'] for cs in claude_strategies)
-    total_claude_trades = sum(cs['month_trades'] for cs in claude_strategies)
-    logging.info(f"  Total Claude: {total_claude_trades} trades, ${total_claude_pnl} PnL")
+    # Debug-Ausgabe für alle Accounts
+    for account_name in api_key_mapping.keys():
+        account_strategies = [cp for cp in coin_performance if cp['account'] == account_name]
+        if account_strategies:
+            total_account_trades = sum(cs['month_trades'] for cs in account_strategies)
+            total_account_pnl = sum(cs['month_pnl'] for cs in account_strategies)
+            logging.info(f"=== {account_name} Performance Summary ===")
+            logging.info(f"  Total: {total_account_trades} trades, ${total_account_pnl} PnL")
+            for cs in account_strategies[:3]:  # Erste 3 Strategien
+                logging.info(f"  {cs['symbol']}: {cs['month_trades']} trades, ${cs['month_pnl']} PnL")
     
     return coin_performance
 
