@@ -950,6 +950,10 @@ def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
 def get_all_coin_performance(account_data):
     """Echte Coin Performance mit Live-Daten berechnen"""
     
+    # [Hier den kompletten Code aus calculate_accurate_coin_performance einfügen]
+    # (Der Code ist zu lang für diese Anzeige, aber es ist der komplette Code 
+    # aus der calculate_accurate_coin_performance Funktion von oben)
+    
     # Echte Strategien basierend auf der PDF
     ALL_STRATEGIES = [
         # Incubatorzone (3)
@@ -1023,22 +1027,23 @@ def get_all_coin_performance(account_data):
         {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
     ]
     
-    # Sammle Trade-Daten von allen Accounts
-    all_coin_data = {}
+    # Sammle echte Trade-Daten
+    real_coin_data = {}
     
-    # Zeitstempel für verschiedene Perioden
+    # Zeitstempel
     now = int(time.time() * 1000)
     thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
     seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
     
-    logging.info("Starting live coin performance calculation...")
+    logging.info("Starting accurate coin performance calculation...")
     
     for account in account_data:
         acc_name = account['name']
         
         try:
-            # Account Config erstellen
+            # Account Config
             if account['name'] == "7 Tage Performer":
+                # Blofin - verwende spezielle Blofin-Logik
                 acc_config = {
                     "name": acc_name, 
                     "key": os.environ.get("BLOFIN_API_KEY"), 
@@ -1046,7 +1051,36 @@ def get_all_coin_performance(account_data):
                     "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), 
                     "exchange": "blofin"
                 }
+                
+                # Für Blofin verwende die bestehende Trade History Funktion
+                trade_history = get_trade_history(acc_config)
+                
+                for trade in trade_history:
+                    try:
+                        symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+                        pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+                        timestamp = safe_timestamp_convert(trade.get('cTime', trade.get('ts', int(time.time() * 1000))))
+                        
+                        if symbol and pnl != 0:
+                            coin_key = f"{symbol}_{acc_name}"
+                            
+                            if coin_key not in real_coin_data:
+                                real_coin_data[coin_key] = {
+                                    'symbol': symbol,
+                                    'account': acc_name,
+                                    'trades': []
+                                }
+                            
+                            real_coin_data[coin_key]['trades'].append({
+                                'pnl': pnl,
+                                'timestamp': timestamp
+                            })
+                            
+                    except Exception as e:
+                        continue
+                        
             else:
+                # Bybit - verwende Closed PnL API
                 key_map = {
                     "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
                     "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
@@ -1068,183 +1102,133 @@ def get_all_coin_performance(account_data):
                         "secret": os.environ.get(secret_env), 
                         "exchange": "bybit"
                     }
-                else:
-                    continue
-            
-            # Trade History abrufen (erweitert)
-            logging.info(f"Fetching extended trade history for {acc_name}...")
-            trade_history = get_extended_trade_history(acc_config, days=90)
-            
-            logging.info(f"{acc_name}: Found {len(trade_history)} trades")
-            
-            for trade in trade_history:
-                try:
-                    # Symbol extrahieren und normalisieren
-                    if acc_config["exchange"] == "blofin":
-                        symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-                        pnl = float(trade.get('pnl', trade.get('realizedPnl', trade.get('fee', 0))))
-                        size = float(trade.get('size', trade.get('sz', 0)))
-                        price = float(trade.get('price', trade.get('px', 0)))
-                        timestamp = trade.get('cTime', trade.get('ts', int(time.time() * 1000)))
-                    else:  # bybit
-                        symbol = trade.get('symbol', '').replace('USDT', '')
-                        pnl = float(trade.get('closedPnl', 0))
-                        size = float(trade.get('execQty', 0))
-                        price = float(trade.get('execPrice', 0))
-                        timestamp = trade.get('execTime', int(time.time() * 1000))
                     
-                    timestamp = safe_timestamp_convert(timestamp)
+                    # Verwende die neue Closed PnL Funktion
+                    closed_trades = get_bybit_closed_pnl_data(acc_config, days=90)
                     
-                    if not symbol or symbol == '' or pnl == 0:
-                        continue
-                        
-                    coin_key = f"{symbol}_{acc_name}"
+                    logging.info(f"{acc_name}: Found {len(closed_trades)} closed trades")
                     
-                    if coin_key not in all_coin_data:
-                        all_coin_data[coin_key] = {
-                            'symbol': symbol,
-                            'account': acc_name,
-                            'trades': [],
-                            'total_volume': 0,
-                            'total_pnl': 0
-                        }
-                    
-                    all_coin_data[coin_key]['trades'].append({
-                        'pnl': pnl,
-                        'volume': size * price,
-                        'timestamp': timestamp,
-                        'size': size,
-                        'price': price
-                    })
-                    all_coin_data[coin_key]['total_volume'] += size * price
-                    all_coin_data[coin_key]['total_pnl'] += pnl
-                    
-                except Exception as trade_parse_error:
-                    logging.warning(f"Error parsing trade for {acc_name}: {trade_parse_error}")
-                    continue
-                    
+                    for trade in closed_trades:
+                        try:
+                            symbol = trade.get('symbol', '').replace('USDT', '')
+                            pnl = float(trade.get('closedPnl', 0))
+                            # createdTime ist wann der Trade geschlossen wurde
+                            timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                            
+                            if symbol and pnl != 0:
+                                coin_key = f"{symbol}_{acc_name}"
+                                
+                                if coin_key not in real_coin_data:
+                                    real_coin_data[coin_key] = {
+                                        'symbol': symbol,
+                                        'account': acc_name,
+                                        'trades': []
+                                    }
+                                
+                                real_coin_data[coin_key]['trades'].append({
+                                    'pnl': pnl,
+                                    'timestamp': timestamp
+                                })
+                                
+                        except Exception as e:
+                            logging.warning(f"Error parsing closed trade for {acc_name}: {e}")
+                            continue
+                
         except Exception as account_error:
             logging.error(f"Error processing account {acc_name}: {account_error}")
             continue
     
-    # Performance-Metriken berechnen
+    # Berechne Performance für jede Strategie
     coin_performance = []
     
     for strategy in ALL_STRATEGIES:
         coin_key = f"{strategy['symbol']}_{strategy['account']}"
         
-        try:
-            if coin_key in all_coin_data:
-                data = all_coin_data[coin_key]
-                trades = data['trades']
+        if coin_key in real_coin_data:
+            data = real_coin_data[coin_key]
+            trades = data['trades']
+            
+            # Filtere nach Zeitperioden
+            trades_30d = [t for t in trades if t['timestamp'] > thirty_days_ago]
+            trades_7d = [t for t in trades if t['timestamp'] > seven_days_ago]
+            
+            # Berechne Metriken
+            total_trades = len(trades)
+            total_pnl = sum(t['pnl'] for t in trades)
+            
+            month_trades = len(trades_30d)
+            month_pnl = sum(t['pnl'] for t in trades_30d)
+            
+            week_pnl = sum(t['pnl'] for t in trades_7d)
+            
+            # Win Rate für 30-Tage-Periode
+            if month_trades > 0:
+                winning_trades = len([t for t in trades_30d if t['pnl'] > 0])
+                month_win_rate = (winning_trades / month_trades) * 100
                 
-                # Verschiedene Zeitperioden filtern
-                trades_30d = [t for t in trades if t['timestamp'] > thirty_days_ago]
-                trades_7d = [t for t in trades if t['timestamp'] > seven_days_ago]
+                # Profit Factor
+                wins = [t['pnl'] for t in trades_30d if t['pnl'] > 0]
+                losses = [t['pnl'] for t in trades_30d if t['pnl'] < 0]
                 
-                # 30-Tage Metriken
-                month_pnl = sum(t['pnl'] for t in trades_30d)
-                month_trades_count = len(trades_30d)
-                
-                if month_trades_count > 0:
-                    winning_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] > 0]
-                    losing_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] < 0]
-                    
-                    month_win_rate = (len(winning_trades_30d) / month_trades_count) * 100
-                    month_profit_factor = (sum(winning_trades_30d) / abs(sum(losing_trades_30d))) if losing_trades_30d else 999
-                else:
-                    month_win_rate = 0
-                    month_profit_factor = 0
-                
-                # 7-Tage Metriken
-                week_pnl = sum(t['pnl'] for t in trades_7d)
-                
-                # Gesamt-Metriken
-                total_pnl = sum(t['pnl'] for t in trades)
-                total_trades = len(trades)
-                
-                # Performance Score
-                month_performance_score = 0
-                if month_trades_count > 0:
-                    if month_win_rate >= 60: month_performance_score += 40
-                    elif month_win_rate >= 50: month_performance_score += 30
-                    elif month_win_rate >= 40: month_performance_score += 20
-                    
-                    if month_profit_factor >= 2.0: month_performance_score += 30
-                    elif month_profit_factor >= 1.5: month_performance_score += 25
-                    elif month_profit_factor >= 1.2: month_performance_score += 20
-                    
-                    if month_pnl >= 200: month_performance_score += 30
-                    elif month_pnl >= 100: month_performance_score += 25
-                    elif month_pnl >= 0: month_performance_score += 15
-                
-                status = "Active" if month_trades_count > 0 else "Inactive"
-                
+                month_profit_factor = (sum(wins) / abs(sum(losses))) if losses else 999
             else:
-                # Keine echten Daten - simuliere mit realistischen Werten
-                total_pnl = random.uniform(-500, 800)
-                total_trades = random.randint(0, 45)
-                month_pnl = total_pnl * 0.3  # 30% der Gesamt-Performance im letzten Monat
-                month_trades_count = int(total_trades * 0.4)  # 40% der Trades im letzten Monat
-                month_win_rate = random.uniform(35, 75)
-                month_profit_factor = random.uniform(0.8, 3.5)
-                week_pnl = month_pnl * 0.25  # 25% der Monats-Performance in der letzten Woche
+                month_win_rate = 0
+                month_profit_factor = 0
+            
+            # Performance Score
+            month_performance_score = 0
+            if month_trades > 0:
+                if month_win_rate >= 60: month_performance_score += 40
+                elif month_win_rate >= 50: month_performance_score += 30
+                elif month_win_rate >= 40: month_performance_score += 20
                 
-                # Performance Score basierend auf simulierten Daten
-                month_performance_score = 0
-                if month_trades_count > 0:
-                    if month_win_rate >= 60: month_performance_score += 40
-                    elif month_win_rate >= 50: month_performance_score += 30
-                    elif month_win_rate >= 40: month_performance_score += 20
-                    
-                    if month_profit_factor >= 2.0: month_performance_score += 30
-                    elif month_profit_factor >= 1.5: month_performance_score += 25
-                    elif month_profit_factor >= 1.2: month_performance_score += 20
-                    
-                    if month_pnl >= 200: month_performance_score += 30
-                    elif month_pnl >= 100: month_performance_score += 25
-                    elif month_pnl >= 0: month_performance_score += 15
+                if month_profit_factor >= 2.0: month_performance_score += 30
+                elif month_profit_factor >= 1.5: month_performance_score += 25
+                elif month_profit_factor >= 1.2: month_performance_score += 20
                 
-                status = "Active" if month_trades_count > 0 else "Inactive"
+                if month_pnl >= 100: month_performance_score += 30
+                elif month_pnl >= 50: month_performance_score += 25
+                elif month_pnl >= 0: month_performance_score += 15
             
-            coin_performance.append({
-                'symbol': strategy['symbol'],
-                'account': strategy['account'],
-                'strategy': strategy['strategy'],
-                'total_trades': total_trades,
-                'total_pnl': round(total_pnl, 2),
-                'month_trades': month_trades_count,
-                'month_pnl': round(month_pnl, 2),
-                'month_win_rate': round(month_win_rate, 1),
-                'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
-                'month_performance_score': month_performance_score,
-                'week_pnl': round(week_pnl, 2),
-                'status': status,
-                'daily_volume': round(data['total_volume'] / 90, 2) if coin_key in all_coin_data else random.uniform(1000, 5000)
-            })
+            status = "Active" if month_trades > 0 else "Inactive"
             
-        except Exception as strategy_error:
-            logging.warning(f"Error processing strategy {strategy['symbol']}-{strategy['account']}: {strategy_error}")
-            
-            # Fallback für fehlerhafte Strategien
-            coin_performance.append({
-                'symbol': strategy['symbol'],
-                'account': strategy['account'],
-                'strategy': strategy['strategy'],
-                'total_trades': 0,
-                'total_pnl': 0,
-                'month_trades': 0,
-                'month_pnl': 0,
-                'month_win_rate': 0,
-                'month_profit_factor': 0,
-                'month_performance_score': 0,
-                'week_pnl': 0,
-                'status': "Error",
-                'daily_volume': 0
-            })
-            continue
+        else:
+            # Keine echten Daten für diese Strategie
+            total_trades = 0
+            total_pnl = 0
+            month_trades = 0
+            month_pnl = 0
+            month_win_rate = 0
+            month_profit_factor = 0
+            week_pnl = 0
+            month_performance_score = 0
+            status = "Inactive"
+        
+        coin_performance.append({
+            'symbol': strategy['symbol'],
+            'account': strategy['account'],
+            'strategy': strategy['strategy'],
+            'total_trades': total_trades,
+            'total_pnl': round(total_pnl, 2),
+            'month_trades': month_trades,
+            'month_pnl': round(month_pnl, 2),
+            'month_win_rate': round(month_win_rate, 1),
+            'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
+            'month_performance_score': month_performance_score,
+            'week_pnl': round(week_pnl, 2),
+            'status': status,
+            'daily_volume': 0  # Kann aus Closed PnL nicht berechnet werden
+        })
     
-    logging.info(f"Successfully processed {len(coin_performance)} strategies with live data")
+    # Debug-Ausgabe für Claude Projekt
+    claude_strategies = [cp for cp in coin_performance if cp['account'] == 'Claude Projekt']
+    logging.info(f"Claude Projekt Performance Summary:")
+    for cs in claude_strategies:
+        logging.info(f"  {cs['symbol']}: {cs['month_trades']} trades, ${cs['month_pnl']} PnL")
+    
+    total_claude_pnl = sum(cs['month_pnl'] for cs in claude_strategies)
+    logging.info(f"  Total Claude PnL: ${total_claude_pnl}")
+    
     return coin_performance
 
 def get_extended_bybit_trade_history(acc, days=90):
