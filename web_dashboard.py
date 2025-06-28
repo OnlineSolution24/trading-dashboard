@@ -437,7 +437,7 @@ def get_bybit_closed_pnl_data(acc, days=30):
         return []
 
 def get_blofin_data(acc):
-    """Blofin Daten abrufen - Verbesserte Version mit korrekter Seitenerkennung"""
+    """Blofin Daten abrufen - Korrekte Seitenerkennung für Positionen"""
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
@@ -489,58 +489,68 @@ def get_blofin_data(acc):
         except Exception as e:
             logging.error(f"Blofin balance error for {acc['name']}: {e}")
         
-        # Positionen abrufen mit verbesserter Seitenerkennung
+        # Positionen abrufen mit korrigierter Seitenerkennung
         positions = []
         try:
             pos_response = client.get_positions()
-            logging.info(f"Blofin Positions for {acc['name']}: {pos_response}")
+            logging.info(f"Blofin Positions Raw Response for {acc['name']}: {pos_response}")
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    # Verschiedene Feldnamen für Position Size und Side
-                    pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
+                    # Alle möglichen Feldnamen für Position Size prüfen
+                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
                     
-                    # Explizite Side-Erkennung für Blofin
-                    side_field = pos.get('side', pos.get('posSide', ''))
-                    
-                    if pos_size != 0:
-                        # Blofin Side Logic - priorisiere explizite Side-Felder
-                        if side_field:
-                            # Blofin verwendet oft 'long', 'short', 'buy', 'sell'
-                            side_lower = side_field.lower()
-                            if side_lower in ['long', 'buy', '1']:
-                                display_side = 'Buy'
-                            elif side_lower in ['short', 'sell', '-1']:
-                                display_side = 'Sell'
-                            else:
-                                # Fallback auf Vorzeichen
-                                display_side = 'Buy' if pos_size > 0 else 'Sell'
-                        else:
-                            # Keine explizite Side - verwende Vorzeichen
-                            # WICHTIG: Bei Blofin sind Short-Positionen oft negativ
-                            display_side = 'Buy' if pos_size > 0 else 'Sell'
+                    if pos_size != 0:  # Nur Positionen mit Size > 0
+                        # Explizite Side-Erkennung - prüfe alle möglichen Felder
+                        side_field = pos.get('posSide', pos.get('side', pos.get('positionSide', '')))
                         
                         # Symbol normalisieren
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
-                        symbol = symbol.replace('-USDT', '').replace('USDT', '')
+                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '')
+                        
+                        # Verbesserte Side-Logik für Blofin
+                        if side_field:
+                            side_lower = str(side_field).lower().strip()
+                            
+                            # Blofin-spezifische Side-Werte
+                            if side_lower in ['long', 'buy', '1', 'net_long']:
+                                display_side = 'Buy'
+                            elif side_lower in ['short', 'sell', '-1', 'net_short']:
+                                display_side = 'Sell'
+                            else:
+                                # Fallback: Wenn Side-Field unbekannt, verwende Position Size
+                                display_side = 'Buy' if pos_size > 0 else 'Sell'
+                                logging.warning(f"Unknown Blofin side field '{side_field}' for {symbol}, using size-based logic")
+                        else:
+                            # Kein Side-Field gefunden - verwende Position Size
+                            # Bei Blofin: negative Size = Short, positive Size = Long
+                            display_side = 'Buy' if pos_size > 0 else 'Sell'
+                        
+                        # Weitere Validierung: Unrealized PnL kann auch Hinweise geben
+                        unrealized_pnl = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', 0))))
                         
                         position = {
                             'symbol': symbol,
                             'size': str(abs(pos_size)),  # Immer positive Größe anzeigen
-                            'avgPrice': str(pos.get('averagePrice', pos.get('avgPx', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': str(pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0')))),
+                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(unrealized_pnl),
                             'side': display_side
                         }
                         positions.append(position)
                         
-                        # Debug-Ausgabe
-                        logging.info(f"Blofin Position: {symbol} - Size: {pos_size}, Side Field: {side_field}, Display Side: {display_side}")
+                        # Detaillierte Debug-Ausgabe
+                        logging.info(f"Blofin Position Details:")
+                        logging.info(f"  Symbol: {symbol}")
+                        logging.info(f"  Raw Size: {pos_size}")
+                        logging.info(f"  Side Field: '{side_field}'")
+                        logging.info(f"  Display Side: {display_side}")
+                        logging.info(f"  Raw Position Data: {pos}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
 
         if usdt == 0.0 and status == "✅":
-            usdt = 0.01  # Zeigt dass API erreichbar ist, aber kein Guthaben
+            usdt = 0.01
         
         logging.info(f"Blofin {acc['name']}: Status={status}, USDT={usdt}, Positions={len(positions)}")
         
@@ -1084,15 +1094,17 @@ def get_all_coin_performance(account_data):
     thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
     seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
     
-    logging.info("Starting accurate coin performance calculation...")
+    logging.info("=== Starting REAL coin performance calculation ===")
     
     for account in account_data:
         acc_name = account['name']
         
         try:
+            logging.info(f"Processing account: {acc_name}")
+            
             # Account Config
             if account['name'] == "7 Tage Performer":
-                # Blofin - verwende spezielle Blofin-Logik
+                # Blofin
                 acc_config = {
                     "name": acc_name, 
                     "key": os.environ.get("BLOFIN_API_KEY"), 
@@ -1101,35 +1113,61 @@ def get_all_coin_performance(account_data):
                     "exchange": "blofin"
                 }
                 
-                # Für Blofin verwende die bestehende Trade History Funktion
-                trade_history = get_trade_history(acc_config)
-                
-                for trade in trade_history:
-                    try:
-                        symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-                        pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
-                        timestamp = safe_timestamp_convert(trade.get('cTime', trade.get('ts', int(time.time() * 1000))))
+                # Blofin Trade History
+                try:
+                    client = BlofinAPI(acc_config["key"], acc_config["secret"], acc_config["passphrase"])
+                    
+                    # Verwende einen längeren Zeitraum für mehr Daten
+                    end_time = int(time.time() * 1000)
+                    start_time = end_time - (90 * 24 * 60 * 60 * 1000)  # 90 Tage
+                    
+                    # Blofin Trade Fills API
+                    fills_response = client._make_request('GET', '/api/v1/trade/fills', {
+                        'begin': str(start_time),
+                        'end': str(end_time),
+                        'limit': '500'
+                    })
+                    
+                    logging.info(f"Blofin API Response for {acc_name}: {fills_response}")
+                    
+                    if fills_response.get('code') == '0':
+                        trades = fills_response.get('data', [])
+                        logging.info(f"Blofin {acc_name}: Found {len(trades)} trade fills")
                         
-                        if symbol and pnl != 0:
-                            coin_key = f"{symbol}_{acc_name}"
-                            
-                            if coin_key not in real_coin_data:
-                                real_coin_data[coin_key] = {
-                                    'symbol': symbol,
-                                    'account': acc_name,
-                                    'trades': []
-                                }
-                            
-                            real_coin_data[coin_key]['trades'].append({
-                                'pnl': pnl,
-                                'timestamp': timestamp
-                            })
-                            
-                    except Exception as e:
-                        continue
+                        for trade in trades:
+                            try:
+                                symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
+                                pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
+                                timestamp = safe_timestamp_convert(trade.get('cTime', trade.get('ts', int(time.time() * 1000))))
+                                
+                                if symbol and pnl != 0:
+                                    coin_key = f"{symbol}_{acc_name}"
+                                    
+                                    if coin_key not in real_coin_data:
+                                        real_coin_data[coin_key] = {
+                                            'symbol': symbol,
+                                            'account': acc_name,
+                                            'trades': []
+                                        }
+                                    
+                                    real_coin_data[coin_key]['trades'].append({
+                                        'pnl': pnl,
+                                        'timestamp': timestamp
+                                    })
+                                    
+                                    logging.info(f"Added Blofin trade: {symbol} PnL={pnl}")
+                                    
+                            except Exception as trade_error:
+                                logging.warning(f"Error parsing Blofin trade: {trade_error}")
+                                continue
+                    else:
+                        logging.warning(f"Blofin API error for {acc_name}: {fills_response}")
                         
+                except Exception as blofin_error:
+                    logging.error(f"Blofin API error for {acc_name}: {blofin_error}")
+                    
             else:
-                # Bybit - verwende Closed PnL API
+                # Bybit Accounts
                 key_map = {
                     "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
                     "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
@@ -1145,47 +1183,74 @@ def get_all_coin_performance(account_data):
                 
                 if acc_name in key_map:
                     key_env, secret_env = key_map[acc_name]
-                    acc_config = {
-                        "name": acc_name, 
-                        "key": os.environ.get(key_env), 
-                        "secret": os.environ.get(secret_env), 
-                        "exchange": "bybit"
-                    }
+                    api_key = os.environ.get(key_env)
+                    api_secret = os.environ.get(secret_env)
                     
-                    # Verwende die neue Closed PnL Funktion
-                    closed_trades = get_bybit_closed_pnl_data(acc_config, days=90)
-                    
-                    logging.info(f"{acc_name}: Found {len(closed_trades)} closed trades")
-                    
-                    for trade in closed_trades:
+                    if api_key and api_secret:
                         try:
-                            symbol = trade.get('symbol', '').replace('USDT', '')
-                            pnl = float(trade.get('closedPnl', 0))
-                            # createdTime ist wann der Trade geschlossen wurde
-                            timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                            # Verwende direkt die Bybit API
+                            client = HTTP(api_key=api_key, api_secret=api_secret)
                             
-                            if symbol and pnl != 0:
-                                coin_key = f"{symbol}_{acc_name}"
+                            # Hole Closed PnL direkt
+                            end_time = int(time.time() * 1000)
+                            start_time = end_time - (90 * 24 * 60 * 60 * 1000)  # 90 Tage
+                            
+                            logging.info(f"Fetching Bybit closed PnL for {acc_name}...")
+                            
+                            closed_pnl_response = client.get_closed_pnl(
+                                category="linear",
+                                startTime=start_time,
+                                endTime=end_time,
+                                limit=200
+                            )
+                            
+                            logging.info(f"Bybit Closed PnL Response for {acc_name}: {closed_pnl_response}")
+                            
+                            if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
+                                closed_trades = closed_pnl_response["result"]["list"]
+                                logging.info(f"Bybit {acc_name}: Found {len(closed_trades)} closed trades")
                                 
-                                if coin_key not in real_coin_data:
-                                    real_coin_data[coin_key] = {
-                                        'symbol': symbol,
-                                        'account': acc_name,
-                                        'trades': []
-                                    }
+                                for trade in closed_trades:
+                                    try:
+                                        symbol = trade.get('symbol', '').replace('USDT', '')
+                                        pnl = float(trade.get('closedPnl', 0))
+                                        timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                                        
+                                        if symbol and pnl != 0:
+                                            coin_key = f"{symbol}_{acc_name}"
+                                            
+                                            if coin_key not in real_coin_data:
+                                                real_coin_data[coin_key] = {
+                                                    'symbol': symbol,
+                                                    'account': acc_name,
+                                                    'trades': []
+                                                }
+                                            
+                                            real_coin_data[coin_key]['trades'].append({
+                                                'pnl': pnl,
+                                                'timestamp': timestamp
+                                            })
+                                            
+                                            logging.info(f"Added Bybit trade: {symbol} PnL={pnl}")
+                                            
+                                    except Exception as trade_error:
+                                        logging.warning(f"Error parsing Bybit trade: {trade_error}")
+                                        continue
+                            else:
+                                logging.warning(f"No closed PnL data for {acc_name}")
                                 
-                                real_coin_data[coin_key]['trades'].append({
-                                    'pnl': pnl,
-                                    'timestamp': timestamp
-                                })
-                                
-                        except Exception as e:
-                            logging.warning(f"Error parsing closed trade for {acc_name}: {e}")
-                            continue
-                
+                        except Exception as bybit_error:
+                            logging.error(f"Bybit API error for {acc_name}: {bybit_error}")
+                    else:
+                        logging.warning(f"Missing API credentials for {acc_name}")
+                        
         except Exception as account_error:
             logging.error(f"Error processing account {acc_name}: {account_error}")
             continue
+    
+    logging.info(f"=== Collected coin data for {len(real_coin_data)} coin-account pairs ===")
+    for key, data in real_coin_data.items():
+        logging.info(f"  {key}: {len(data['trades'])} trades")
     
     # Berechne Performance für jede Strategie
     coin_performance = []
@@ -1241,6 +1306,8 @@ def get_all_coin_performance(account_data):
             
             status = "Active" if month_trades > 0 else "Inactive"
             
+            logging.info(f"Strategy {coin_key}: {month_trades} trades, ${month_pnl:.2f} PnL")
+            
         else:
             # Keine echten Daten für diese Strategie
             total_trades = 0
@@ -1266,20 +1333,20 @@ def get_all_coin_performance(account_data):
             'month_performance_score': month_performance_score,
             'week_pnl': round(week_pnl, 2),
             'status': status,
-            'daily_volume': 0  # Kann aus Closed PnL nicht berechnet werden
+            'daily_volume': 0
         })
     
     # Debug-Ausgabe für Claude Projekt
     claude_strategies = [cp for cp in coin_performance if cp['account'] == 'Claude Projekt']
-    logging.info(f"Claude Projekt Performance Summary:")
+    logging.info(f"=== Claude Projekt Performance Summary ===")
     for cs in claude_strategies:
-        logging.info(f"  {cs['symbol']}: {cs['month_trades']} trades, ${cs['month_pnl']} PnL")
+        logging.info(f"  {cs['symbol']}: {cs['month_trades']} trades, ${cs['month_pnl']} PnL, Status: {cs['status']}")
     
     total_claude_pnl = sum(cs['month_pnl'] for cs in claude_strategies)
-    logging.info(f"  Total Claude PnL: ${total_claude_pnl}")
+    total_claude_trades = sum(cs['month_trades'] for cs in claude_strategies)
+    logging.info(f"  Total Claude: {total_claude_trades} trades, ${total_claude_pnl} PnL")
     
     return coin_performance
-
 def get_extended_bybit_trade_history(acc, days=90):
     """Erweiterte Bybit Trade History - umgeht 7-Tage-Limit"""
     try:
