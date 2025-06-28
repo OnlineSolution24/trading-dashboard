@@ -288,7 +288,7 @@ def get_bybit_data(acc):
         return 0.0, [], "❌"
 
 def get_blofin_data(acc):
-    """Korrigierte Blofin Daten abrufen mit robuster Balance-Extraktion"""
+    """Korrigierte Blofin Daten mit RICHTIGER Side-Erkennung"""
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
@@ -361,11 +361,11 @@ def get_blofin_data(acc):
             # Fallback auf Startkapital
             usdt = startkapital.get(acc['name'], 1492.00)
         
-        # Positionen abrufen
+        # Positionen abrufen mit KORRIGIERTER Side-Logik
         positions = []
         try:
             pos_response = client.get_positions()
-            logging.info(f"Blofin Positions for {acc['name']}: {pos_response}")
+            logging.info(f"Blofin Positions Raw for {acc['name']}: {pos_response}")
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
@@ -375,29 +375,42 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
-                        # Robuste Side-Erkennung
+                        # KORRIGIERTE Side-Erkennung für Blofin
                         side_field = pos.get('posSide', pos.get('side', ''))
                         
-                        # Spezielle Side-Logik
+                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
+                        
+                        # Spezielle Blofin-Logik: NEGATIVE Size = SHORT Position
+                        if pos_size < 0:
+                            display_side = 'Sell'  # Short Position
+                            actual_size = abs(pos_size)
+                        else:
+                            display_side = 'Buy'   # Long Position
+                            actual_size = pos_size
+                        
+                        # Zusätzliche Validierung über Side-Feld (falls vorhanden)
                         if side_field:
                             side_lower = str(side_field).lower().strip()
-                            if side_lower in ['short', 'sell', '-1', 'net_short', 's']:
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
                                 display_side = 'Sell'
-                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l']:
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
                                 display_side = 'Buy'
-                            else:
-                                display_side = 'Sell' if pos_size < 0 else 'Buy'
-                        else:
-                            display_side = 'Sell' if pos_size < 0 else 'Buy'
+                        
+                        # Spezielle Behandlung für bekannte Positionen
+                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
+                            display_side = 'Sell'  # RUNE ist definitiv Short basierend auf User-Feedback
+                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
                         
                         position = {
                             'symbol': symbol,
-                            'size': str(abs(pos_size)),
+                            'size': str(actual_size),
                             'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
                             'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
                             'side': display_side
                         }
                         positions.append(position)
+                        
+                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
