@@ -22,12 +22,10 @@ from google.oauth2.service_account import Credentials
 from functools import wraps
 from threading import Lock
 
-# Globale Cache-Variablen hinzufügen
+# Globale Cache-Variablen
 cache_lock = Lock()
 dashboard_cache = {}
-last_full_refresh = None
 CACHE_DURATION = 300  # 5 Minuten Cache
-INCREMENTAL_UPDATE_INTERVAL = 60  # 1 Minute für Updates
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
@@ -50,7 +48,7 @@ subaccounts = [
     {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET"), "exchange": "bybit"},
     {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET"), "exchange": "bybit"},
     {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET"), "exchange": "bybit"},
-    {"name": "Claude Projekt", "key": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY"), "secret": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET"), "exchange": "bybit"},  # NEU
+    {"name": "Claude Projekt", "key": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY"), "secret": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET"), "exchange": "bybit"},
     {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
 ]
 
@@ -82,18 +80,14 @@ def cached_function(cache_duration=300):
             cache_key = f"{func.__name__}_{cache_key_generator(*args, **kwargs)}"
             
             with cache_lock:
-                # Prüfe Cache
                 if cache_key in dashboard_cache:
                     cached_data, timestamp = dashboard_cache[cache_key]
                     if datetime.now() - timestamp < timedelta(seconds=cache_duration):
                         logging.info(f"Cache hit for {func.__name__}")
                         return cached_data
                 
-                # Cache miss - Funktion ausführen
                 logging.info(f"Cache miss for {func.__name__} - executing")
                 result = func(*args, **kwargs)
-                
-                # Ergebnis cachen
                 dashboard_cache[cache_key] = (result, datetime.now())
                 return result
         return wrapper
@@ -105,43 +99,30 @@ def safe_timestamp_convert(timestamp):
         if isinstance(timestamp, str):
             timestamp = int(timestamp)
         elif isinstance(timestamp, datetime):
-            return int(timestamp.timestamp() * 1000)  # Return as milliseconds
+            return int(timestamp.timestamp() * 1000)
         
-        # Check if timestamp is in milliseconds
         if timestamp > 1e12:
-            return timestamp  # Already in milliseconds
+            return timestamp
         else:
-            return int(timestamp * 1000)  # Convert to milliseconds
+            return int(timestamp * 1000)
             
     except (ValueError, TypeError, OSError):
-        return int(time.time() * 1000)  # Current time in milliseconds
+        return int(time.time() * 1000)
 
 # 📊 Google Sheets Integration
 def setup_google_sheets():
     """Google Sheets Setup für historische Daten"""
     try:
-        # Service Account JSON aus Umgebungsvariable
         service_account_info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "{}"))
-        
-        # Scopes für Google Sheets
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
-        
-        # Credentials erstellen
         credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
-        
-        # Google Sheets Client
         gc = gspread.authorize(credentials)
-        
-        # Spreadsheet öffnen (ID aus Umgebungsvariable)
         spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
         spreadsheet = gc.open_by_key(spreadsheet_id)
-        
-        # Spezifisches Arbeitsblatt öffnen
         sheet = spreadsheet.worksheet("DailyBalances")
-        
         return sheet
     except Exception as e:
         logging.error(f"Google Sheets Setup Fehler: {e}")
@@ -153,20 +134,15 @@ def save_daily_data(total_balance, total_pnl, sheet=None):
         return
     
     try:
-        # Datum im deutschen Format
         today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-        
-        # Prüfen ob heute bereits ein Eintrag existiert
         records = sheet.get_all_records()
         today_exists = any(record.get('Datum') == today for record in records)
         
         if not today_exists:
-            # Neue Zeile hinzufügen
             sheet.append_row([today, total_balance, total_pnl])
             logging.info(f"Daten für {today} in Google Sheets gespeichert")
         else:
-            # Bestehende Zeile aktualisieren
-            for i, record in enumerate(records, start=2):  # Start bei 2 wegen Header
+            for i, record in enumerate(records, start=2):
                 if record.get('Datum') == today:
                     sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
                     logging.info(f"Daten für {today} in Google Sheets aktualisiert")
@@ -186,26 +162,18 @@ def get_historical_performance(total_pnl, sheet=None):
         return performance_data
     
     try:
-        # Alle Daten aus dem Sheet holen
         records = sheet.get_all_records()
-        
-        # Nach Datum sortieren
         df = pd.DataFrame(records)
         if df.empty:
             return performance_data
         
-        # Datum in datetime konvertieren
         df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y')
         df = df.sort_values('Datum')
         
-        # Heutiges Datum
         today = datetime.now(timezone("Europe/Berlin")).date()
         
-        # Performance für verschiedene Zeiträume berechnen
         for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
             target_date = today - timedelta(days=days)
-            
-            # Nächstgelegenen Eintrag finden
             df['date_diff'] = abs(df['Datum'].dt.date - target_date)
             closest_idx = df['date_diff'].idxmin()
             
@@ -228,12 +196,10 @@ class BlofinAPI:
         self.base_url = "https://openapi.blofin.com"
     
     def _generate_signature(self, path, method, timestamp, nonce, body=''):
-        # Blofin signature format: {path}{method}{timestamp}{nonce}{body}
         message = f"{path}{method}{timestamp}{nonce}"
         if body:
             message += body
         
-        # Generate hex signature and convert to base64
         hex_signature = hmac.new(
             self.api_secret.encode('utf-8'),
             message.encode('utf-8'),
@@ -256,7 +222,6 @@ class BlofinAPI:
         
         signature = self._generate_signature(request_path, method, timestamp, nonce, body)
         
-        # Korrekte Blofin Header nach offizieller Dokumentation
         headers = {
             'ACCESS-KEY': self.api_key,
             'ACCESS-SIGN': signature,
@@ -270,7 +235,6 @@ class BlofinAPI:
         
         try:
             logging.info(f"Blofin API Request: {method} {url}")
-            logging.info(f"Headers: {dict(headers)}")  # Log headers (ohne sensible Daten)
             
             if method == 'GET':
                 response = requests.get(url, headers=headers, timeout=10)
@@ -291,153 +255,28 @@ class BlofinAPI:
     
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
-    
-    def get_trade_history(self):
-        return self._make_request('GET', '/api/v1/trade/fills')
 
-def get_trade_history(acc):
-    """Trade History für Performance-Analyse abrufen"""
-    if acc["exchange"] == "blofin":
-        return get_blofin_trade_history(acc)
-    else:
-        return get_bybit_trade_history(acc)
-
-def get_extended_trade_history(acc, days=90):
-    """Erweiterte Trade History für längere Zeiträume mit Fehlerbehandlung"""
-    try:
-        if acc["exchange"] == "blofin":
-            return get_extended_blofin_trade_history(acc, days)
-        else:
-            return get_extended_bybit_trade_history(acc, days)
-    except Exception as e:
-        logging.error(f"Error in extended trade history for {acc['name']}: {e}")
-        # Fallback zur normalen Trade History
-        return get_trade_history(acc)
-
-def get_extended_bybit_trade_history(acc, days=90):
-    """Erweiterte Bybit Trade History - umgeht 7-Tage-Limit"""
+def get_bybit_data(acc):
+    """Bybit Daten abrufen"""
     try:
         client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        all_trades = []
+        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
         
-        # Begrenze auf maximal 30 Tage für Stabilität
-        days = min(days, 30)
+        try:
+            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+        except Exception as e:
+            pos = []
+            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
         
-        # Teile in 6-Tage-Blöcke auf (sicherer als 7 Tage)
-        block_days = 6
-        num_blocks = min((days + block_days - 1) // block_days, 5)  # Max 5 Blöcke
-        
-        end_time = int(time.time() * 1000)
-        
-        for block in range(num_blocks):
-            block_start_time = end_time - (block_days * 24 * 60 * 60 * 1000)
-            
-            try:
-                # Executions abrufen
-                executions_response = client.get_executions(
-                    category="linear",
-                    startTime=block_start_time,
-                    endTime=end_time,
-                    limit=200
-                )
-                
-                if executions_response.get("result") and executions_response["result"].get("list"):
-                    block_trades = executions_response["result"]["list"]
-                    all_trades.extend(block_trades)
-                
-                # Für nächsten Block
-                end_time = block_start_time
-                
-                # Rate Limiting
-                time.sleep(0.1)
-                
-            except Exception as block_error:
-                logging.warning(f"Block {block+1} error for {acc['name']}: {block_error}")
-                end_time = block_start_time  # Trotzdem weiter
-                continue
-        
-        # Entferne Duplikate
-        unique_trades = []
-        seen = set()
-        
-        for trade in all_trades:
-            trade_key = f"{trade.get('execTime', '')}-{trade.get('symbol', '')}-{trade.get('execQty', '')}"
-            if trade_key not in seen:
-                seen.add(trade_key)
-                unique_trades.append(trade)
-        
-        logging.info(f"Extended Bybit history for {acc['name']}: {len(unique_trades)} unique trades")
-        return unique_trades
-        
+        positions = [p for p in pos if float(p.get("size", 0)) > 0]
+        return usdt, positions, "✅"
     except Exception as e:
-        logging.error(f"Extended Bybit history error for {acc['name']}: {e}")
-        # Fallback zur normalen Trade History
-        return get_trade_history(acc)
-
-def get_bybit_closed_pnl_data(acc, days=30):
-    """Abrufen der echten Bybit Closed PnL Daten statt Executions"""
-    try:
-        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        
-        # Verwende get_closed_pnl anstatt get_executions für echte PnL-Daten
-        end_time = int(time.time() * 1000)
-        start_time = end_time - (days * 24 * 60 * 60 * 1000)
-        
-        all_closed_trades = []
-        
-        # Mehrere Zeitblöcke abrufen (Bybit Limit umgehen)
-        block_days = 7  # 7-Tage-Blöcke
-        num_blocks = (days + block_days - 1) // block_days
-        
-        current_end_time = end_time
-        
-        for block in range(num_blocks):
-            current_start_time = current_end_time - (block_days * 24 * 60 * 60 * 1000)
-            
-            try:
-                logging.info(f"Fetching closed PnL for {acc['name']}, block {block+1}/{num_blocks}")
-                
-                # Bybit get_closed_pnl API - das sind die echten abgeschlossenen Trades
-                closed_pnl_response = client.get_closed_pnl(
-                    category="linear",
-                    startTime=current_start_time,
-                    endTime=current_end_time,
-                    limit=200
-                )
-                
-                if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
-                    block_trades = closed_pnl_response["result"]["list"]
-                    all_closed_trades.extend(block_trades)
-                    logging.info(f"Block {block+1}: Found {len(block_trades)} closed trades")
-                
-                current_end_time = current_start_time
-                time.sleep(0.2)  # Rate limiting
-                
-            except Exception as block_error:
-                logging.error(f"Error fetching block {block+1} for {acc['name']}: {block_error}")
-                current_end_time = current_start_time
-                continue
-        
-        # Entferne Duplikate
-        unique_trades = []
-        seen = set()
-        
-        for trade in all_closed_trades:
-            # Eindeutiger Key basierend auf Zeit + Symbol + PnL
-            trade_key = f"{trade.get('createdTime', '')}-{trade.get('symbol', '')}-{trade.get('closedPnl', '')}"
-            if trade_key not in seen:
-                seen.add(trade_key)
-                unique_trades.append(trade)
-        
-        logging.info(f"Closed PnL for {acc['name']}: {len(unique_trades)} unique closed trades")
-        return unique_trades
-        
-    except Exception as e:
-        logging.error(f"Error getting closed PnL for {acc['name']}: {e}")
-        return []
+        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
+        return 0.0, [], "❌"
 
 def get_blofin_data(acc):
-    """Blofin Daten abrufen - Korrekte Seitenerkennung für Positionen"""
+    """Blofin Daten abrufen - KORRIGIERTE Seitenerkennung"""
     try:
         client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
         
@@ -489,7 +328,7 @@ def get_blofin_data(acc):
         except Exception as e:
             logging.error(f"Blofin balance error for {acc['name']}: {e}")
         
-        # Positionen abrufen mit korrigierter Seitenerkennung
+        # Positionen abrufen - KORRIGIERTE Logik
         positions = []
         try:
             pos_response = client.get_positions()
@@ -497,54 +336,44 @@ def get_blofin_data(acc):
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    # Alle möglichen Feldnamen für Position Size prüfen
+                    # Position Size aus verschiedenen Feldern
                     pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
                     
-                    if pos_size != 0:  # Nur Positionen mit Size > 0
-                        # Explizite Side-Erkennung - prüfe alle möglichen Felder
-                        side_field = pos.get('posSide', pos.get('side', pos.get('positionSide', '')))
-                        
+                    if pos_size != 0:
                         # Symbol normalisieren
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '')
                         
-                        # Verbesserte Side-Logik für Blofin
+                        # KORRIGIERTE Side-Logik für Blofin
+                        # Bei Blofin: negative Position = Short, positive Position = Long
+                        if pos_size > 0:
+                            display_side = 'Buy'  # Long Position
+                        else:
+                            display_side = 'Sell'  # Short Position
+                        
+                        # Prüfe auch explizite Side-Felder als Backup
+                        side_field = pos.get('posSide', pos.get('side', ''))
                         if side_field:
                             side_lower = str(side_field).lower().strip()
-                            
-                            # Blofin-spezifische Side-Werte
-                            if side_lower in ['long', 'buy', '1', 'net_long']:
-                                display_side = 'Buy'
-                            elif side_lower in ['short', 'sell', '-1', 'net_short']:
+                            if side_lower in ['short', 'sell', '-1', 'net_short']:
                                 display_side = 'Sell'
-                            else:
-                                # Fallback: Wenn Side-Field unbekannt, verwende Position Size
-                                display_side = 'Buy' if pos_size > 0 else 'Sell'
-                                logging.warning(f"Unknown Blofin side field '{side_field}' for {symbol}, using size-based logic")
-                        else:
-                            # Kein Side-Field gefunden - verwende Position Size
-                            # Bei Blofin: negative Size = Short, positive Size = Long
-                            display_side = 'Buy' if pos_size > 0 else 'Sell'
-                        
-                        # Weitere Validierung: Unrealized PnL kann auch Hinweise geben
-                        unrealized_pnl = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', 0))))
+                            elif side_lower in ['long', 'buy', '1', 'net_long']:
+                                display_side = 'Buy'
                         
                         position = {
                             'symbol': symbol,
                             'size': str(abs(pos_size)),  # Immer positive Größe anzeigen
                             'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': str(unrealized_pnl),
+                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
                             'side': display_side
                         }
                         positions.append(position)
                         
                         # Detaillierte Debug-Ausgabe
-                        logging.info(f"Blofin Position Details:")
-                        logging.info(f"  Symbol: {symbol}")
+                        logging.info(f"Blofin Position: {symbol}")
                         logging.info(f"  Raw Size: {pos_size}")
                         logging.info(f"  Side Field: '{side_field}'")
-                        logging.info(f"  Display Side: {display_side}")
-                        logging.info(f"  Raw Position Data: {pos}")
+                        logging.info(f"  Final Display Side: {display_side}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
@@ -560,521 +389,15 @@ def get_blofin_data(acc):
         logging.error(f"General Blofin error for {acc['name']}: {e}")
         return 0.0, [], "❌"
 
-def get_blofin_trade_history(acc):
-    """Blofin Trade History abrufen"""
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        
-        # Trade History Endpunkt
-        trades_response = client.get_trade_history()
-        
-        if trades_response.get('code') == '0':
-            return trades_response.get('data', [])
-        return []
-    except Exception as e:
-        logging.error(f"Fehler bei Blofin Trade History {acc['name']}: {e}")
-        return []
-
-def calculate_trading_metrics(trades, account_name):
-    """Trading-Metriken aus Trade History berechnen"""
-    if not trades:
-        return {
-            'total_trades': 0,
-            'win_rate': 0,
-            'avg_win': 0,
-            'avg_loss': 0,
-            'profit_factor': 0,
-            'max_drawdown': 0,
-            'sharpe_ratio': 0,
-            'total_pnl': 0,
-            'best_trade': 0,
-            'worst_trade': 0,
-            'avg_trade_duration': 0,
-            'daily_volume': 0
-        }
-    
-    try:
-        # Basis-Metriken
-        total_trades = len(trades)
-        
-        # PnL pro Trade berechnen
-        pnl_list = []
-        volumes = []
-        
-        for trade in trades:
-            # Verschiedene APIs haben unterschiedliche Feldnamen
-            if account_name == "7 Tage Performer":  # Blofin
-                pnl = float(trade.get('pnl', trade.get('realizedPnl', trade.get('fee', 0))))
-                volume = float(trade.get('size', trade.get('sz', 0))) * float(trade.get('price', trade.get('px', 0)))
-            else:  # Bybit
-                pnl = float(trade.get('closedPnl', trade.get('execValue', 0)))
-                volume = float(trade.get('execQty', 0)) * float(trade.get('execPrice', 0))
-            
-            if pnl != 0:  # Nur Trades mit PnL
-                pnl_list.append(pnl)
-            if volume > 0:
-                volumes.append(volume)
-        
-        if not pnl_list:
-            # Fallback: Verwende alle Trades für Volume-Berechnung
-            return {
-                'total_trades': total_trades,
-                'win_rate': 0,
-                'avg_win': 0,
-                'avg_loss': 0,
-                'profit_factor': 0,
-                'max_drawdown': 0,
-                'sharpe_ratio': 0,
-                'total_pnl': 0,
-                'best_trade': 0,
-                'worst_trade': 0,
-                'avg_trade_duration': 0,
-                'daily_volume': sum(volumes) / 30 if volumes else 0
-            }
-        
-        # Win Rate
-        winning_trades = [pnl for pnl in pnl_list if pnl > 0]
-        losing_trades = [pnl for pnl in pnl_list if pnl < 0]
-        win_rate = (len(winning_trades) / len(pnl_list)) * 100 if pnl_list else 0
-        
-        # Durchschnittliche Gewinne/Verluste
-        avg_win = sum(winning_trades) / len(winning_trades) if winning_trades else 0
-        avg_loss = abs(sum(losing_trades) / len(losing_trades)) if losing_trades else 0
-        
-        # Profit Factor
-        total_wins = sum(winning_trades)
-        total_losses = abs(sum(losing_trades))
-        profit_factor = total_wins / total_losses if total_losses > 0 else (float('inf') if total_wins > 0 else 0)
-        
-        # Maximum Drawdown
-        if len(pnl_list) > 0:
-            cumulative_pnl = []
-            running_total = 0
-            for pnl in pnl_list:
-                running_total += pnl
-                cumulative_pnl.append(running_total)
-            
-            peak = cumulative_pnl[0]
-            max_drawdown = 0
-            for value in cumulative_pnl:
-                if value > peak:
-                    peak = value
-                drawdown = peak - value
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
-        else:
-            max_drawdown = 0
-        
-        # Sharpe Ratio (vereinfacht)
-        if len(pnl_list) > 1:
-            avg_return = sum(pnl_list) / len(pnl_list)
-            variance = sum([(x - avg_return) ** 2 for x in pnl_list]) / len(pnl_list)
-            std_dev = variance ** 0.5
-            sharpe_ratio = avg_return / std_dev if std_dev > 0 else 0
-        else:
-            sharpe_ratio = 0
-        
-        return {
-            'total_trades': len(pnl_list),
-            'win_rate': round(win_rate, 1),
-            'avg_win': round(avg_win, 2),
-            'avg_loss': round(avg_loss, 2),
-            'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 999,
-            'max_drawdown': round(max_drawdown, 2),
-            'sharpe_ratio': round(sharpe_ratio, 3),
-            'total_pnl': round(sum(pnl_list), 2),
-            'best_trade': round(max(pnl_list), 2) if pnl_list else 0,
-            'worst_trade': round(min(pnl_list), 2) if pnl_list else 0,
-            'avg_trade_duration': 0,  # Benötigt zusätzliche Logik
-            'daily_volume': round(sum(volumes) / 30, 2) if volumes else 0
-        }
-        
-    except Exception as e:
-        logging.error(f"Fehler bei Trading-Metriken Berechnung für {account_name}: {e}")
-        return {
-            'total_trades': 0,
-            'win_rate': 0,
-            'avg_win': 0,
-            'avg_loss': 0,
-            'profit_factor': 0,
-            'max_drawdown': 0,
-            'sharpe_ratio': 0,
-            'total_pnl': 0,
-            'best_trade': 0,
-            'worst_trade': 0,
-            'avg_trade_duration': 0,
-            'daily_volume': 0
-        }
-
-def calculate_risk_score(metrics):
-    """Risiko-Score basierend auf Trading-Metriken berechnen"""
-    if metrics['total_trades'] == 0:
-        return "N/A"
-    
-    score = 0
-    
-    # Win Rate (30% Gewichtung)
-    if metrics['win_rate'] >= 60:
-        score += 30
-    elif metrics['win_rate'] >= 50:
-        score += 20
-    elif metrics['win_rate'] >= 40:
-        score += 10
-    
-    # Profit Factor (25% Gewichtung)
-    if metrics['profit_factor'] >= 2.0:
-        score += 25
-    elif metrics['profit_factor'] >= 1.5:
-        score += 20
-    elif metrics['profit_factor'] >= 1.2:
-        score += 15
-    elif metrics['profit_factor'] >= 1.0:
-        score += 10
-    
-    # Max Drawdown (25% Gewichtung) - weniger ist besser
-    if metrics['max_drawdown'] <= 50:
-        score += 25
-    elif metrics['max_drawdown'] <= 100:
-        score += 20
-    elif metrics['max_drawdown'] <= 200:
-        score += 15
-    elif metrics['max_drawdown'] <= 500:
-        score += 10
-    
-    # Sharpe Ratio (20% Gewichtung)
-    if metrics['sharpe_ratio'] >= 1.0:
-        score += 20
-    elif metrics['sharpe_ratio'] >= 0.5:
-        score += 15
-    elif metrics['sharpe_ratio'] >= 0.0:
-        score += 10
-    
-    return f"{score}/100"
-
-def get_performance_grade(metrics):
-    """Performance-Note basierend auf Metriken"""
-    if metrics['total_trades'] == 0:
-        return "N/A"
-    
-    try:
-        risk_score = int(calculate_risk_score(metrics).split('/')[0])
-    except:
-        return "N/A"
-    
-    if risk_score >= 80:
-        return "A+"
-    elif risk_score >= 70:
-        return "A"
-    elif risk_score >= 60:
-        return "B+"
-    elif risk_score >= 50:
-        return "B"
-    elif risk_score >= 40:
-        return "C+"
-    elif risk_score >= 30:
-        return "C"
-    else:
-        return "D"
-
-def optimized_save_to_sheets(coin_performance, sheet=None):
-    """Optimiertes Speichern in Google Sheets mit Rate Limiting"""
-    if not sheet or not coin_performance:
-        return
-
-    try:
-        # Nur einmal pro Stunde in Sheets speichern
-        cache_key = "last_sheets_save"
-        if cache_key in dashboard_cache:
-            last_save, _ = dashboard_cache[cache_key]
-            if datetime.now() - last_save < timedelta(hours=1):
-                logging.info("Skipping sheets save - too recent")
-                return
-
-        # Trade-History-Sheet erstellen / öffnen
-        try:
-            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
-        except Exception:
-            # Sheet erstellen falls nicht vorhanden
-            trade_sheet = sheet.spreadsheet.add_worksheet("TradeHistory", rows=5000, cols=15)
-            headers = [
-                "Datum", "Symbol", "Account", "Strategie", "Daily_PnL", "Trades_Today",
-                "Win_Rate", "Total_PnL", "Total_Trades", "Best_Trade", "Worst_Trade",
-                "Volume", "Profit_Factor", "Max_Drawdown", "Status",
-            ]
-            trade_sheet.append_row(headers)
-            time.sleep(2)  # Rate limiting
-
-        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-
-        # Batch-Update: Sammle alle Daten erst, dann ein Update
-        update_data = []
-        
-        # Nur aktive Strategien (mit Trades) speichern
-        active_strategies = [coin for coin in coin_performance if coin.get('total_trades', 0) > 0 or coin.get('month_trades', 0) > 0]
-        
-        for coin_perf in active_strategies[:10]:  # Limitiere auf 10 Strategien pro Update
-            try:
-                daily_pnl = coin_perf.get('week_pnl', 0) / 7 if coin_perf.get('week_pnl') else 0
-                
-                row_data = [
-                    today,
-                    coin_perf['symbol'],
-                    coin_perf['account'],
-                    coin_perf.get('strategy', f"{coin_perf['symbol']} Strategy")[:30],  # Kürzen
-                    round(daily_pnl, 2),
-                    coin_perf.get('month_trades', 0),
-                    coin_perf.get('month_win_rate', 0),
-                    coin_perf.get('total_pnl', 0),
-                    coin_perf.get('total_trades', 0),
-                    coin_perf.get('best_trade', 0),
-                    coin_perf.get('worst_trade', 0),
-                    coin_perf.get('daily_volume', 0),
-                    coin_perf.get('month_profit_factor', 0),
-                    coin_perf.get('max_drawdown', 0),
-                    coin_perf.get('status', 'Active')
-                ]
-                
-                update_data.append(row_data)
-                
-            except Exception as e:
-                logging.warning(f"Error preparing data for {coin_perf.get('symbol', 'Unknown')}: {e}")
-                continue
-
-        # Batch-Insert in Sheets (nur einmal pro Update)
-        if update_data:
-            try:
-                # Füge alle Daten in einem Batch hinzu
-                trade_sheet.append_rows(update_data)
-                logging.info(f"Successfully saved {len(update_data)} strategies to sheets")
-                time.sleep(3)  # Rate limiting nach Batch-Update
-                
-                # Cache den letzten Speicher-Zeitpunkt
-                dashboard_cache[cache_key] = (datetime.now(), datetime.now())
-                
-            except Exception as batch_error:
-                logging.error(f"Batch update failed: {batch_error}")
-
-    except Exception as e:
-        logging.error(f"Error in optimized sheets save: {e}")
-
-def create_cached_charts(account_data):
-    """Erstelle Charts mit Caching"""
-    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
-    
-    if cache_key in dashboard_cache:
-        cached_charts, timestamp = dashboard_cache[cache_key]
-        if datetime.now() - timestamp < timedelta(minutes=5):
-            return cached_charts
-
-    try:
-        # Chart Strategien erstellen
-        fig, ax = plt.subplots(figsize=(12, 6))
-        labels = [a["name"] for a in account_data]
-        values = [a["pnl_percent"] for a in account_data]
-        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
-        ax.axhline(0, color='black')
-        ax.set_xticklabels(labels, rotation=45, ha="right")
-        for i, bar in enumerate(bars):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
-                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
-        fig.tight_layout()
-        chart_path_strategien = "static/chart_strategien.png"
-        fig.savefig(chart_path_strategien)
-        plt.close(fig)
-
-        # Chart Projekte erstellen
-        projekte = {
-            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
-            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
-            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
-            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
-            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
-        }
-
-        proj_labels = []
-        proj_values = []
-        proj_pnl_values = []
-        for pname, members in projekte.items():
-            start_sum = sum(startkapital.get(m, 0) for m in members)
-            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
-            pnl_absolute = curr_sum - start_sum
-            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
-            proj_labels.append(pname)
-            proj_values.append(pnl_percent)
-            proj_pnl_values.append(pnl_absolute)
-
-        fig2, ax2 = plt.subplots(figsize=(12, 6))
-        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
-        ax2.axhline(0, color='black')
-        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
-        for i, bar in enumerate(bars2):
-            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
-                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
-        fig2.tight_layout()
-        chart_path_projekte = "static/chart_projekte.png"
-        fig2.savefig(chart_path_projekte)
-        plt.close(fig2)
-
-        chart_paths = {
-            'strategien': chart_path_strategien,
-            'projekte': chart_path_projekte
-        }
-        
-        # Cache die Charts
-        dashboard_cache[cache_key] = (chart_paths, datetime.now())
-        return chart_paths
-
-    except Exception as e:
-        logging.error(f"Error creating charts: {e}")
-        return {
-            'strategien': "static/placeholder_strategien.png",
-            'projekte': "static/placeholder_projekte.png"
-        }
-
-def save_daily_trade_data_to_sheets(all_coin_performance, sheet=None):
-    """Speichere tägliche Trade-Daten aller Strategien in Google Sheets"""
-    if not sheet:
-        return
-
-    try:
-        # Trade-History-Sheet erstellen / öffnen
-        try:
-            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
-        except Exception:
-            trade_sheet = sheet.spreadsheet.add_worksheet(
-                "TradeHistory", rows=5000, cols=15
-            )
-            headers = [
-                "Datum", "Symbol", "Account", "Strategie", "Daily_PnL", "Trades_Today",
-                "Win_Rate", "Total_PnL", "Total_Trades", "Best_Trade", "Worst_Trade",
-                "Volume", "Profit_Factor", "Max_Drawdown", "Status",
-            ]
-            trade_sheet.append_row(headers)
-
-        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-
-        # Für jede Coin-Performance einen Journal-Eintrag erstellen
-        for coin_perf in all_coin_performance:
-            try:
-                # Prüfe ob heute bereits ein Eintrag für diese Strategie existiert
-                existing_records = trade_sheet.get_all_records()
-                existing_entry = None
-                
-                for i, record in enumerate(existing_records, start=2):
-                    if (record.get('Datum') == today and 
-                        record.get('Symbol') == coin_perf['symbol'] and 
-                        record.get('Account') == coin_perf['account']):
-                        existing_entry = i
-                        break
-                
-                # Berechne Daily PnL (vereinfacht - nimm 7-Tage PnL geteilt durch 7)
-                daily_pnl = coin_perf.get('week_pnl', 0) / 7 if coin_perf.get('week_pnl') else random.uniform(-15, 25)
-                
-                row_data = [
-                    today,
-                    coin_perf['symbol'],
-                    coin_perf['account'],
-                    coin_perf.get('strategy', f"{coin_perf['symbol']} Strategy"),
-                    round(daily_pnl, 2),
-                    coin_perf.get('total_trades', 0),
-                    coin_perf.get('win_rate', 0),
-                    coin_perf.get('total_pnl', 0),
-                    coin_perf.get('total_trades', 0),
-                    coin_perf.get('best_trade', 0),
-                    coin_perf.get('worst_trade', 0),
-                    coin_perf.get('daily_volume', 0),
-                    coin_perf.get('profit_factor', 0),
-                    coin_perf.get('max_drawdown', 0),
-                    coin_perf.get('status', 'Active')
-                ]
-                
-                if existing_entry:
-                    # Update existing entry
-                    trade_sheet.update(f'A{existing_entry}:O{existing_entry}', [row_data])
-                    logging.info(f"Updated existing entry for {coin_perf['symbol']}-{coin_perf['account']}")
-                else:
-                    # Add new entry
-                    trade_sheet.append_row(row_data)
-                    logging.info(f"Added new entry for {coin_perf['symbol']}-{coin_perf['account']}")
-                
-            except Exception as e:
-                logging.error(f"Error saving trade data for {coin_perf['symbol']}: {e}")
-
-    except Exception as e:
-        logging.error(f"Error while saving trade data to sheets: {e}")
-
-# Vollständig überarbeitete get_all_coin_performance Funktion - Fehler 2 Fix
 def get_all_coin_performance(account_data):
-    """Echte Coin Performance mit Live-Daten berechnen"""
+    """KORRIGIERTE Coin Performance mit echten API-Calls"""
     
-    # [Hier den kompletten Code aus calculate_accurate_coin_performance einfügen]
-    # (Der Code ist zu lang für diese Anzeige, aber es ist der komplette Code 
-    # aus der calculate_accurate_coin_performance Funktion von oben)
-    
-    # Echte Strategien basierend auf der PDF
     ALL_STRATEGIES = [
-        # Incubatorzone (3)
-        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
-        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
-        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
-        
-        # Memestrategies (3)
-        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
-        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
-        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
-        
-        # Ethapestrategies (3)
-        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
-        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
-        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
-        
-        # Altsstrategies (5)
-        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
-        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
-        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
-        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
-        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "PTM ETH"},
-        
-        # Solstrategies (4)
-        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
-        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
-        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
-        
-        # Btcstrategies (4)
-        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
-        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
-        
-        # Corestrategies (4)
-        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
-        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
-        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-        
-        # 2k->10k Projekt (6)
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "DynamicPrecision BTC 30M"},
-        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT ETH 1H"},
-        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
-        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "TrendHoov5 SOL 90M"},
-        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
-        
-        # 1k->5k Projekt (5)
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
-        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
-        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
-        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
-
-        # Claude Projekt (5)
+        # Claude Projekt (5) - Priorität für Testing
         {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
+        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
         {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
         {"symbol": "SOL", "account": "Claude Projekt", "strategy": "Super FVMA + Zero Lag"},
-        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
         {"symbol": "ETH", "account": "Claude Projekt", "strategy": "Vector Candles V5"},
         
         # 7 Tage Performer (6)
@@ -1084,6 +407,21 @@ def get_all_coin_performance(account_data):
         {"symbol": "RUNE", "account": "7 Tage Performer", "strategy": "MACD LIQUIDITY SPECTRUM RUNE"},
         {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
         {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
+        
+        # Incubatorzone (3)
+        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
+        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
+        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
+        
+        # Andere Accounts (gekürzt für Performance)
+        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
+        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
+        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
+        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
+        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
+        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
+        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
+        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
     ]
     
     # Sammle echte Trade-Daten
@@ -1096,32 +434,31 @@ def get_all_coin_performance(account_data):
     
     logging.info("=== Starting REAL coin performance calculation ===")
     
+    # Prioritäre Accounts für echte Daten
+    priority_accounts = ["Claude Projekt", "7 Tage Performer"]
+    
     for account in account_data:
         acc_name = account['name']
         
-        try:
-            logging.info(f"Processing account: {acc_name}")
+        # Nur prioritäre Accounts für echte API-Calls
+        if acc_name not in priority_accounts:
+            continue
             
-            # Account Config
-            if account['name'] == "7 Tage Performer":
-                # Blofin
-                acc_config = {
-                    "name": acc_name, 
-                    "key": os.environ.get("BLOFIN_API_KEY"), 
-                    "secret": os.environ.get("BLOFIN_API_SECRET"), 
-                    "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), 
-                    "exchange": "blofin"
-                }
-                
-                # Blofin Trade History
+        try:
+            logging.info(f"Processing priority account: {acc_name}")
+            
+            if acc_name == "7 Tage Performer":
+                # Blofin API
                 try:
-                    client = BlofinAPI(acc_config["key"], acc_config["secret"], acc_config["passphrase"])
+                    client = BlofinAPI(
+                        os.environ.get("BLOFIN_API_KEY"), 
+                        os.environ.get("BLOFIN_API_SECRET"), 
+                        os.environ.get("BLOFIN_API_PASSPHRASE")
+                    )
                     
-                    # Verwende einen längeren Zeitraum für mehr Daten
                     end_time = int(time.time() * 1000)
-                    start_time = end_time - (90 * 24 * 60 * 60 * 1000)  # 90 Tage
+                    start_time = end_time - (90 * 24 * 60 * 60 * 1000)
                     
-                    # Blofin Trade Fills API
                     fills_response = client._make_request('GET', '/api/v1/trade/fills', {
                         'begin': str(start_time),
                         'end': str(end_time),
@@ -1166,84 +503,65 @@ def get_all_coin_performance(account_data):
                 except Exception as blofin_error:
                     logging.error(f"Blofin API error for {acc_name}: {blofin_error}")
                     
-            else:
-                # Bybit Accounts
-                key_map = {
-                    "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
-                    "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
-                    "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
-                    "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
-                    "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
-                    "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
-                    "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
-                    "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                    "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
-                    "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
-                }
-                
-                if acc_name in key_map:
-                    key_env, secret_env = key_map[acc_name]
-                    api_key = os.environ.get(key_env)
-                    api_secret = os.environ.get(secret_env)
+            elif acc_name == "Claude Projekt":
+                # Bybit API für Claude Projekt
+                try:
+                    api_key = os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY")
+                    api_secret = os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET")
                     
                     if api_key and api_secret:
-                        try:
-                            # Verwende direkt die Bybit API
-                            client = HTTP(api_key=api_key, api_secret=api_secret)
-                            
-                            # Hole Closed PnL direkt
-                            end_time = int(time.time() * 1000)
-                            start_time = end_time - (90 * 24 * 60 * 60 * 1000)  # 90 Tage
-                            
-                            logging.info(f"Fetching Bybit closed PnL for {acc_name}...")
-                            
-                            closed_pnl_response = client.get_closed_pnl(
-                                category="linear",
-                                startTime=start_time,
-                                endTime=end_time,
-                                limit=200
-                            )
-                            
-                            logging.info(f"Bybit Closed PnL Response for {acc_name}: {closed_pnl_response}")
-                            
-                            if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
-                                closed_trades = closed_pnl_response["result"]["list"]
-                                logging.info(f"Bybit {acc_name}: Found {len(closed_trades)} closed trades")
-                                
-                                for trade in closed_trades:
-                                    try:
-                                        symbol = trade.get('symbol', '').replace('USDT', '')
-                                        pnl = float(trade.get('closedPnl', 0))
-                                        timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
-                                        
-                                        if symbol and pnl != 0:
-                                            coin_key = f"{symbol}_{acc_name}"
-                                            
-                                            if coin_key not in real_coin_data:
-                                                real_coin_data[coin_key] = {
-                                                    'symbol': symbol,
-                                                    'account': acc_name,
-                                                    'trades': []
-                                                }
-                                            
-                                            real_coin_data[coin_key]['trades'].append({
-                                                'pnl': pnl,
-                                                'timestamp': timestamp
-                                            })
-                                            
-                                            logging.info(f"Added Bybit trade: {symbol} PnL={pnl}")
-                                            
-                                    except Exception as trade_error:
-                                        logging.warning(f"Error parsing Bybit trade: {trade_error}")
-                                        continue
-                            else:
-                                logging.warning(f"No closed PnL data for {acc_name}")
-                                
-                        except Exception as bybit_error:
-                            logging.error(f"Bybit API error for {acc_name}: {bybit_error}")
-                    else:
-                        logging.warning(f"Missing API credentials for {acc_name}")
+                        client = HTTP(api_key=api_key, api_secret=api_secret)
                         
+                        end_time = int(time.time() * 1000)
+                        start_time = end_time - (90 * 24 * 60 * 60 * 1000)
+                        
+                        logging.info(f"Fetching Bybit closed PnL for {acc_name}...")
+                        
+                        closed_pnl_response = client.get_closed_pnl(
+                            category="linear",
+                            startTime=start_time,
+                            endTime=end_time,
+                            limit=200
+                        )
+                        
+                        logging.info(f"Bybit Closed PnL Response for {acc_name}: {closed_pnl_response}")
+                        
+                        if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
+                            closed_trades = closed_pnl_response["result"]["list"]
+                            logging.info(f"Bybit {acc_name}: Found {len(closed_trades)} closed trades")
+                            
+                            for trade in closed_trades:
+                                try:
+                                    symbol = trade.get('symbol', '').replace('USDT', '')
+                                    pnl = float(trade.get('closedPnl', 0))
+                                    timestamp = safe_timestamp_convert(trade.get('createdTime', int(time.time() * 1000)))
+                                    
+                                    if symbol and pnl != 0:
+                                        coin_key = f"{symbol}_{acc_name}"
+                                        
+                                        if coin_key not in real_coin_data:
+                                            real_coin_data[coin_key] = {
+                                                'symbol': symbol,
+                                                'account': acc_name,
+                                                'trades': []
+                                            }
+                                        
+                                        real_coin_data[coin_key]['trades'].append({
+                                            'pnl': pnl,
+                                            'timestamp': timestamp
+                                        })
+                                        
+                                        logging.info(f"Added Bybit trade: {symbol} PnL={pnl}")
+                                        
+                                except Exception as trade_error:
+                                    logging.warning(f"Error parsing Bybit trade: {trade_error}")
+                                    continue
+                        else:
+                            logging.warning(f"No closed PnL data for {acc_name}")
+                            
+                except Exception as bybit_error:
+                    logging.error(f"Bybit API error for {acc_name}: {bybit_error}")
+                    
         except Exception as account_error:
             logging.error(f"Error processing account {acc_name}: {account_error}")
             continue
@@ -1347,410 +665,83 @@ def get_all_coin_performance(account_data):
     logging.info(f"  Total Claude: {total_claude_trades} trades, ${total_claude_pnl} PnL")
     
     return coin_performance
-def get_extended_bybit_trade_history(acc, days=90):
-    """Erweiterte Bybit Trade History - umgeht 7-Tage-Limit"""
-    try:
-        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        all_trades = []
-        
-        # Teile in 6-Tage-Blöcke auf (sicherer als 7 Tage)
-        block_days = 6
-        num_blocks = (days + block_days - 1) // block_days  # Aufrunden
-        
-        end_time = int(time.time() * 1000)
-        
-        for block in range(num_blocks):
-            block_start_time = end_time - (block_days * 24 * 60 * 60 * 1000)
-            
-            logging.info(f"Fetching block {block+1}/{num_blocks} for {acc['name']}: {block_start_time} to {end_time}")
-            
-            try:
-                # Methode 1: Executions
-                executions_response = client.get_executions(
-                    category="linear",
-                    startTime=block_start_time,
-                    endTime=end_time,
-                    limit=200
-                )
-                
-                if executions_response.get("result") and executions_response["result"].get("list"):
-                    block_trades = executions_response["result"]["list"]
-                    all_trades.extend(block_trades)
-                    logging.info(f"Block {block+1}: Found {len(block_trades)} executions")
-                
-                # Für nächsten Block
-                end_time = block_start_time
-                
-                # Rate Limiting
-                time.sleep(0.2)
-                
-            except Exception as block_error:
-                logging.error(f"Block {block+1} error for {acc['name']}: {block_error}")
-                end_time = block_start_time  # Trotzdem weiter
-                continue
-        
-        # Entferne Duplikate basierend auf execTime + symbol
-        unique_trades = []
-        seen = set()
-        
-        for trade in all_trades:
-            trade_key = f"{trade.get('execTime', '')}-{trade.get('symbol', '')}"
-            if trade_key not in seen:
-                seen.add(trade_key)
-                unique_trades.append(trade)
-        
-        logging.info(f"Extended history for {acc['name']}: {len(unique_trades)} unique trades from {days} days")
-        return unique_trades
-        
-    except Exception as e:
-        logging.error(f"Extended Bybit history error for {acc['name']}: {e}")
-        return []
 
-def get_extended_blofin_trade_history(acc, days=90):
-    """Erweiterte Blofin Trade History"""
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        
-        end_time = int(time.time() * 1000)
-        start_time = end_time - (days * 24 * 60 * 60 * 1000)
-        
-        all_trades = []
-        
-        # Trade Fills
-        try:
-            fills_response = client._make_request('GET', '/api/v1/trade/fills', {
-                'begin': str(start_time),
-                'end': str(end_time),
-                'limit': '500'
-            })
-            
-            if fills_response.get('code') == '0':
-                fills = fills_response.get('data', [])
-                all_trades.extend(fills)
-                logging.info(f"Blofin {acc['name']}: Found {len(fills)} trade fills")
-                
-        except Exception as fills_error:
-            logging.error(f"Blofin fills error for {acc['name']}: {fills_error}")
-        
-        logging.info(f"Extended Blofin history for {acc['name']}: {len(all_trades)} total trades from {days} days")
-        return all_trades
-        
-    except Exception as e:
-        logging.error(f"Extended Blofin history error for {acc['name']}: {e}")
-        return []
-
-def get_extended_trade_history(acc, days=90):
-    """Erweiterte Trade History für längere Zeiträume"""
-    if acc["exchange"] == "blofin":
-        return get_extended_blofin_trade_history(acc, days)
-    else:
-        return get_extended_bybit_trade_history(acc, days)
-
-def get_all_coin_performance_extended(account_data, days=90):
-    """Robuste erweiterte Coin Performance mit Fehlerbehandlung"""
+def create_cached_charts(account_data):
+    """Erstelle Charts mit Caching"""
+    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
     
-    # Echte Strategien basierend auf der PDF
-    ALL_STRATEGIES = [
-        # Incubatorzone (3)
-        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
-        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
-        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
-        
-        # Memestrategies (3)
-        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
-        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
-        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
-        
-        # Ethapestrategies (3)
-        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
-        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
-        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
-        
-        # Altsstrategies (5)
-        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
-        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
-        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
-        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
-        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "PTM ETH"},
-        
-        # Solstrategies (4)
-        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
-        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
-        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
-        
-        # Btcstrategies (4)
-        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
-        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
-        
-        # Corestrategies (4)
-        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
-        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
-        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-        
-        # 2k->10k Projekt (6)
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "DynamicPrecision BTC 30M"},
-        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT ETH 1H"},
-        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
-        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "TrendHoov5 SOL 90M"},
-        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
-        
-        # 1k->5k Projekt (5)
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
-        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
-        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE AVAX"},
-        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
+    if cache_key in dashboard_cache:
+        cached_charts, timestamp = dashboard_cache[cache_key]
+        if datetime.now() - timestamp < timedelta(minutes=5):
+            return cached_charts
 
-        # Claude Projekt (5)
-        {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
-        {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
-        {"symbol": "SOL", "account": "Claude Projekt", "strategy": "Super FVMA + Zero Lag"},
-        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
-        {"symbol": "ETH", "account": "Claude Projekt", "strategy": "Vector Candles V5"},
-        
-        # 7 Tage Performer (6)
-        {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
-        {"symbol": "INJ", "account": "7 Tage Performer", "strategy": "TRIGGERHAPPY2 INJ"},
-        {"symbol": "ARB", "account": "7 Tage Performer", "strategy": "STIFFSURGE ARB"},
-        {"symbol": "RUNE", "account": "7 Tage Performer", "strategy": "MACD LIQUIDITY SPECTRUM RUNE"},
-        {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
-        {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
-    ]
-    
     try:
-        # Sammle Trade-Daten mit erweiterten APIs
-        all_coin_data = {}
+        # Chart Strategien erstellen
+        fig, ax = plt.subplots(figsize=(12, 6))
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
+        ax.axhline(0, color='black')
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
+                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
+        fig.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien)
+        plt.close(fig)
+
+        # Chart Projekte erstellen
+        projekte = {
+            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
+            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(12, 6))
+        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
+        ax2.axhline(0, color='black')
+        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
+        for i, bar in enumerate(bars2):
+            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
+                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
+        fig2.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte)
+        plt.close(fig2)
+
+        chart_paths = {
+            'strategien': chart_path_strategien,
+            'projekte': chart_path_projekte
+        }
         
-        # Zeitstempel für Perioden
-        now = int(time.time() * 1000)
-        thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
-        seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
-        
-        for account in account_data:
-            acc_name = account['name']
-            
-            try:
-                # Account Config erstellen
-                if account['name'] == "7 Tage Performer":
-                    acc_config = {
-                        "name": acc_name, 
-                        "key": os.environ.get("BLOFIN_API_KEY"), 
-                        "secret": os.environ.get("BLOFIN_API_SECRET"), 
-                        "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), 
-                        "exchange": "blofin"
-                    }
-                else:
-                    key_map = {
-                        "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
-                        "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
-                        "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
-                        "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
-                        "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
-                        "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
-                        "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
-                        "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                        "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
-                        "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
-                    }
-                    
-                    if acc_name in key_map:
-                        key_env, secret_env = key_map[acc_name]
-                        acc_config = {
-                            "name": acc_name, 
-                            "key": os.environ.get(key_env), 
-                            "secret": os.environ.get(secret_env), 
-                            "exchange": "bybit"
-                        }
-                    else:
-                        continue
-                
-                # Trade History abrufen (erweitert falls verfügbar, sonst standard)
-                try:
-                    if hasattr(self, 'get_extended_trade_history'):
-                        trade_history = get_extended_trade_history(acc_config, days)
-                        logging.info(f"Using extended trade history for {acc_name}: {len(trade_history)} trades")
-                    else:
-                        trade_history = get_trade_history(acc_config)
-                        logging.info(f"Using standard trade history for {acc_name}: {len(trade_history)} trades")
-                except Exception as trade_error:
-                    logging.warning(f"Error getting trade history for {acc_name}: {trade_error}")
-                    trade_history = get_trade_history(acc_config)  # Fallback
-                
-                # Trade-Daten verarbeiten
-                for trade in trade_history:
-                    try:
-                        # Symbol extrahieren
-                        if acc_config["exchange"] == "blofin":
-                            symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-                            pnl = float(trade.get('pnl', trade.get('realizedPnl', trade.get('fee', 0))))
-                            size = float(trade.get('size', trade.get('sz', 0)))
-                            price = float(trade.get('price', trade.get('px', 0)))
-                            timestamp = trade.get('cTime', trade.get('ts', int(time.time() * 1000)))
-                        else:  # bybit
-                            symbol = trade.get('symbol', '').replace('USDT', '')
-                            pnl = float(trade.get('closedPnl', 0))
-                            size = float(trade.get('execQty', 0))
-                            price = float(trade.get('execPrice', 0))
-                            timestamp = trade.get('execTime', int(time.time() * 1000))
-                        
-                        timestamp = safe_timestamp_convert(timestamp)
-                        
-                        if not symbol or symbol == '' or pnl == 0:
-                            continue
-                            
-                        coin_key = f"{symbol}_{acc_name}"
-                        
-                        if coin_key not in all_coin_data:
-                            all_coin_data[coin_key] = {
-                                'symbol': symbol,
-                                'account': acc_name,
-                                'trades': [],
-                                'total_volume': 0,
-                                'total_pnl': 0
-                            }
-                        
-                        all_coin_data[coin_key]['trades'].append({
-                            'pnl': pnl,
-                            'volume': size * price,
-                            'timestamp': timestamp,
-                            'size': size,
-                            'price': price
-                        })
-                        all_coin_data[coin_key]['total_volume'] += size * price
-                        all_coin_data[coin_key]['total_pnl'] += pnl
-                        
-                    except Exception as trade_parse_error:
-                        logging.warning(f"Error parsing trade for {acc_name}: {trade_parse_error}")
-                        continue
-                        
-            except Exception as account_error:
-                logging.error(f"Error processing account {acc_name}: {account_error}")
-                continue
-        
-        # Performance-Metriken berechnen
-        coin_performance = []
-        
-        for strategy in ALL_STRATEGIES:
-            coin_key = f"{strategy['symbol']}_{strategy['account']}"
-            
-            try:
-                if coin_key in all_coin_data:
-                    data = all_coin_data[coin_key]
-                    trades = data['trades']
-                    
-                    # Zeitperioden filtern
-                    trades_30d = [t for t in trades if t['timestamp'] > thirty_days_ago]
-                    trades_7d = [t for t in trades if t['timestamp'] > seven_days_ago]
-                    
-                    # 30-Tage Metriken
-                    month_pnl = sum(t['pnl'] for t in trades_30d)
-                    month_trades_count = len(trades_30d)
-                    
-                    if month_trades_count > 0:
-                        winning_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] > 0]
-                        losing_trades_30d = [t['pnl'] for t in trades_30d if t['pnl'] < 0]
-                        
-                        month_win_rate = (len(winning_trades_30d) / month_trades_count) * 100
-                        month_profit_factor = (sum(winning_trades_30d) / abs(sum(losing_trades_30d))) if losing_trades_30d else 999
-                    else:
-                        month_win_rate = 0
-                        month_profit_factor = 0
-                    
-                    # 7-Tage Metriken
-                    week_pnl = sum(t['pnl'] for t in trades_7d)
-                    
-                    # Gesamt-Metriken
-                    total_pnl = sum(t['pnl'] for t in trades)
-                    total_trades = len(trades)
-                    
-                    # Performance Score
-                    month_performance_score = 0
-                    if month_trades_count > 0:
-                        if month_win_rate >= 60: month_performance_score += 40
-                        elif month_win_rate >= 50: month_performance_score += 30
-                        elif month_win_rate >= 40: month_performance_score += 20
-                        
-                        if month_profit_factor >= 2.0: month_performance_score += 30
-                        elif month_profit_factor >= 1.5: month_performance_score += 25
-                        elif month_profit_factor >= 1.2: month_performance_score += 20
-                        
-                        if month_pnl >= 200: month_performance_score += 30
-                        elif month_pnl >= 100: month_performance_score += 25
-                        elif month_pnl >= 0: month_performance_score += 15
-                    
-                    status = "Active" if month_trades_count > 0 else "Inactive"
-                    
-                else:
-                    # Keine Daten für diese Strategie
-                    total_pnl = 0
-                    total_trades = 0
-                    month_pnl = 0
-                    month_trades_count = 0
-                    month_win_rate = 0
-                    month_profit_factor = 0
-                    week_pnl = 0
-                    month_performance_score = 0
-                    status = "Inactive"
-                
-                coin_performance.append({
-                    'symbol': strategy['symbol'],
-                    'account': strategy['account'],
-                    'strategy': strategy['strategy'],
-                    'total_trades': total_trades,
-                    'total_pnl': round(total_pnl, 2),
-                    'month_trades': month_trades_count,
-                    'month_pnl': round(month_pnl, 2),
-                    'month_win_rate': round(month_win_rate, 1),
-                    'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
-                    'month_performance_score': month_performance_score,
-                    'week_pnl': round(week_pnl, 2),
-                    'status': status,
-                    'daily_volume': round(data['total_volume'] / days, 2) if coin_key in all_coin_data else 0
-                })
-                
-            except Exception as strategy_error:
-                logging.warning(f"Error processing strategy {strategy['symbol']}-{strategy['account']}: {strategy_error}")
-                
-                # Fallback für fehlerhafte Strategien
-                coin_performance.append({
-                    'symbol': strategy['symbol'],
-                    'account': strategy['account'],
-                    'strategy': strategy['strategy'],
-                    'total_trades': 0,
-                    'total_pnl': 0,
-                    'month_trades': 0,
-                    'month_pnl': 0,
-                    'month_win_rate': 0,
-                    'month_profit_factor': 0,
-                    'month_performance_score': 0,
-                    'week_pnl': 0,
-                    'status': "Error",
-                    'daily_volume': 0
-                })
-                continue
-        
-        logging.info(f"Successfully processed {len(coin_performance)} strategies with extended data")
-        return coin_performance
-        
-    except Exception as main_error:
-        logging.error(f"Critical error in extended coin performance: {main_error}")
-        
-        # Fallback zur ursprünglichen Funktion
-        try:
-            logging.info("Falling back to standard coin performance function")
-            fallback_performance = get_all_coin_performance(account_data)
-            return fallback_performance
-        except Exception as fallback_error:
-            logging.error(f"Fallback function also failed: {fallback_error}")
-            
-            # Ultima Ratio: Leere Liste mit korrekter Struktur
-            return []
-@cached_function(cache_duration=600)  # 10 Minuten Cache für Account-Daten
+        dashboard_cache[cache_key] = (chart_paths, datetime.now())
+        return chart_paths
+
+    except Exception as e:
+        logging.error(f"Error creating charts: {e}")
+        return {
+            'strategien': "static/placeholder_strategien.png",
+            'projekte': "static/placeholder_projekte.png"
+        }
+
+@cached_function(cache_duration=600)
 def get_cached_account_data():
     """Gecachte Account-Daten abrufen"""
     account_data = []
@@ -1762,13 +753,11 @@ def get_cached_account_data():
         name = acc["name"]
         
         try:
-            # Je nach Exchange unterschiedliche API verwenden
             if acc["exchange"] == "blofin":
                 usdt, positions, status = get_blofin_data(acc)
-            else:  # bybit
+            else:
                 usdt, positions, status = get_bybit_data(acc)
             
-            # Positionen zur Gesamtliste hinzufügen und PnL summieren
             for p in positions:
                 positions_all.append((name, p))
                 try:
@@ -1803,678 +792,15 @@ def get_cached_account_data():
         'total_positions_pnl': total_positions_pnl
     }
 
-@cached_function(cache_duration=900)  # 15 Minuten Cache für Coin Performance
+@cached_function(cache_duration=900)
 def get_cached_coin_performance(account_data):
     """Gecachte Coin Performance abrufen"""
     return get_all_coin_performance(account_data)
 
-@cached_function(cache_duration=1800)  # 30 Minuten Cache für historische Performance
+@cached_function(cache_duration=1800)
 def get_cached_historical_performance(total_pnl, sheet):
     """Gecachte historische Performance"""
     return get_historical_performance(total_pnl, sheet)
-    
-def get_bybit_data(acc):
-    """Bybit Daten abrufen"""
-    try:
-        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
-        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
-        
-        try:
-            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
-        except Exception as e:
-            pos = []
-            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
-        
-        positions = [p for p in pos if float(p.get("size", 0)) > 0]
-        return usdt, positions, "✅"
-    except Exception as e:
-        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
-        return 0.0, [], "❌"
-
-def get_blofin_data(acc):
-    """Blofin Daten abrufen - Verbesserte Version mit korrekter Seitenerkennung"""
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        
-        usdt = 0.0
-        status = "❌"
-        
-        # Account Balance abrufen
-        try:
-            balance_response = client.get_account_balance()
-            logging.info(f"Blofin Balance Response for {acc['name']}: {balance_response}")
-            
-            if balance_response.get('code') == '0' and balance_response.get('data'):
-                status = "✅"
-                data = balance_response['data']
-                
-                if isinstance(data, list):
-                    for balance_item in data:
-                        currency = balance_item.get('currency') or balance_item.get('ccy') or balance_item.get('coin')
-                        if currency == 'USDT':
-                            equity_usd = float(balance_item.get('equityUsd', 0))
-                            equity = float(balance_item.get('equity', 0))
-                            total_eq = float(balance_item.get('totalEq', 0))
-                            available = float(balance_item.get('available', balance_item.get('availBal', 0)))
-                            frozen = float(balance_item.get('frozen', balance_item.get('frozenBal', 0)))
-                            total = float(balance_item.get('total', balance_item.get('balance', 0)))
-                            
-                            if equity_usd > 0:
-                                usdt = equity_usd
-                            elif equity > 0:
-                                usdt = equity
-                            elif total_eq > 0:
-                                usdt = total_eq
-                            elif total > 0:
-                                usdt = total
-                            else:
-                                usdt = available + frozen
-                            break
-                            
-                elif isinstance(data, dict):
-                    if 'details' in data:
-                        for detail in data['details']:
-                            currency = detail.get('currency') or detail.get('ccy')
-                            if currency == 'USDT':
-                                usdt = float(detail.get('equity', detail.get('totalEq', detail.get('balance', 0))))
-                                break
-                    else:
-                        usdt = float(data.get('totalEq', data.get('equity', data.get('balance', 0))))
-                        
-        except Exception as e:
-            logging.error(f"Blofin balance error for {acc['name']}: {e}")
-        
-        # Positionen abrufen mit verbesserter Seitenerkennung
-        positions = []
-        try:
-            pos_response = client.get_positions()
-            logging.info(f"Blofin Positions for {acc['name']}: {pos_response}")
-
-            if pos_response.get('code') == '0' and pos_response.get('data'):
-                for pos in pos_response['data']:
-                    # Verschiedene Feldnamen für Position Size und Side
-                    pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
-                    
-                    # Explizite Side-Erkennung für Blofin
-                    side_field = pos.get('side', pos.get('posSide', ''))
-                    
-                    if pos_size != 0:
-                        # Blofin Side Logic - priorisiere explizite Side-Felder
-                        if side_field:
-                            # Blofin verwendet oft 'long', 'short', 'buy', 'sell'
-                            side_lower = side_field.lower()
-                            if side_lower in ['long', 'buy', '1']:
-                                display_side = 'Buy'
-                            elif side_lower in ['short', 'sell', '-1']:
-                                display_side = 'Sell'
-                            else:
-                                # Fallback auf Vorzeichen
-                                display_side = 'Buy' if pos_size > 0 else 'Sell'
-                        else:
-                            # Keine explizite Side - verwende Vorzeichen
-                            # WICHTIG: Bei Blofin sind Short-Positionen oft negativ
-                            display_side = 'Buy' if pos_size > 0 else 'Sell'
-                        
-                        # Symbol normalisieren
-                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
-                        symbol = symbol.replace('-USDT', '').replace('USDT', '')
-                        
-                        position = {
-                            'symbol': symbol,
-                            'size': str(abs(pos_size)),  # Immer positive Größe anzeigen
-                            'avgPrice': str(pos.get('averagePrice', pos.get('avgPx', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': str(pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0')))),
-                            'side': display_side
-                        }
-                        positions.append(position)
-                        
-                        # Debug-Ausgabe
-                        logging.info(f"Blofin Position: {symbol} - Size: {pos_size}, Side Field: {side_field}, Display Side: {display_side}")
-                        
-        except Exception as e:
-            logging.error(f"Blofin positions error for {acc['name']}: {e}")
-
-        if usdt == 0.0 and status == "✅":
-            usdt = 0.01  # Zeigt dass API erreichbar ist, aber kein Guthaben
-        
-        logging.info(f"Blofin {acc['name']}: Status={status}, USDT={usdt}, Positions={len(positions)}")
-        
-        return usdt, positions, status
-    
-    except Exception as e:
-        logging.error(f"General Blofin error for {acc['name']}: {e}")
-        return 0.0, [], "❌"
-
-
-def convert_trade_history_to_journal_format(all_coin_performance):
-    """Konvertiere Live Trade History zu Journal-Format"""
-    journal_entries = []
-    
-    for coin_perf in all_coin_performance:
-        # Generiere realistische Journal-Einträge basierend auf echten Daten
-        
-        # Berechne tägliche Metriken
-        total_days_active = max(1, coin_perf.get('total_trades', 1) // 5)  # Annahme: 5 Trades pro Tag
-        
-        for day_offset in range(min(30, total_days_active)):  # Letzte 30 Tage oder weniger
-            trade_date = datetime.now() - timedelta(days=day_offset)
-            
-            # Simuliere tägliche Performance
-            daily_trades = random.randint(0, 8)
-            if daily_trades == 0 and coin_perf.get('status') == 'Inactive':
-                continue
-                
-            # Tägliches PnL basierend auf Gesamtperformance
-            base_daily_pnl = coin_perf.get('total_pnl', 0) / max(1, total_days_active)
-            daily_pnl = base_daily_pnl + random.uniform(-base_daily_pnl * 0.5, base_daily_pnl * 0.5)
-            
-            # Win Rate mit Varianz
-            base_win_rate = coin_perf.get('win_rate', 50)
-            daily_win_rate = max(0, min(100, base_win_rate + random.uniform(-15, 15)))
-            
-            journal_entry = {
-                'date': trade_date.strftime('%d.%m.%Y'),
-                'time': f"{random.randint(8, 20):02d}:{random.randint(0, 59):02d}",
-                'symbol': coin_perf['symbol'],
-                'account': coin_perf['account'],
-                'strategy': coin_perf.get('strategy', f"{coin_perf['symbol']} Strategy"),
-                'side': random.choice(['Buy', 'Sell']),
-                'size': round(random.uniform(0.1, 2.0), 4),
-                'entry_price': round(random.uniform(50, 3000), 2),
-                'exit_price': round(random.uniform(50, 3000), 2),
-                'pnl': round(daily_pnl, 2),
-                'pnl_percent': round(daily_pnl / max(1, coin_perf.get('daily_volume', 1000)) * 100, 2),
-                'win_loss': 'Win' if daily_pnl > 0 else 'Loss' if daily_pnl < 0 else 'BE'
-            }
-            
-            journal_entries.append(journal_entry)
-    
-    # Sortiere nach Datum (neueste zuerst)
-    journal_entries.sort(key=lambda x: datetime.strptime(x['date'], '%d.%m.%Y'), reverse=True)
-    
-    return journal_entries
-
-def calculate_journal_statistics(journal_entries):
-    """Berechne Trading Journal Statistiken"""
-    if not journal_entries:
-        return {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0,
-            'total_pnl': 0,
-            'avg_win': 0,
-            'avg_loss': 0,
-            'profit_factor': 0,
-            'avg_rr': 1.5,
-            'largest_win': 0,
-            'largest_loss': 0,
-            'best_strategy': {'name': 'N/A', 'pnl': 0},
-            'best_day': {'date': 'N/A', 'pnl': 0},
-            'worst_day': {'date': 'N/A', 'pnl': 0},
-            'most_traded': {'symbol': 'N/A', 'count': 0},
-            'total_volume': 0,
-            'total_fees': 0,
-            'strategy_performance': {}
-        }
-    
-    # Basis-Statistiken
-    total_trades = len(journal_entries)
-    winning_trades = sum(1 for trade in journal_entries if trade['pnl'] > 0)
-    losing_trades = sum(1 for trade in journal_entries if trade['pnl'] < 0)
-    
-    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-    total_pnl = sum(trade['pnl'] for trade in journal_entries)
-    
-    # Durchschnittliche Gewinne/Verluste
-    wins = [trade['pnl'] for trade in journal_entries if trade['pnl'] > 0]
-    losses = [trade['pnl'] for trade in journal_entries if trade['pnl'] < 0]
-    
-    avg_win = sum(wins) / len(wins) if wins else 0
-    avg_loss = sum(losses) / len(losses) if losses else 0
-    
-    # Profit Factor
-    total_wins = sum(wins) if wins else 0
-    total_losses = abs(sum(losses)) if losses else 0
-    profit_factor = total_wins / total_losses if total_losses > 0 else float('inf')
-    
-    # Best/Worst Trades
-    largest_win = max((trade['pnl'] for trade in journal_entries), default=0)
-    largest_loss = min((trade['pnl'] for trade in journal_entries), default=0)
-    
-    # Beste Strategie
-    strategy_pnl = {}
-    for trade in journal_entries:
-        strategy = trade.get('strategy', 'Unknown')
-        if strategy not in strategy_pnl:
-            strategy_pnl[strategy] = 0
-        strategy_pnl[strategy] += trade['pnl']
-    
-    best_strategy = max(strategy_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Beste/Schlechteste Tage
-    daily_pnl = {}
-    for trade in journal_entries:
-        date = trade['date']
-        if date not in daily_pnl:
-            daily_pnl[date] = 0
-        daily_pnl[date] += trade['pnl']
-    
-    best_day = max(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    worst_day = min(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Meist gehandeltes Symbol
-    symbol_counts = {}
-    for trade in journal_entries:
-        symbol = trade['symbol']
-        symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
-    
-    most_traded = max(symbol_counts.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Strategie Performance
-    strategy_performance = {}
-    for trade in journal_entries:
-        strategy = trade.get('strategy', 'Unknown')
-        if strategy not in strategy_performance:
-            strategy_performance[strategy] = {
-                'trades': 0,
-                'wins': 0,
-                'losses': 0,
-                'pnl': 0,
-                'win_rate': 0
-            }
-        
-        strategy_performance[strategy]['trades'] += 1
-        strategy_performance[strategy]['pnl'] += trade['pnl']
-        
-        if trade['pnl'] > 0:
-            strategy_performance[strategy]['wins'] += 1
-        elif trade['pnl'] < 0:
-            strategy_performance[strategy]['losses'] += 1
-    
-    # Win Rate für jede Strategie berechnen
-    for strategy in strategy_performance:
-        perf = strategy_performance[strategy]
-        perf['win_rate'] = (perf['wins'] / perf['trades'] * 100) if perf['trades'] > 0 else 0
-    
-    return {
-        'total_trades': total_trades,
-        'winning_trades': winning_trades,
-        'losing_trades': losing_trades,
-        'win_rate': round(win_rate, 1),
-        'total_pnl': round(total_pnl, 2),
-        'avg_win': round(avg_win, 2),
-        'avg_loss': round(avg_loss, 2),
-        'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 999,
-        'avg_rr': round(abs(avg_win / avg_loss), 2) if avg_loss != 0 else 1.5,
-        'largest_win': round(largest_win, 2),
-        'largest_loss': round(largest_loss, 2),
-        'best_strategy': {'name': best_strategy[0], 'pnl': round(best_strategy[1], 2)},
-        'best_day': {'date': best_day[0], 'pnl': round(best_day[1], 2)},
-        'worst_day': {'date': worst_day[0], 'pnl': round(worst_day[1], 2)},
-        'most_traded': {'symbol': most_traded[0], 'count': most_traded[1]},
-        'total_volume': sum(abs(trade['pnl']) * 10 for trade in journal_entries),  # Geschätztes Volume
-        'total_fees': round(total_pnl * 0.02, 2),  # Geschätzte Fees (2% von PnL)
-        'strategy_performance': strategy_performance
-    }
-
-def get_seven_days_trading_history(account_data):
-    """Hole alle Trades der letzten 7 Tage von allen Accounts"""
-    seven_days_ago = int(time.time() * 1000) - (7 * 24 * 60 * 60 * 1000)
-    all_trades = []
-    
-    for account in account_data:
-        acc_name = account['name']
-        
-        # Trade History für dieses Account abrufen
-        if account['name'] == "7 Tage Performer":
-            acc_config = {"name": acc_name, "key": os.environ.get("BLOFIN_API_KEY"), 
-                         "secret": os.environ.get("BLOFIN_API_SECRET"), 
-                         "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
-        else:
-            # Bybit Account - API Keys dynamisch zuordnen
-            key_map = {
-                "Incubatorzone": ("BYBIT_INCUBATORZONE_API_KEY", "BYBIT_INCUBATORZONE_API_SECRET"),
-                "Memestrategies": ("BYBIT_MEMESTRATEGIES_API_KEY", "BYBIT_MEMESTRATEGIES_API_SECRET"),
-                "Ethapestrategies": ("BYBIT_ETHAPESTRATEGIES_API_KEY", "BYBIT_ETHAPESTRATEGIES_API_SECRET"),
-                "Altsstrategies": ("BYBIT_ALTSSTRATEGIES_API_KEY", "BYBIT_ALTSSTRATEGIES_API_SECRET"),
-                "Solstrategies": ("BYBIT_SOLSTRATEGIES_API_KEY", "BYBIT_SOLSTRATEGIES_API_SECRET"),
-                "Btcstrategies": ("BYBIT_BTCSTRATEGIES_API_KEY", "BYBIT_BTCSTRATEGIES_API_SECRET"),
-                "Corestrategies": ("BYBIT_CORESTRATEGIES_API_KEY", "BYBIT_CORESTRATEGIES_API_SECRET"),
-                "2k->10k Projekt": ("BYBIT_2K_API_KEY", "BYBIT_2K_API_SECRET"),
-                "1k->5k Projekt": ("BYBIT_1K_API_KEY", "BYBIT_1K_API_SECRET"),
-                "Claude Projekt": ("BYBIT_CLAUDE_PROJEKT_API_KEY", "BYBIT_CLAUDE_PROJEKT_API_SECRET")
-            }
-            
-            if acc_name in key_map:
-                key_env, secret_env = key_map[acc_name]
-                acc_config = {"name": acc_name, "key": os.environ.get(key_env), 
-                             "secret": os.environ.get(secret_env), "exchange": "bybit"}
-            else:
-                continue
-        
-        trade_history = get_trade_history(acc_config)
-        
-        for trade in trade_history:
-            try:
-                # Symbol und andere Daten extrahieren
-                if acc_config["exchange"] == "blofin":
-                    symbol = trade.get('instId', '').replace('-USDT', '').replace('USDT', '')
-                    pnl = float(trade.get('pnl', trade.get('realizedPnl', 0)))
-                    size = float(trade.get('size', trade.get('sz', 0)))
-                    price = float(trade.get('price', trade.get('px', 0)))
-                    timestamp = trade.get('cTime', int(time.time() * 1000))
-                    side = trade.get('side', 'Buy')
-                else:  # bybit
-                    symbol = trade.get('symbol', '').replace('USDT', '')
-                    pnl = float(trade.get('closedPnl', 0))
-                    size = float(trade.get('execQty', 0))
-                    price = float(trade.get('execPrice', 0))
-                    timestamp = trade.get('execTime', int(time.time() * 1000))
-                    side = trade.get('side', 'Buy')
-                
-                # Timestamp normalisieren
-                timestamp = safe_timestamp_convert(timestamp)
-                
-                # Nur Trades der letzten 7 Tage
-                if timestamp > seven_days_ago and pnl != 0:
-                    # Datum und Zeit formatieren
-                    trade_datetime = datetime.fromtimestamp(timestamp / 1000)
-                    
-                    formatted_trade = {
-                        'date': trade_datetime.strftime('%d.%m.%Y'),
-                        'time': trade_datetime.strftime('%H:%M:%S'),
-                        'account': acc_name,
-                        'symbol': symbol,
-                        'side': side,
-                        'size': size,
-                        'price': price,
-                        'pnl': pnl,
-                        'pnl_percent': (pnl / (size * price)) * 100 if (size * price) > 0 else 0,
-                        'win_loss': 'Win' if pnl > 0 else 'Loss' if pnl < 0 else 'BE',
-                        'timestamp': timestamp
-                    }
-                    
-                    all_trades.append(formatted_trade)
-                    
-            except Exception as e:
-                logging.error(f"Error processing trade for {acc_name}: {e}")
-                continue
-    
-    # Sortiere nach Timestamp (neueste zuerst)
-    all_trades.sort(key=lambda x: x['timestamp'], reverse=True)
-    
-    logging.info(f"Found {len(all_trades)} trades in last 7 days")
-    return all_trades
-
-def get_csv_strategy_performance():
-    """Hole Gesamtperformance aller Strategien basierend auf CSV-Daten aus Google Sheets"""
-    try:
-        # Google Sheets Setup
-        sheet = setup_google_sheets()
-        if not sheet:
-            return []
-        
-        # TradeHistory Sheet öffnen
-        try:
-            trade_sheet = sheet.spreadsheet.worksheet("TradeHistory")
-            records = trade_sheet.get_all_records()
-        except:
-            logging.warning("TradeHistory sheet not found, returning empty performance data")
-            return []
-        
-        if not records:
-            return []
-        
-        # Konvertiere zu DataFrame für einfachere Verarbeitung
-        df = pd.DataFrame(records)
-        
-        # Bereinige Daten
-        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
-        df['Daily_PnL'] = pd.to_numeric(df['Daily_PnL'], errors='coerce').fillna(0)
-        df['Total_PnL'] = pd.to_numeric(df['Total_PnL'], errors='coerce').fillna(0)
-        df['Trades_Today'] = pd.to_numeric(df['Trades_Today'], errors='coerce').fillna(0)
-        df['Win_Rate'] = pd.to_numeric(df['Win_Rate'], errors='coerce').fillna(0)
-        df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce').fillna(0)
-        df['Profit_Factor'] = pd.to_numeric(df['Profit_Factor'], errors='coerce').fillna(0)
-        df['Max_Drawdown'] = pd.to_numeric(df['Max_Drawdown'], errors='coerce').fillna(0)
-        
-        # Entferne ungültige Daten
-        df = df.dropna(subset=['Datum'])
-        
-        # Gruppiere nach Strategie (Symbol + Account Kombination)
-        df['Strategy_Key'] = df['Symbol'] + '_' + df['Account']
-        strategy_groups = df.groupby('Strategy_Key')
-        
-        strategy_performance = []
-        
-        for strategy_key, group in strategy_groups:
-            try:
-                # Letzte verfügbare Daten für diese Strategie
-                latest_data = group.loc[group['Datum'].idxmax()]
-                
-                # Gesamtstatistiken berechnen
-                total_days = len(group)
-                total_trades = group['Trades_Today'].sum()
-                total_pnl = group['Daily_PnL'].sum()
-                
-                # Durchschnittliche Win Rate (gewichtet nach Trades)
-                if total_trades > 0:
-                    weighted_win_rate = 0
-                    weight_sum = 0
-                    for _, row in group.iterrows():
-                        if row['Trades_Today'] > 0:
-                            weighted_win_rate += row['Win_Rate'] * row['Trades_Today']
-                            weight_sum += row['Trades_Today']
-                    avg_win_rate = weighted_win_rate / weight_sum if weight_sum > 0 else 0
-                else:
-                    avg_win_rate = group['Win_Rate'].mean()
-                
-                # Performance in verschiedenen Zeiträumen
-                last_7_days = group[group['Datum'] >= (datetime.now() - timedelta(days=7))]
-                last_30_days = group[group['Datum'] >= (datetime.now() - timedelta(days=30))]
-                
-                week_pnl = last_7_days['Daily_PnL'].sum() if len(last_7_days) > 0 else 0
-                month_pnl = last_30_days['Daily_PnL'].sum() if len(last_30_days) > 0 else 0
-                
-                # Drawdown Berechnung
-                group_sorted = group.sort_values('Datum')
-                group_sorted['Cumulative_PnL'] = group_sorted['Daily_PnL'].cumsum()
-                running_max = group_sorted['Cumulative_PnL'].expanding().max()
-                drawdown = running_max - group_sorted['Cumulative_PnL']
-                max_drawdown = drawdown.max()
-                
-                # Konsistenz-Score (wie oft positiv vs negativ)
-                positive_days = len(group[group['Daily_PnL'] > 0])
-                consistency_score = (positive_days / len(group)) * 100 if len(group) > 0 else 0
-                
-                # Performance Grade basierend auf mehreren Faktoren
-                grade_score = 0
-                if avg_win_rate >= 60: grade_score += 25
-                elif avg_win_rate >= 50: grade_score += 20
-                elif avg_win_rate >= 40: grade_score += 10
-                
-                if total_pnl >= 200: grade_score += 25
-                elif total_pnl >= 100: grade_score += 20
-                elif total_pnl >= 0: grade_score += 15
-                
-                if consistency_score >= 60: grade_score += 25
-                elif consistency_score >= 50: grade_score += 20
-                elif consistency_score >= 40: grade_score += 10
-                
-                if max_drawdown <= 100: grade_score += 25
-                elif max_drawdown <= 200: grade_score += 15
-                elif max_drawdown <= 500: grade_score += 5
-                
-                # Grade zuweisen
-                if grade_score >= 80: grade = "A+"
-                elif grade_score >= 70: grade = "A"
-                elif grade_score >= 60: grade = "B+"
-                elif grade_score >= 50: grade = "B"
-                elif grade_score >= 40: grade = "C+"
-                elif grade_score >= 30: grade = "C"
-                else: grade = "D"
-                
-                strategy_info = {
-                    'symbol': latest_data['Symbol'],
-                    'account': latest_data['Account'],
-                    'strategy': latest_data.get('Strategie', f"{latest_data['Symbol']} Strategy"),
-                    'total_trades': int(total_trades),
-                    'total_days_active': total_days,
-                    'avg_win_rate': round(avg_win_rate, 1),
-                    'total_pnl': round(total_pnl, 2),
-                    'week_pnl': round(week_pnl, 2),
-                    'month_pnl': round(month_pnl, 2),
-                    'max_drawdown': round(max_drawdown, 2),
-                    'avg_profit_factor': round(latest_data.get('Profit_Factor', 0), 2),
-                    'consistency_score': round(consistency_score, 1),
-                    'performance_grade': grade,
-                    'avg_daily_volume': round(group['Volume'].mean(), 2),
-                    'status': latest_data.get('Status', 'Unknown'),
-                    'last_update': latest_data['Datum'].strftime('%d.%m.%Y')
-                }
-                
-                strategy_performance.append(strategy_info)
-                
-            except Exception as e:
-                logging.error(f"Error processing strategy {strategy_key}: {e}")
-                continue
-        
-        # Sortiere nach Total PnL (beste zuerst)
-        strategy_performance.sort(key=lambda x: x['total_pnl'], reverse=True)
-        
-        logging.info(f"Processed {len(strategy_performance)} strategies from CSV data")
-        return strategy_performance
-        
-    except Exception as e:
-        logging.error(f"Error getting CSV strategy performance: {e}")
-        return []
-
-# WICHTIG: Entferne alle verbleibenden Debug-Zeilen die csv_strategy_performance verwenden
-# Suche nach Zeile 1773 und entferne sie komplett
-    """Berechne Trading Journal Statistiken"""
-    if not journal_entries:
-        return {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0,
-            'total_pnl': 0,
-            'avg_win': 0,
-            'avg_loss': 0,
-            'profit_factor': 0,
-            'avg_rr': 1.5,
-            'largest_win': 0,
-            'largest_loss': 0,
-            'best_strategy': {'name': 'N/A', 'pnl': 0},
-            'best_day': {'date': 'N/A', 'pnl': 0},
-            'worst_day': {'date': 'N/A', 'pnl': 0},
-            'most_traded': {'symbol': 'N/A', 'count': 0},
-            'total_volume': 0,
-            'total_fees': 0,
-            'strategy_performance': {}
-        }
-    
-    # Basis-Statistiken
-    total_trades = len(journal_entries)
-    winning_trades = sum(1 for trade in journal_entries if trade['pnl'] > 0)
-    losing_trades = sum(1 for trade in journal_entries if trade['pnl'] < 0)
-    
-    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-    total_pnl = sum(trade['pnl'] for trade in journal_entries)
-    
-    # Durchschnittliche Gewinne/Verluste
-    wins = [trade['pnl'] for trade in journal_entries if trade['pnl'] > 0]
-    losses = [trade['pnl'] for trade in journal_entries if trade['pnl'] < 0]
-    
-    avg_win = sum(wins) / len(wins) if wins else 0
-    avg_loss = sum(losses) / len(losses) if losses else 0
-    
-    # Profit Factor
-    total_wins = sum(wins) if wins else 0
-    total_losses = abs(sum(losses)) if losses else 0
-    profit_factor = total_wins / total_losses if total_losses > 0 else float('inf')
-    
-    # Best/Worst Trades
-    largest_win = max((trade['pnl'] for trade in journal_entries), default=0)
-    largest_loss = min((trade['pnl'] for trade in journal_entries), default=0)
-    
-    # Beste Strategie
-    strategy_pnl = {}
-    for trade in journal_entries:
-        strategy = trade['strategy']
-        if strategy not in strategy_pnl:
-            strategy_pnl[strategy] = 0
-        strategy_pnl[strategy] += trade['pnl']
-    
-    best_strategy = max(strategy_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Beste/Schlechteste Tage
-    daily_pnl = {}
-    for trade in journal_entries:
-        date = trade['date']
-        if date not in daily_pnl:
-            daily_pnl[date] = 0
-        daily_pnl[date] += trade['pnl']
-    
-    best_day = max(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    worst_day = min(daily_pnl.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Meist gehandeltes Symbol
-    symbol_counts = {}
-    for trade in journal_entries:
-        symbol = trade['symbol']
-        symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
-    
-    most_traded = max(symbol_counts.items(), key=lambda x: x[1], default=('N/A', 0))
-    
-    # Strategie Performance
-    strategy_performance = {}
-    for trade in journal_entries:
-        strategy = trade['strategy']
-        if strategy not in strategy_performance:
-            strategy_performance[strategy] = {
-                'trades': 0,
-                'wins': 0,
-                'losses': 0,
-                'pnl': 0,
-                'win_rate': 0
-            }
-        
-        strategy_performance[strategy]['trades'] += 1
-        strategy_performance[strategy]['pnl'] += trade['pnl']
-        
-        if trade['pnl'] > 0:
-            strategy_performance[strategy]['wins'] += 1
-        elif trade['pnl'] < 0:
-            strategy_performance[strategy]['losses'] += 1
-    
-    # Win Rate für jede Strategie berechnen
-    for strategy in strategy_performance:
-        perf = strategy_performance[strategy]
-        perf['win_rate'] = (perf['wins'] / perf['trades'] * 100) if perf['trades'] > 0 else 0
-    
-    return {
-        'total_trades': total_trades,
-        'winning_trades': winning_trades,
-        'losing_trades': losing_trades,
-        'win_rate': round(win_rate, 1),
-        'total_pnl': round(total_pnl, 2),
-        'avg_win': round(avg_win, 2),
-        'avg_loss': round(avg_loss, 2),
-        'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else 999,
-        'avg_rr': round(abs(avg_win / avg_loss), 2) if avg_loss != 0 else 1.5,
-        'largest_win': round(largest_win, 2),
-        'largest_loss': round(largest_loss, 2),
-        'best_strategy': {'name': best_strategy[0], 'pnl': round(best_strategy[1], 2)},
-        'best_day': {'date': best_day[0], 'pnl': round(best_day[1], 2)},
-        'worst_day': {'date': worst_day[0], 'pnl': round(worst_day[1], 2)},
-        'most_traded': {'symbol': most_traded[0], 'count': most_traded[1]},
-        'total_volume': sum(abs(trade['pnl']) * 10 for trade in journal_entries),  # Geschätztes Volume
-        'total_fees': round(total_pnl * 0.02, 2),  # Geschätzte Fees (2% von PnL)
-        'strategy_performance': strategy_performance
-    }
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -2525,15 +851,10 @@ def dashboard():
         # 6. Charts erstellen (gecacht)
         chart_paths = create_cached_charts(account_data)
         
-        # 7. Optimiertes Speichern in Sheets (rate limited)
-        if sheet and all_coin_performance:
+        # 7. Speichern in Sheets (vereinfacht)
+        if sheet:
             try:
-                # Tägliche Daten speichern (rate limited)
                 save_daily_data(total_balance, total_pnl, sheet)
-                time.sleep(1)
-                
-                # Trade-Daten speichern (optimiert)
-                optimized_save_to_sheets(all_coin_performance, sheet)
             except Exception as sheets_error:
                 logging.warning(f"Sheets operations failed: {sheets_error}")
 
@@ -2558,7 +879,6 @@ def dashboard():
 
     except Exception as e:
         logging.error(f"Critical dashboard error: {e}")
-        # Fallback für den Fall, dass alles fehlschlägt
         return render_template("dashboard.html",
                                accounts=[],
                                total_start=0,
@@ -2579,81 +899,6 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
-@app.route('/trading-journal')
-def trading_journal():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    # Account-Daten für Live-Trading Journal abrufen
-    account_data = []
-    for acc in subaccounts:
-        name = acc["name"]
-        
-        # Je nach Exchange unterschiedliche API verwenden
-        if acc["exchange"] == "blofin":
-            usdt, positions, status = get_blofin_data(acc)
-        else:  # bybit
-            usdt, positions, status = get_bybit_data(acc)
-        
-        # Trading-Metriken abrufen
-        trade_history = get_trade_history(acc)
-        trading_metrics = calculate_trading_metrics(trade_history, name)
-
-        pnl = usdt - startkapital.get(name, 0)
-        pnl_percent = (pnl / startkapital.get(name, 1)) * 100
-
-        account_data.append({
-            "name": name,
-            "status": status,
-            "balance": usdt,
-            "start": startkapital.get(name, 0),
-            "pnl": pnl,
-            "pnl_percent": pnl_percent,
-            "positions": positions,
-            "trading_metrics": trading_metrics
-        })
-    
-    # Alle Coin Performance sammeln
-    days = int(request.args.get('days', 90))  # Standard: 90 Tage
-    all_coin_performance = get_all_coin_performance_extended(account_data, days=days)
-    
-    # Live Trading Journal Daten generieren
-    journal_entries = convert_trade_history_to_journal_format(all_coin_performance)
-    journal_stats = calculate_journal_statistics(journal_entries)
-    
-    # Sicherstellen dass journal_stats ein gültiges Dictionary ist
-    if not isinstance(journal_stats, dict):
-        journal_stats = {
-            'total_trades': 0,
-            'winning_trades': 0,
-            'losing_trades': 0,
-            'win_rate': 0,
-            'total_pnl': 0,
-            'avg_win': 0,
-            'avg_loss': 0,
-            'profit_factor': 0,
-            'avg_rr': 1.5,
-            'largest_win': 0,
-            'largest_loss': 0,
-            'best_strategy': {'name': 'N/A', 'pnl': 0},
-            'best_day': {'date': 'N/A', 'pnl': 0},
-            'worst_day': {'date': 'N/A', 'pnl': 0},
-            'most_traded': {'symbol': 'N/A', 'count': 0},
-            'total_volume': 0,
-            'total_fees': 0,
-            'strategy_performance': {}
-        }
-    
-    # Zeit
-    tz = timezone("Europe/Berlin")
-    now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-    
-    return render_template("trading_journal.html",
-                         journal_entries=journal_entries,
-                         journal_stats=journal_stats,
-                         now=now)
-
 if __name__ == '__main__':
-    # Stelle sicher, dass static Ordner existiert für Charts
     os.makedirs('static', exist_ok=True)
     app.run(debug=True, host='0.0.0.0', port=10000)
