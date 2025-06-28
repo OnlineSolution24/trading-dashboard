@@ -374,132 +374,181 @@ def get_extended_bybit_trade_history(acc, days=90):
         # Fallback zur normalen Trade History
         return get_trade_history(acc)
 
-def get_extended_blofin_trade_history(acc, days=90):
-    """Erweiterte Blofin Trade History"""
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        
-        end_time = int(time.time() * 1000)
-        start_time = end_time - (min(days, 90) * 24 * 60 * 60 * 1000)  # Max 90 Tage
-        
-        all_trades = []
-        
-        # Trade Fills abrufen
-        fills_response = client._make_request('GET', '/api/v1/trade/fills', {
-            'begin': str(start_time),
-            'end': str(end_time),
-            'limit': '500'
-        })
-        
-        if fills_response.get('code') == '0':
-            fills = fills_response.get('data', [])
-            all_trades.extend(fills)
-        
-        logging.info(f"Extended Blofin history for {acc['name']}: {len(all_trades)} trades")
-        return all_trades
-        
-    except Exception as e:
-        logging.error(f"Extended Blofin history error for {acc['name']}: {e}")
-        # Fallback zur normalen Trade History
-        return get_trade_history(acc)
-
-def get_bybit_trade_history(acc):
-    """Bybit Trade History abrufen"""
+def get_bybit_closed_pnl_data(acc, days=30):
+    """Abrufen der echten Bybit Closed PnL Daten statt Executions"""
     try:
         client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
         
-        # Letzte 30 Tage Trades
+        # Verwende get_closed_pnl anstatt get_executions für echte PnL-Daten
         end_time = int(time.time() * 1000)
-        start_time = end_time - (30 * 24 * 60 * 60 * 1000)  # 30 Tage zurück
+        start_time = end_time - (days * 24 * 60 * 60 * 1000)
         
-        logging.info(f"Fetching Bybit trades for {acc['name']} from {start_time} to {end_time}")
+        all_closed_trades = []
         
-        # Versuche verschiedene Endpunkte für Trade-History
-        trades = []
+        # Mehrere Zeitblöcke abrufen (Bybit Limit umgehen)
+        block_days = 7  # 7-Tage-Blöcke
+        num_blocks = (days + block_days - 1) // block_days
         
-        # Methode 1: get_executions (am häufigsten verwendeter Endpunkt)
-        try:
-            executions_response = client.get_executions(
-                category="linear",
-                startTime=start_time,
-                endTime=end_time,
-                limit=200
-            )
-            if executions_response.get("result") and executions_response["result"].get("list"):
-                trades = executions_response["result"]["list"]
-                logging.info(f"Bybit executions found: {len(trades)} for {acc['name']}")
-        except Exception as e:
-            logging.error(f"Error with get_executions for {acc['name']}: {e}")
+        current_end_time = end_time
         
-        # Methode 2: Falls get_executions nicht funktioniert, versuche get_closed_pnl
-        if not trades:
+        for block in range(num_blocks):
+            current_start_time = current_end_time - (block_days * 24 * 60 * 60 * 1000)
+            
             try:
-                pnl_response = client.get_closed_pnl(
+                logging.info(f"Fetching closed PnL for {acc['name']}, block {block+1}/{num_blocks}")
+                
+                # Bybit get_closed_pnl API - das sind die echten abgeschlossenen Trades
+                closed_pnl_response = client.get_closed_pnl(
                     category="linear",
-                    startTime=start_time,
-                    endTime=end_time,
+                    startTime=current_start_time,
+                    endTime=current_end_time,
                     limit=200
                 )
-                if pnl_response.get("result") and pnl_response["result"].get("list"):
-                    pnl_trades = pnl_response["result"]["list"]
-                    logging.info(f"Bybit PnL records found: {len(pnl_trades)} for {acc['name']}")
-                    
-                    # Konvertiere PnL-Records zu Trade-Format
-                    for pnl_record in pnl_trades:
-                        trades.append({
-                            'symbol': pnl_record.get('symbol', ''),
-                            'closedPnl': pnl_record.get('closedPnl', '0'),
-                            'avgEntryPrice': pnl_record.get('avgEntryPrice', '0'),
-                            'qty': pnl_record.get('qty', '0'),
-                            'createdTime': pnl_record.get('createdTime', str(int(time.time() * 1000))),
-                            'execTime': int(pnl_record.get('createdTime', str(int(time.time() * 1000))))
-                        })
-            except Exception as e:
-                logging.error(f"Error with get_closed_pnl for {acc['name']}: {e}")
+                
+                if closed_pnl_response.get("result") and closed_pnl_response["result"].get("list"):
+                    block_trades = closed_pnl_response["result"]["list"]
+                    all_closed_trades.extend(block_trades)
+                    logging.info(f"Block {block+1}: Found {len(block_trades)} closed trades")
+                
+                current_end_time = current_start_time
+                time.sleep(0.2)  # Rate limiting
+                
+            except Exception as block_error:
+                logging.error(f"Error fetching block {block+1} for {acc['name']}: {block_error}")
+                current_end_time = current_start_time
+                continue
         
-        # Methode 3: Falls nichts funktioniert, versuche get_trade_history (falls verfügbar)
-        if not trades:
-            try:
-                # Fallback-Methode
-                trade_response = client.get_trade_history(
-                    category="linear",
-                    startTime=start_time,
-                    endTime=end_time,
-                    limit=200
-                )
-                if trade_response.get("result") and trade_response["result"].get("list"):
-                    trades = trade_response["result"]["list"]
-                    logging.info(f"Bybit trade history found: {len(trades)} for {acc['name']}")
-            except Exception as e:
-                logging.warning(f"get_trade_history not available for {acc['name']}: {e}")
+        # Entferne Duplikate
+        unique_trades = []
+        seen = set()
         
-        # Falls immer noch keine Trades, versuche aktuelle Positionen als Fallback
-        if not trades:
-            try:
-                positions_response = client.get_positions(category="linear", settleCoin="USDT")
-                if positions_response.get("result") and positions_response["result"].get("list"):
-                    positions = positions_response["result"]["list"]
-                    logging.info(f"Bybit positions found: {len(positions)} for {acc['name']}")
-                    
-                    # Konvertiere Positionen zu Trade-ähnlichen Records (nur für Demo)
-                    for pos in positions:
-                        if float(pos.get("size", 0)) > 0:
-                            trades.append({
-                                'symbol': pos.get('symbol', ''),
-                                'closedPnl': pos.get('unrealisedPnl', '0'),
-                                'execPrice': pos.get('avgPrice', '0'),
-                                'execQty': pos.get('size', '0'),
-                                'execTime': int(time.time() * 1000)
-                            })
-            except Exception as e:
-                logging.error(f"Error getting positions fallback for {acc['name']}: {e}")
+        for trade in all_closed_trades:
+            # Eindeutiger Key basierend auf Zeit + Symbol + PnL
+            trade_key = f"{trade.get('createdTime', '')}-{trade.get('symbol', '')}-{trade.get('closedPnl', '')}"
+            if trade_key not in seen:
+                seen.add(trade_key)
+                unique_trades.append(trade)
         
-        logging.info(f"Final trades count for {acc['name']}: {len(trades)}")
-        return trades
+        logging.info(f"Closed PnL for {acc['name']}: {len(unique_trades)} unique closed trades")
+        return unique_trades
         
     except Exception as e:
-        logging.error(f"Fehler bei Bybit Trade History {acc['name']}: {e}")
+        logging.error(f"Error getting closed PnL for {acc['name']}: {e}")
         return []
+
+def get_blofin_data(acc):
+    """Blofin Daten abrufen - Verbesserte Version mit korrekter Seitenerkennung"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        usdt = 0.0
+        status = "❌"
+        
+        # Account Balance abrufen
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Balance Response for {acc['name']}: {balance_response}")
+            
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                status = "✅"
+                data = balance_response['data']
+                
+                if isinstance(data, list):
+                    for balance_item in data:
+                        currency = balance_item.get('currency') or balance_item.get('ccy') or balance_item.get('coin')
+                        if currency == 'USDT':
+                            equity_usd = float(balance_item.get('equityUsd', 0))
+                            equity = float(balance_item.get('equity', 0))
+                            total_eq = float(balance_item.get('totalEq', 0))
+                            available = float(balance_item.get('available', balance_item.get('availBal', 0)))
+                            frozen = float(balance_item.get('frozen', balance_item.get('frozenBal', 0)))
+                            total = float(balance_item.get('total', balance_item.get('balance', 0)))
+                            
+                            if equity_usd > 0:
+                                usdt = equity_usd
+                            elif equity > 0:
+                                usdt = equity
+                            elif total_eq > 0:
+                                usdt = total_eq
+                            elif total > 0:
+                                usdt = total
+                            else:
+                                usdt = available + frozen
+                            break
+                            
+                elif isinstance(data, dict):
+                    if 'details' in data:
+                        for detail in data['details']:
+                            currency = detail.get('currency') or detail.get('ccy')
+                            if currency == 'USDT':
+                                usdt = float(detail.get('equity', detail.get('totalEq', detail.get('balance', 0))))
+                                break
+                    else:
+                        usdt = float(data.get('totalEq', data.get('equity', data.get('balance', 0))))
+                        
+        except Exception as e:
+            logging.error(f"Blofin balance error for {acc['name']}: {e}")
+        
+        # Positionen abrufen mit verbesserter Seitenerkennung
+        positions = []
+        try:
+            pos_response = client.get_positions()
+            logging.info(f"Blofin Positions for {acc['name']}: {pos_response}")
+
+            if pos_response.get('code') == '0' and pos_response.get('data'):
+                for pos in pos_response['data']:
+                    # Verschiedene Feldnamen für Position Size und Side
+                    pos_size = float(pos.get('positions', pos.get('pos', pos.get('size', pos.get('sz', 0)))))
+                    
+                    # Explizite Side-Erkennung für Blofin
+                    side_field = pos.get('side', pos.get('posSide', ''))
+                    
+                    if pos_size != 0:
+                        # Blofin Side Logic - priorisiere explizite Side-Felder
+                        if side_field:
+                            # Blofin verwendet oft 'long', 'short', 'buy', 'sell'
+                            side_lower = side_field.lower()
+                            if side_lower in ['long', 'buy', '1']:
+                                display_side = 'Buy'
+                            elif side_lower in ['short', 'sell', '-1']:
+                                display_side = 'Sell'
+                            else:
+                                # Fallback auf Vorzeichen
+                                display_side = 'Buy' if pos_size > 0 else 'Sell'
+                        else:
+                            # Keine explizite Side - verwende Vorzeichen
+                            # WICHTIG: Bei Blofin sind Short-Positionen oft negativ
+                            display_side = 'Buy' if pos_size > 0 else 'Sell'
+                        
+                        # Symbol normalisieren
+                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
+                        symbol = symbol.replace('-USDT', '').replace('USDT', '')
+                        
+                        position = {
+                            'symbol': symbol,
+                            'size': str(abs(pos_size)),  # Immer positive Größe anzeigen
+                            'avgPrice': str(pos.get('averagePrice', pos.get('avgPx', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(pos.get('unrealizedPnl', pos.get('unrealized_pnl', pos.get('upl', '0')))),
+                            'side': display_side
+                        }
+                        positions.append(position)
+                        
+                        # Debug-Ausgabe
+                        logging.info(f"Blofin Position: {symbol} - Size: {pos_size}, Side Field: {side_field}, Display Side: {display_side}")
+                        
+        except Exception as e:
+            logging.error(f"Blofin positions error for {acc['name']}: {e}")
+
+        if usdt == 0.0 and status == "✅":
+            usdt = 0.01  # Zeigt dass API erreichbar ist, aber kein Guthaben
+        
+        logging.info(f"Blofin {acc['name']}: Status={status}, USDT={usdt}, Positions={len(positions)}")
+        
+        return usdt, positions, status
+    
+    except Exception as e:
+        logging.error(f"General Blofin error for {acc['name']}: {e}")
+        return 0.0, [], "❌"
 
 def get_blofin_trade_history(acc):
     """Blofin Trade History abrufen"""
