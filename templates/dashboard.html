@@ -274,44 +274,42 @@
             color: white;
         }
 
-        .collapsible {
-            cursor: pointer;
-            padding: 15px;
-            border-radius: 10px;
-            background: rgba(52, 152, 219, 0.1);
-            border: 1px solid var(--blue-primary);
-            margin-bottom: 10px;
-            transition: all 0.3s ease;
+        .equity-curve-section {
+            margin-bottom: 40px;
         }
 
-        .collapsible:hover {
-            background: rgba(52, 152, 219, 0.2);
-        }
-
-        .collapsible.active {
-            background: rgba(52, 152, 219, 0.3);
-        }
-
-        .collapsible-content {
-            display: none;
-            padding: 20px 0;
-        }
-
-        .collapsible-content.show {
-            display: block;
-        }
-
-        .grade-badge {
-            padding: 4px 8px;
+        .equity-chart-container {
+            background: var(--bg-card);
             border-radius: 15px;
-            font-size: 0.8rem;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        .equity-chart-title {
+            color: var(--text-light);
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 25px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .performance-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
             font-weight: 600;
         }
 
-        .grade-a { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
-        .grade-b { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
-        .grade-c { background-color: rgba(255, 152, 0, 0.2); color: #ff9800; border: 1px solid #ff9800; }
-        .grade-d { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
+        .perf-excellent { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
+        .perf-good { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
+        .perf-poor { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
+        .perf-inactive { background-color: rgba(108, 117, 125, 0.2); color: var(--neutral-color); border: 1px solid var(--neutral-color); }
 
         .coin-performance-section {
             margin-top: 30px;
@@ -329,24 +327,6 @@
         .coin-table td {
             padding: 10px 8px;
         }
-
-        .strategy-name {
-            font-size: 0.85rem;
-            color: var(--gray-light);
-            font-style: italic;
-        }
-
-        .performance-badge {
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .perf-excellent { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
-        .perf-good { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
-        .perf-poor { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
-        .perf-inactive { background-color: rgba(108, 117, 125, 0.2); color: var(--neutral-color); border: 1px solid var(--neutral-color); }
 
         /* Responsive Design */
         @media (max-width: 768px) {
@@ -465,6 +445,27 @@
                         {% endif %}
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- NEUE Equity Curve Section -->
+        <div class="equity-curve-section">
+            <div class="equity-chart-container">
+                <h5 class="equity-chart-title">
+                    <i class="fas fa-chart-area me-3 icon-blue"></i>
+                    Equity Curves - Portfolio Performance über Zeit
+                    <span class="ms-auto">
+                        <small class="neutral" style="font-size: 0.9rem;">Drawdown-Analyse</small>
+                    </span>
+                </h5>
+                {% if equity_curve_path %}
+                    <img src="{{ equity_curve_path }}" class="chart-img" alt="Equity Curve Chart">
+                {% else %}
+                    <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Equity Curve wird geladen... Historische Daten werden verarbeitet.
+                    </div>
+                {% endif %}
             </div>
         </div>
 
@@ -608,7 +609,7 @@
                     <i class="fas fa-coins icon-blue"></i>
                     Coin Performance Übersicht (30 Tage)
                     <span class="ms-auto">
-                        <small class="neutral">Nach Subaccount sortiert</small>
+                        <small class="neutral">Nach Subaccount sortiert - KORRIGIERTE Daten</small>
                     </span>
                 </h5>
                 
@@ -631,7 +632,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set account_order = ['Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt', 'Claude Projekt', '7 Tage Performer'] %}
+                            {% set account_order = ['Claude Projekt', '7 Tage Performer', 'Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt'] %}
                             
                             {% for account_name in account_order %}
                                 {% set account_coins = all_coin_performance | selectattr('account', 'equalto', account_name) | list %}
@@ -642,6 +643,9 @@
                                             <i class="fas fa-folder-open me-2 icon-blue"></i>{{ account_name }}
                                             <span style="float: right; font-size: 0.9rem; color: var(--gray-light);">
                                                 {{ account_coins | length }} Strategien
+                                                {% if account_name == 'Claude Projekt' %}
+                                                    <span class="ms-2" style="color: #ffc107;">(ECHTE DATEN)</span>
+                                                {% endif %}
                                             </span>
                                         </td>
                                     </tr>
