@@ -278,27 +278,6 @@
             margin-bottom: 40px;
         }
 
-        .equity-chart-container {
-            background: var(--bg-card);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-        .equity-chart-title {
-            color: var(--text-light);
-            font-size: 1.4rem;
-            font-weight: 600;
-            margin-bottom: 25px;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-        }
-
         .performance-badge {
             padding: 3px 8px;
             border-radius: 12px;
@@ -372,16 +351,6 @@
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
-            
-            <!-- Navigation Buttons -->
-            <div class="btn-group mt-4" role="group">
-                <a href="/dashboard" class="btn btn-outline-light active">
-                    <i class="fas fa-home me-2"></i>Dashboard
-                </a>
-                <a href="/logout" class="btn btn-outline-danger">
-                    <i class="fas fa-sign-out-alt me-2"></i>Logout
-                </a>
-            </div>
         </div>
         
         <!-- KPI Cards - Performance Übersicht -->
@@ -448,24 +417,39 @@
             </div>
         </div>
 
-        <!-- NEUE Equity Curve Section -->
+        <!-- NEUE Equity Curve Section - 2 Charts nebeneinander -->
         <div class="equity-curve-section">
-            <div class="equity-chart-container">
-                <h5 class="equity-chart-title">
-                    <i class="fas fa-chart-area me-3 icon-blue"></i>
-                    Equity Curves - Portfolio Performance über Zeit
-                    <span class="ms-auto">
-                        <small class="neutral" style="font-size: 0.9rem;">Drawdown-Analyse</small>
-                    </span>
-                </h5>
-                {% if equity_curve_path %}
-                    <img src="{{ equity_curve_path }}" class="chart-img" alt="Equity Curve Chart">
-                {% else %}
-                    <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
-                        <i class="fas fa-info-circle me-2"></i>
-                        Equity Curve wird geladen... Historische Daten werden verarbeitet.
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5 class="chart-title">
+                            <i class="fas fa-chart-area me-2 icon-blue"></i>Portfolio & Subaccount Performance (%)
+                        </h5>
+                        {% if equity_total_path %}
+                            <img src="{{ equity_total_path }}" class="chart-img" alt="Portfolio Equity Curve">
+                        {% else %}
+                            <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Portfolio Equity Curve wird geladen...
+                            </div>
+                        {% endif %}
                     </div>
-                {% endif %}
+                </div>
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5 class="chart-title">
+                            <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance Vergleich (%)
+                        </h5>
+                        {% if equity_projects_path %}
+                            <img src="{{ equity_projects_path }}" class="chart-img" alt="Projekte Equity Curve">
+                        {% else %}
+                            <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Projekt Equity Curves werden geladen...
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
 
