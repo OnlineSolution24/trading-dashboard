@@ -466,24 +466,36 @@ def get_blofin_data_safe(acc):
                 if isinstance(pos, dict):
                     logging.info(f"📊 {name}: Position {i}: {pos}")
                     
-                    # Alle möglichen Size-Felder
+                    # BLOFIN-spezifische Size-Felder - 'positions' ist das Hauptfeld!
                     pos_size = 0
-                    size_fields = [
-                        'pos', 'size', 'sz', 'positionAmt', 'notional', 
-                        'posSize', 'position_size', 'qty', 'quantity',
-                        'contracts', 'amount', 'vol', 'volume'
-                    ]
-                    
                     size_found_field = None
-                    for field in size_fields:
-                        if field in pos and pos[field] is not None:
-                            try:
-                                pos_size = float(pos[field])
-                                size_found_field = field
-                                logging.info(f"   📏 {name}: Size gefunden: {field} = {pos_size}")
-                                break
-                            except (ValueError, TypeError):
-                                continue
+                    
+                    # Direkt das BLOFIN-Feld 'positions' prüfen
+                    if 'positions' in pos and pos['positions'] is not None:
+                        try:
+                            pos_size = float(pos['positions'])
+                            size_found_field = 'positions'
+                            logging.info(f"   📏 {name}: Size gefunden: positions = {pos_size}")
+                        except (ValueError, TypeError) as e:
+                            logging.error(f"   ❌ {name}: Positions-Konvertierung fehlgeschlagen: {e}")
+                    
+                    # Fallback für andere Size-Felder
+                    if pos_size == 0:
+                        size_fields = [
+                            'pos', 'size', 'sz', 'positionAmt', 'notional', 
+                            'posSize', 'position_size', 'qty', 'quantity',
+                            'contracts', 'amount', 'vol', 'volume'
+                        ]
+                        
+                        for field in size_fields:
+                            if field in pos and pos[field] is not None:
+                                try:
+                                    pos_size = float(pos[field])
+                                    size_found_field = field
+                                    logging.info(f"   📏 {name}: Size gefunden: {field} = {pos_size}")
+                                    break
+                                except (ValueError, TypeError):
+                                    continue
                     
                     # Nur Positionen mit tatsächlicher Größe verarbeiten
                     if pos_size != 0:
@@ -501,18 +513,31 @@ def get_blofin_data_safe(acc):
                                 logging.info(f"   🏷️ {name}: Symbol gefunden: {field} = {symbol}")
                                 break
                         
-                        # Symbol bereinigen
+                        # Symbol bereinigen (BLOFIN: ARB-USDT -> ARB)
                         original_symbol = symbol
-                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('-PERP', '')
-                        symbol = symbol.replace('USDT', '').replace('PERP', '').replace('SWAP', '')
+                        if '-USDT' in symbol:
+                            symbol = symbol.replace('-USDT', '')
+                        elif 'USDT' in symbol:
+                            symbol = symbol.replace('USDT', '')
+                        symbol = symbol.replace('-SWAP', '').replace('-PERP', '').replace('PERP', '').replace('SWAP', '')
+                        
                         if symbol != original_symbol:
                             logging.info(f"   🧹 {name}: Symbol bereinigt: {original_symbol} -> {symbol}")
                         
-                        # Side bestimmen - mehrere Möglichkeiten
+                        # Side bestimmen - BLOFIN hat 'positionSide'!
                         side = 'Buy'  # Default
                         
-                        # 1. Explizites Side-Feld
-                        if 'side' in pos:
+                        # 1. Blofin-spezifisches 'positionSide' Feld (das haben wir in den Logs gesehen!)
+                        if 'positionSide' in pos:
+                            pos_side = str(pos['positionSide']).lower()
+                            if pos_side in ['short', 'sell', 's']:
+                                side = 'Sell'
+                            elif pos_side in ['long', 'buy', 'l']:
+                                side = 'Buy'
+                            logging.info(f"   ↕️ {name}: Side aus 'positionSide': {pos['positionSide']} -> {side}")
+                        
+                        # 2. Explizites Side-Feld
+                        elif 'side' in pos:
                             side_value = str(pos['side']).lower()
                             if side_value in ['sell', 'short', 's', '-1']:
                                 side = 'Sell'
@@ -520,26 +545,27 @@ def get_blofin_data_safe(acc):
                                 side = 'Buy'
                             logging.info(f"   ↕️ {name}: Side aus 'side' Feld: {pos['side']} -> {side}")
                         
-                        # 2. Aus Position Size (negativ = Short)
+                        # 3. Aus Position Size (negativ = Short)
                         elif pos_size < 0:
                             side = 'Sell'
                             logging.info(f"   ↕️ {name}: Side aus negativer Size: {side}")
                         
-                        # 3. Spezielle Blofin Felder
+                        # 4. Andere Blofin Felder
                         elif 'posSide' in pos:
                             pos_side = str(pos['posSide']).lower()
                             if pos_side in ['short', 'sell', 's']:
                                 side = 'Sell'
                             logging.info(f"   ↕️ {name}: Side aus 'posSide': {pos['posSide']} -> {side}")
                         
-                        # 4. RUNE Spezialbehandlung (du sagtest es ist Short)
+                        # 5. RUNE Spezialbehandlung (du sagtest es ist Short)
                         if 'RUNE' in symbol.upper():
                             side = 'Sell'
                             logging.info(f"   🎯 {name}: RUNE forced to SHORT")
                         
-                        # Durchschnittspreis - alle möglichen Felder
+                        # Durchschnittspreis - BLOFIN hat 'averagePrice'!
                         avg_price_fields = [
-                            'avgPx', 'avgCost', 'averagePrice', 'avgPrice', 
+                            'averagePrice',  # BLOFIN verwendet dieses Feld!
+                            'avgPx', 'avgCost', 'avgPrice', 
                             'avg_price', 'entryPrice', 'entry_price',
                             'markPrice', 'mark_price', 'price', 'px'
                         ]
@@ -551,9 +577,10 @@ def get_blofin_data_safe(acc):
                                 logging.info(f"   💰 {name}: Avg Price gefunden: {field} = {avg_price}")
                                 break
                         
-                        # Unrealized PnL - alle möglichen Felder
+                        # Unrealized PnL - BLOFIN hat 'unrealizedPnl'!
                         pnl_fields = [
-                            'upl', 'unrealizedPnl', 'unrealized_pnl', 'pnl',
+                            'unrealizedPnl',  # BLOFIN verwendet dieses Feld!
+                            'upl', 'unrealized_pnl', 'pnl',
                             'unrealPnl', 'unreal_pnl', 'profit', 'loss',
                             'floatingPnl', 'floating_pnl'
                         ]
@@ -577,7 +604,9 @@ def get_blofin_data_safe(acc):
                         
                         logging.info(f"✅ {name}: Position hinzugefügt: {symbol} {side} {abs(pos_size)} @ {avg_price} (PnL: {unrealized_pnl})")
                     else:
-                        logging.info(f"   ⚠️ {name}: Position {i} hat keine Size (size_field: {size_found_field})")
+                        logging.warning(f"   ⚠️ {name}: Position {i} hat Size=0 oder konnte nicht konvertiert werden")
+                        logging.warning(f"   🔍 {name}: Verfügbare Felder: {list(pos.keys())}")
+                        logging.warning(f"   🔍 {name}: positions-Feld: {pos.get('positions')} (Type: {type(pos.get('positions'))})")
         
         else:
             error_msg = pos_response.get('msg', 'Unknown error')
