@@ -8,9 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --profit-color: #28a745;
-            --loss-color: #dc3545;
-            --neutral-color: #6c757d;
             --bg-dark: #2c3e50;
             --bg-card: #34495e;
             --text-light: #ffffff;
@@ -18,9 +15,9 @@
             --blue-primary: #3498db;
             --gray-light: #bdc3c7;
         }
-
+        
         body {
-            background: linear-gradient(135deg, #2c3e50, #34495e);
+            background: linear-gradient(135deg, #2c3e50, #3498db);
             min-height: 100vh;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: var(--text-light);
@@ -40,18 +37,27 @@
             max-width: 400px;
         }
 
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
         .login-title {
             font-size: 2rem;
             font-weight: 700;
             background: linear-gradient(135deg, var(--blue-primary), var(--gray-light));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 30px;
-            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .login-subtitle {
+            color: var(--gray-light);
+            font-size: 0.9rem;
         }
 
         .form-control {
-            background: rgba(52, 152, 219, 0.1);
+            background: rgba(52, 73, 94, 0.8);
             border: 1px solid var(--border-color);
             color: var(--text-light);
             border-radius: 10px;
@@ -60,7 +66,7 @@
         }
 
         .form-control:focus {
-            background: rgba(52, 152, 219, 0.15);
+            background: rgba(52, 73, 94, 0.9);
             border-color: var(--blue-primary);
             color: var(--text-light);
             box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
@@ -71,84 +77,126 @@
             opacity: 0.8;
         }
 
-        .btn-primary {
+        .btn-login {
             background: linear-gradient(135deg, var(--blue-primary), #2980b9);
             border: none;
-            border-radius: 10px;
-            padding: 12px;
+            color: white;
             font-weight: 600;
-            transition: all 0.3s ease;
+            padding: 12px 30px;
+            border-radius: 10px;
             width: 100%;
+            transition: all 0.3s ease;
         }
 
-        .btn-primary:hover {
+        .btn-login:hover {
+            background: linear-gradient(135deg, #2980b9, var(--blue-primary));
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+            color: white;
         }
 
         .alert {
             background: rgba(220, 53, 69, 0.2);
-            border: 1px solid var(--loss-color);
-            color: var(--loss-color);
+            border: 1px solid #dc3545;
+            color: #dc3545;
             border-radius: 10px;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+        }
+
+        .icon-container {
+            text-align: center;
             margin-bottom: 20px;
         }
 
         .login-icon {
             font-size: 3rem;
             color: var(--blue-primary);
-            margin-bottom: 20px;
-            text-align: center;
-            display: block;
+            opacity: 0.8;
         }
 
-        .form-label {
+        .form-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .form-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
             color: var(--gray-light);
-            font-weight: 600;
-            margin-bottom: 8px;
+            z-index: 10;
+        }
+
+        .form-control-icon {
+            padding-left: 45px;
+        }
+
+        .footer-info {
+            text-align: center;
+            margin-top: 30px;
+            color: var(--gray-light);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 20px;
+                padding: 30px 20px;
+            }
+            
+            .login-title {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <div class="text-center">
-            <i class="fas fa-chart-line login-icon"></i>
+        <div class="login-header">
+            <div class="icon-container">
+                <i class="fas fa-chart-line login-icon"></i>
+            </div>
+            <h1 class="login-title">Trading Dashboard</h1>
+            <p class="login-subtitle">Sichere Anmeldung erforderlich</p>
         </div>
-        
-        <h1 class="login-title">
-            Trading Dashboard
-        </h1>
-        
+
         {% if error %}
-        <div class="alert" role="alert">
+        <div class="alert">
             <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
         </div>
         {% endif %}
-        
+
         <form method="POST">
-            <div class="mb-3">
-                <label for="username" class="form-label">
-                    <i class="fas fa-user me-2"></i>Benutzername
-                </label>
-                <input type="text" class="form-control" id="username" name="username" placeholder="Benutzername eingeben" required>
+            <div class="form-group">
+                <i class="fas fa-user"></i>
+                <input type="text" 
+                       class="form-control form-control-icon" 
+                       name="username" 
+                       placeholder="Benutzername" 
+                       required 
+                       autocomplete="username">
             </div>
-            
-            <div class="mb-4">
-                <label for="password" class="form-label">
-                    <i class="fas fa-lock me-2"></i>Passwort
-                </label>
-                <input type="password" class="form-control" id="password" name="password" placeholder="Passwort eingeben" required>
+
+            <div class="form-group">
+                <i class="fas fa-lock"></i>
+                <input type="password" 
+                       class="form-control form-control-icon" 
+                       name="password" 
+                       placeholder="Passwort" 
+                       required 
+                       autocomplete="current-password">
             </div>
-            
-            <button type="submit" class="btn btn-primary">
+
+            <button type="submit" class="btn btn-login">
                 <i class="fas fa-sign-in-alt me-2"></i>Anmelden
             </button>
         </form>
-        
-        <div class="text-center mt-4">
-            <small style="color: var(--gray-light); opacity: 0.8;">
-                <i class="fas fa-shield-alt me-1"></i>Sichere Verbindung
-            </small>
+
+        <div class="footer-info">
+            <i class="fas fa-shield-alt me-1"></i>
+            Verschlüsselte Verbindung
         </div>
     </div>
 
