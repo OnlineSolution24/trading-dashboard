@@ -25,6 +25,8 @@ import numpy as np
 from urllib.parse import urlencode
 import sqlite3
 import threading
+from matplotlib import style
+style.use('default')
 
 # Globale Cache-Variablen
 cache_lock = Lock()
@@ -493,7 +495,7 @@ def get_all_account_data():
     }
 
 def create_subaccount_performance_chart(account_data):
-    """Erstelle vereinfachten Subaccount Performance Chart"""
+    """Erstelle vereinfachten Subaccount Performance Chart - KORRIGIERT"""
     try:
         # Nur ein Chart: Subaccounts Performance
         dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
@@ -511,24 +513,32 @@ def create_subaccount_performance_chart(account_data):
             color = colors[i % len(colors)]
             
             # Erstelle realistische Curve mit Startpunkt 0 und Endpunkt = aktuelle Performance
-            final_performance = acc['pnl_percent']
+            final_performance = float(acc['pnl_percent'])  # Explizit zu float konvertieren
             
             # Generiere realistische Curve mit Volatilität
-            curve = np.linspace(0, final_performance * 0.8, len(dates))
-            
-            # Füge realistische Volatilität hinzu
-            volatility = np.random.normal(0, abs(final_performance) * 0.1, len(dates))
-            volatility = np.cumsum(volatility * 0.1)  # Kumulativ für Trend
-            
-            curve += volatility
+            curve_values = []
+            for j in range(len(dates)):
+                # Linearer Fortschritt von 0 zu final_performance
+                progress = j / (len(dates) - 1)
+                base_value = final_performance * progress * 0.8
+                
+                # Füge Volatilität hinzu
+                volatility = random.uniform(-abs(final_performance) * 0.05, abs(final_performance) * 0.05)
+                curve_values.append(base_value + volatility)
             
             # Stelle sicher, dass der letzte Punkt der aktuellen Performance entspricht
-            curve[-1] = final_performance
+            curve_values[-1] = final_performance
             
             # Glättung für realistischeren Verlauf
-            curve = pd.Series(curve).rolling(window=3, center=True).mean().fillna(curve)
+            if len(curve_values) > 3:
+                curve_series = pd.Series(curve_values)
+                curve_smoothed = curve_series.rolling(window=3, center=True, min_periods=1).mean()
+                curve_values = curve_smoothed.tolist()
             
-            ax.plot(dates, curve, label=f'{acc["name"]} ({final_performance:+.1f}%)', 
+            # Stelle sicher, dass alle Werte Skalare sind
+            curve_final = [float(val) for val in curve_values]
+            
+            ax.plot(dates, curve_final, label=f'{acc["name"]} ({final_performance:+.1f}%)', 
                    color=color, linewidth=2.5, alpha=0.8)
         
         # Null-Linie
@@ -551,6 +561,9 @@ def create_subaccount_performance_chart(account_data):
         # Layout optimieren
         plt.tight_layout()
         
+        # Erstelle static Ordner falls nicht vorhanden
+        os.makedirs('static', exist_ok=True)
+        
         chart_path = "static/chart_subaccounts.png"
         fig.savefig(chart_path, dpi=120, bbox_inches='tight', facecolor='white')
         plt.close(fig)
@@ -560,10 +573,12 @@ def create_subaccount_performance_chart(account_data):
         
     except Exception as e:
         logging.error(f"❌ Chart-Fehler: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
         return "static/chart_fallback.png"
 
 def create_project_performance_chart(account_data):
-    """Erstelle Projekt Performance Chart"""
+    """Erstelle Projekt Performance Chart - KORRIGIERT"""
     try:
         dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
         
@@ -581,19 +596,29 @@ def create_project_performance_chart(account_data):
         
         for i, (pname, members) in enumerate(projekte.items()):
             start_sum = sum(startkapital.get(m, 0) for m in members)
-            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
-            proj_pnl_percent = ((curr_sum - start_sum) / start_sum * 100) if start_sum > 0 else 0
+            curr_sum = sum(float(a["balance"]) for a in account_data if a["name"] in members)
+            proj_pnl_percent = float(((curr_sum - start_sum) / start_sum * 100)) if start_sum > 0 else 0.0
             
             # Generiere realistische Curve
-            proj_curve = np.linspace(0, proj_pnl_percent * 0.85, len(dates))
-            proj_noise = np.random.normal(0, abs(proj_pnl_percent) * 0.08, len(dates))
-            proj_curve += np.cumsum(proj_noise * 0.1)
-            proj_curve[-1] = proj_pnl_percent
+            curve_values = []
+            for j in range(len(dates)):
+                progress = j / (len(dates) - 1)
+                base_value = proj_pnl_percent * progress * 0.85
+                noise = random.uniform(-abs(proj_pnl_percent) * 0.08, abs(proj_pnl_percent) * 0.08)
+                curve_values.append(base_value + noise)
+            
+            curve_values[-1] = proj_pnl_percent
             
             # Glättung
-            proj_curve = pd.Series(proj_curve).rolling(window=2, center=True).mean().fillna(proj_curve)
+            if len(curve_values) > 2:
+                curve_series = pd.Series(curve_values)
+                curve_smoothed = curve_series.rolling(window=2, center=True, min_periods=1).mean()
+                curve_values = curve_smoothed.tolist()
             
-            ax.plot(dates, proj_curve, label=f'{pname} ({proj_pnl_percent:+.1f}%)', 
+            # Stelle sicher, dass alle Werte float sind
+            curve_final = [float(val) for val in curve_values]
+            
+            ax.plot(dates, curve_final, label=f'{pname} ({proj_pnl_percent:+.1f}%)', 
                    color=proj_colors[i % len(proj_colors)], linewidth=3, alpha=0.9)
         
         ax.axhline(0, color='black', alpha=0.5, linestyle='--')
@@ -605,8 +630,9 @@ def create_project_performance_chart(account_data):
         plt.xticks(rotation=45)
         plt.tight_layout()
         
+        os.makedirs('static', exist_ok=True)
         chart2_path = "static/chart_projekte.png"
-        fig.savefig(chart2_path, dpi=100, bbox_inches='tight')
+        fig.savefig(chart2_path, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         
         logging.info("✅ Projekt Performance Chart erstellt")
@@ -614,7 +640,47 @@ def create_project_performance_chart(account_data):
         
     except Exception as e:
         logging.error(f"❌ Projekt Chart Fehler: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
         return "static/chart_fallback.png"
+
+def create_fallback_chart():
+    """Erstelle einen einfachen Fallback Chart"""
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Einfacher Dummy-Chart
+        x = range(10)
+        y = [i * 2 + random.randint(-2, 2) for i in x]
+        
+        ax.plot(x, y, color='#3498db', linewidth=2)
+        ax.set_title('Chart wird geladen...', fontsize=14)
+        ax.set_xlabel('Zeit')
+        ax.set_ylabel('Performance')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        os.makedirs('static', exist_ok=True)
+        fallback_path = "static/chart_fallback.png"
+        fig.savefig(fallback_path, dpi=100, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        
+        return fallback_path
+        
+    except Exception as e:
+        logging.error(f"❌ Fallback Chart Fehler: {e}")
+        return None
+
+# Zusätzliche Hilfsfunktion für sichere Datenkonvertierung
+def safe_float_convert(value, default=0.0):
+    """Sichere Konvertierung zu float"""
+    try:
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return float(value[0]) if len(value) > 0 else default
+        return float(value)
+    except (ValueError, TypeError, IndexError):
+        return default
 
 def get_comprehensive_coin_performance():
     """Umfassende Coin Performance für alle Subaccounts"""
@@ -1077,6 +1143,9 @@ def dashboard():
     try:
         logging.info("=== DASHBOARD START ===")
         
+        # Erstelle Fallback Chart zuerst
+        fallback_chart = create_fallback_chart()
+        
         data = get_all_account_data()
         account_data = data['account_data']
         total_balance = data['total_balance']
@@ -1094,12 +1163,29 @@ def dashboard():
             '30_day': total_pnl * 0.80
         }
         
-        # Erstelle Charts
-        chart_subaccounts = create_subaccount_performance_chart(account_data)
-        chart_projekte = create_project_performance_chart(account_data)
+        # Versuche Charts zu erstellen, verwende Fallback bei Fehlern
+        try:
+            chart_subaccounts = create_subaccount_performance_chart(account_data)
+            if not chart_subaccounts or not os.path.exists(chart_subaccounts):
+                chart_subaccounts = fallback_chart
+        except Exception as e:
+            logging.error(f"❌ Subaccount Chart Fehler: {e}")
+            chart_subaccounts = fallback_chart
+        
+        try:
+            chart_projekte = create_project_performance_chart(account_data)
+            if not chart_projekte or not os.path.exists(chart_projekte):
+                chart_projekte = fallback_chart
+        except Exception as e:
+            logging.error(f"❌ Projekt Chart Fehler: {e}")
+            chart_projekte = fallback_chart
         
         # Hole umfassende Coin Performance
-        all_coin_performance = get_comprehensive_coin_performance()
+        try:
+            all_coin_performance = get_comprehensive_coin_performance()
+        except Exception as e:
+            logging.error(f"❌ Coin Performance Fehler: {e}")
+            all_coin_performance = []
         
         berlin_time = get_berlin_time()
         now = berlin_time.strftime("%d.%m.%Y %H:%M:%S")
@@ -1126,6 +1212,30 @@ def dashboard():
                                total_positions_pnl_percent=total_positions_pnl_percent,
                                all_coin_performance=all_coin_performance,
                                now=now)
+
+    except Exception as e:
+        logging.error(f"❌ KRITISCHER DASHBOARD FEHLER: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        
+        total_start = sum(startkapital.values())
+        berlin_time = get_berlin_time()
+        fallback_chart = create_fallback_chart() or "static/fallback.png"
+        
+        return render_template("dashboard.html",
+                               accounts=[],
+                               total_start=total_start,
+                               total_balance=total_start,
+                               total_pnl=0,
+                               total_pnl_percent=0,
+                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               chart_path_subaccounts=fallback_chart,
+                               chart_path_projekte=fallback_chart,
+                               positions_all=[],
+                               total_positions_pnl=0,
+                               total_positions_pnl_percent=0,
+                               all_coin_performance=[],
+                               now=berlin_time.strftime("%d.%m.%Y %H:%M:%S"))
 
     except Exception as e:
         logging.error(f"❌ KRITISCHER DASHBOARD FEHLER: {e}")
