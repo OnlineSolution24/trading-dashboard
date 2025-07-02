@@ -148,13 +148,22 @@ class GoogleSheetsManager:
         self.spreadsheet = None
         self._connect()
     
-    def _connect(self):
+def _connect(self):
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        
+        if not creds_file:
+            raise Exception("GOOGLE_SERVICE_ACCOUNT_JSON nicht gefunden")
+        
+        # FIX: Behandle verschiedene JSON-Formate
         try:
-            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-            creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-            
-            if not creds_file:
-                raise Exception("GOOGLE_SERVICE_ACCOUNT_JSON nicht gefunden")
+            if isinstance(creds_file, str):
+                creds_data = json.loads(creds_file)
+            else:
+                creds_data = creds_file
+        except json.JSONDecodeError as e:
+            raise Exception(f"GOOGLE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON: {e}"
             
             creds_data = json.loads(creds_file)
             credentials = Credentials.from_service_account_info(creds_data, scopes=scope)
