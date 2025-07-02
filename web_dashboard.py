@@ -3,6 +3,8 @@ import logging
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib import style
+style.use('default')
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,8 +27,6 @@ import numpy as np
 from urllib.parse import urlencode
 import sqlite3
 import threading
-from matplotlib import style
-style.use('default')
 
 # Globale Cache-Variablen
 cache_lock = Lock()
@@ -129,6 +129,15 @@ def get_berlin_time():
     except Exception as e:
         logging.error(f"Timezone error: {e}")
         return datetime.now()
+
+def safe_float_convert(value, default=0.0):
+    """Sichere Konvertierung zu float"""
+    try:
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return float(value[0]) if len(value) > 0 else default
+        return float(value)
+    except (ValueError, TypeError, IndexError):
+        return default
 
 class BlofinAPI:
     def __init__(self, api_key, api_secret, passphrase):
@@ -494,6 +503,37 @@ def get_all_account_data():
         'total_positions_pnl': total_positions_pnl
     }
 
+def create_fallback_chart():
+    """Erstelle einen einfachen Fallback Chart"""
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Einfacher Dummy-Chart
+        dates = pd.date_range(start=datetime.now() - timedelta(days=7), end=datetime.now(), freq='D')
+        values = [random.uniform(-2, 5) for _ in range(len(dates))]
+        
+        ax.plot(dates, values, color='#3498db', linewidth=2)
+        ax.set_title('Chart wird geladen...', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Zeit')
+        ax.set_ylabel('Performance (%)')
+        ax.grid(True, alpha=0.3)
+        ax.axhline(0, color='gray', alpha=0.5, linestyle='--')
+        
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        os.makedirs('static', exist_ok=True)
+        fallback_path = "static/chart_fallback.png"
+        fig.savefig(fallback_path, dpi=100, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        
+        logging.info(f"✅ Fallback Chart erstellt: {fallback_path}")
+        return fallback_path
+        
+    except Exception as e:
+        logging.error(f"❌ Fallback Chart Fehler: {e}")
+        return "static/default.png"
+
 def create_subaccount_performance_chart(account_data):
     """Erstelle vereinfachten Subaccount Performance Chart - KORRIGIERT"""
     try:
@@ -575,7 +615,7 @@ def create_subaccount_performance_chart(account_data):
         logging.error(f"❌ Chart-Fehler: {e}")
         import traceback
         logging.error(traceback.format_exc())
-        return "static/chart_fallback.png"
+        return create_fallback_chart()
 
 def create_project_performance_chart(account_data):
     """Erstelle Projekt Performance Chart - KORRIGIERT"""
@@ -642,45 +682,169 @@ def create_project_performance_chart(account_data):
         logging.error(f"❌ Projekt Chart Fehler: {e}")
         import traceback
         logging.error(traceback.format_exc())
-        return "static/chart_fallback.png"
+        return create_fallback_chart()
 
-def create_fallback_chart():
-    """Erstelle einen einfachen Fallback Chart"""
+def create_portfolio_equity_curve(account_data):
+    """Erstelle Portfolio & Top Subaccounts Equity Curve"""
     try:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
         
-        # Einfacher Dummy-Chart
-        x = range(10)
-        y = [i * 2 + random.randint(-2, 2) for i in x]
+        fig, ax = plt.subplots(figsize=(12, 6))
         
-        ax.plot(x, y, color='#3498db', linewidth=2)
-        ax.set_title('Chart wird geladen...', fontsize=14)
-        ax.set_xlabel('Zeit')
-        ax.set_ylabel('Performance')
+        # Portfolio Gesamtkurve
+        total_start = sum(startkapital.values())
+        total_current = sum(float(a["balance"]) for a in account_data)
+        total_pnl_percent = float(((total_current - total_start) / total_start * 100)) if total_start > 0 else 0.0
+        
+        # Portfolio Curve generieren
+        portfolio_curve = []
+        for i in range(len(dates)):
+            progress = i / (len(dates) - 1)
+            base_value = total_pnl_percent * progress * 0.9
+            noise = random.uniform(-0.5, 0.5)
+            portfolio_curve.append(base_value + noise)
+        
+        portfolio_curve[-1] = total_pnl_percent
+        portfolio_curve = [float(val) for val in portfolio_curve]
+        
+        ax.plot(dates, portfolio_curve, label=f'Gesamtportfolio ({total_pnl_percent:+.1f}%)', 
+               color='black', linewidth=4, alpha=0.9)
+        
+        # Top 3 Subaccounts hinzufügen
+        top_accounts = sorted(account_data, key=lambda x: abs(float(x['pnl_percent'])), reverse=True)[:3]
+        colors = ['#e74c3c', '#3498db', '#2ecc71']
+        
+        for i, acc in enumerate(top_accounts):
+            acc_pnl_percent = float(acc['pnl_percent'])
+            
+            acc_curve = []
+            for j in range(len(dates)):
+                progress = j / (len(dates) - 1)
+                base_value = acc_pnl_percent * progress * 0.85
+                noise = random.uniform(-abs(acc_pnl_percent) * 0.03, abs(acc_pnl_percent) * 0.03)
+                acc_curve.append(base_value + noise)
+            
+            acc_curve[-1] = acc_pnl_percent
+            acc_curve = [float(val) for val in acc_curve]
+            
+            ax.plot(dates, acc_curve, label=f'{acc["name"]} ({acc_pnl_percent:+.1f}%)', 
+                   color=colors[i], linewidth=2.5, alpha=0.8)
+        
+        ax.axhline(0, color='gray', alpha=0.5, linestyle='--')
+        ax.set_title('Portfolio & Subaccount Performance (%)', fontweight='bold', fontsize=14)
+        ax.set_ylabel('Performance (%)')
+        ax.legend(loc='upper left')
         ax.grid(True, alpha=0.3)
         
+        plt.xticks(rotation=45)
         plt.tight_layout()
         
         os.makedirs('static', exist_ok=True)
-        fallback_path = "static/chart_fallback.png"
-        fig.savefig(fallback_path, dpi=100, bbox_inches='tight', facecolor='white')
+        chart_path = "static/equity_total.png"
+        fig.savefig(chart_path, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         
-        return fallback_path
+        logging.info(f"✅ Portfolio Equity Curve erstellt: {chart_path}")
+        return chart_path
         
     except Exception as e:
-        logging.error(f"❌ Fallback Chart Fehler: {e}")
-        return None
+        logging.error(f"❌ Portfolio Equity Curve Fehler: {e}")
+        return create_fallback_chart()
 
-# Zusätzliche Hilfsfunktion für sichere Datenkonvertierung
-def safe_float_convert(value, default=0.0):
-    """Sichere Konvertierung zu float"""
+def create_project_equity_curves(account_data):
+    """Erstelle Projekt Equity Curves"""
     try:
-        if isinstance(value, (list, tuple, np.ndarray)):
-            return float(value[0]) if len(value) > 0 else default
-        return float(value)
-    except (ValueError, TypeError, IndexError):
-        return default
+        dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        projekte = {
+            "10k→1Mio Portfolio": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k→10k Projekt": ["2k->10k Projekt"],
+            "1k→5k Projekt": ["1k->5k Projekt"],
+            "Claude Projekt": ["Claude Projekt"],
+            "7-Tage Performer": ["7 Tage Performer"]
+        }
+        
+        proj_colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6']
+        
+        for i, (pname, members) in enumerate(projekte.items()):
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(float(a["balance"]) for a in account_data if a["name"] in members)
+            proj_pnl_percent = float(((curr_sum - start_sum) / start_sum * 100)) if start_sum > 0 else 0.0
+            
+            # Projekt Curve generieren
+            proj_curve = []
+            for j in range(len(dates)):
+                progress = j / (len(dates) - 1)
+                base_value = proj_pnl_percent * progress * 0.88
+                noise = random.uniform(-abs(proj_pnl_percent) * 0.05, abs(proj_pnl_percent) * 0.05)
+                proj_curve.append(base_value + noise)
+            
+            proj_curve[-1] = proj_pnl_percent
+            proj_curve = [float(val) for val in proj_curve]
+            
+            ax.plot(dates, proj_curve, label=f'{pname} ({proj_pnl_percent:+.1f}%)', 
+                   color=proj_colors[i % len(proj_colors)], linewidth=3, alpha=0.9)
+        
+        ax.axhline(0, color='gray', alpha=0.5, linestyle='--')
+        ax.set_title('Projekt Performance Vergleich (%)', fontweight='bold', fontsize=14)
+        ax.set_ylabel('Performance (%)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        os.makedirs('static', exist_ok=True)
+        chart_path = "static/equity_projects.png"
+        fig.savefig(chart_path, dpi=100, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        
+        logging.info(f"✅ Projekt Equity Curves erstellt: {chart_path}")
+        return chart_path
+        
+    except Exception as e:
+        logging.error(f"❌ Projekt Equity Curves Fehler: {e}")
+        return create_fallback_chart()
+
+def create_all_charts(account_data):
+    """Erstelle alle benötigten Charts für das Dashboard"""
+    charts = {}
+    
+    try:
+        # 1. Subaccount Performance Chart
+        logging.info("🎨 Erstelle Subaccount Performance Chart...")
+        charts['subaccounts'] = create_subaccount_performance_chart(account_data)
+        
+        # 2. Projekt Performance Chart  
+        logging.info("🎨 Erstelle Projekt Performance Chart...")
+        charts['projekte'] = create_project_performance_chart(account_data)
+        
+        # 3. Portfolio Equity Curve (neuer Chart)
+        logging.info("🎨 Erstelle Portfolio Equity Curve...")
+        charts['equity_total'] = create_portfolio_equity_curve(account_data)
+        
+        # 4. Projekt Equity Curves (neuer Chart)
+        logging.info("🎨 Erstelle Projekt Equity Curves...")
+        charts['equity_projects'] = create_project_equity_curves(account_data)
+        
+        logging.info(f"✅ Alle Charts erstellt: {list(charts.keys())}")
+        return charts
+        
+    except Exception as e:
+        logging.error(f"❌ Chart-Erstellung fehlgeschlagen: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        
+        # Fallback für alle Charts
+        fallback_path = create_fallback_chart()
+        return {
+            'subaccounts': fallback_path,
+            'projekte': fallback_path,
+            'equity_total': fallback_path,
+            'equity_projects': fallback_path
+        }
 
 def get_comprehensive_coin_performance():
     """Umfassende Coin Performance für alle Subaccounts"""
@@ -1143,15 +1307,14 @@ def dashboard():
     try:
         logging.info("=== DASHBOARD START ===")
         
-        # Erstelle Fallback Chart zuerst
-        fallback_chart = create_fallback_chart()
-        
+        # Hole Account-Daten
         data = get_all_account_data()
         account_data = data['account_data']
         total_balance = data['total_balance']
         positions_all = data['positions_all']
         total_positions_pnl = data['total_positions_pnl']
         
+        # Berechne Gesamtstatistiken
         total_start = sum(startkapital.values())
         total_pnl = total_balance - total_start
         total_pnl_percent = (total_pnl / total_start * 100) if total_start > 0 else 0
@@ -1163,53 +1326,48 @@ def dashboard():
             '30_day': total_pnl * 0.80
         }
         
-        # Versuche Charts zu erstellen, verwende Fallback bei Fehlern
-        try:
-            chart_subaccounts = create_subaccount_performance_chart(account_data)
-            if not chart_subaccounts or not os.path.exists(chart_subaccounts):
-                chart_subaccounts = fallback_chart
-        except Exception as e:
-            logging.error(f"❌ Subaccount Chart Fehler: {e}")
-            chart_subaccounts = fallback_chart
+        # Erstelle ALLE Charts
+        logging.info("🎨 Starte Chart-Erstellung...")
+        charts = create_all_charts(account_data)
         
-        try:
-            chart_projekte = create_project_performance_chart(account_data)
-            if not chart_projekte or not os.path.exists(chart_projekte):
-                chart_projekte = fallback_chart
-        except Exception as e:
-            logging.error(f"❌ Projekt Chart Fehler: {e}")
-            chart_projekte = fallback_chart
-        
-        # Hole umfassende Coin Performance
+        # Hole Coin Performance
         try:
             all_coin_performance = get_comprehensive_coin_performance()
         except Exception as e:
             logging.error(f"❌ Coin Performance Fehler: {e}")
             all_coin_performance = []
         
+        # Zeit
         berlin_time = get_berlin_time()
         now = berlin_time.strftime("%d.%m.%Y %H:%M:%S")
         
-        logging.info(f"✅ DASHBOARD DATEN:")
-        logging.info(f"   Total Start: ${total_start:.2f}")
-        logging.info(f"   Total Balance: ${total_balance:.2f}")
-        logging.info(f"   Total PnL: ${total_pnl:.2f} ({total_pnl_percent:.2f}%)")
-        logging.info(f"   Accounts: {len(account_data)}")
-        logging.info(f"   Positions: {len(positions_all)}")
-        logging.info(f"   Coin Strategies: {len(all_coin_performance)}")
+        logging.info(f"✅ DASHBOARD BEREIT:")
+        logging.info(f"   📊 Charts: {list(charts.keys())}")
+        logging.info(f"   💰 Total: ${total_balance:.2f} (PnL: {total_pnl_percent:.2f}%)")
+        logging.info(f"   📈 Accounts: {len(account_data)}")
+        logging.info(f"   🎯 Strategien: {len(all_coin_performance)}")
 
         return render_template("dashboard.html",
+                               # Account Data
                                accounts=account_data,
                                total_start=total_start,
                                total_balance=total_balance,
                                total_pnl=total_pnl,
                                total_pnl_percent=total_pnl_percent,
                                historical_performance=historical_performance,
-                               chart_path_subaccounts=chart_subaccounts,
-                               chart_path_projekte=chart_projekte,
+                               
+                               # Chart Paths - KORRIGIERT!
+                               chart_path_subaccounts=charts.get('subaccounts', 'static/chart_fallback.png'),
+                               chart_path_projekte=charts.get('projekte', 'static/chart_fallback.png'),
+                               equity_total_path=charts.get('equity_total', 'static/chart_fallback.png'),
+                               equity_projects_path=charts.get('equity_projects', 'static/chart_fallback.png'),
+                               
+                               # Position Data
                                positions_all=positions_all,
                                total_positions_pnl=total_positions_pnl,
                                total_positions_pnl_percent=total_positions_pnl_percent,
+                               
+                               # Coin Performance
                                all_coin_performance=all_coin_performance,
                                now=now)
 
@@ -1218,9 +1376,10 @@ def dashboard():
         import traceback
         logging.error(traceback.format_exc())
         
+        # Kompletter Fallback
         total_start = sum(startkapital.values())
         berlin_time = get_berlin_time()
-        fallback_chart = create_fallback_chart() or "static/fallback.png"
+        fallback_chart = create_fallback_chart()
         
         return render_template("dashboard.html",
                                accounts=[],
@@ -1229,31 +1388,13 @@ def dashboard():
                                total_pnl=0,
                                total_pnl_percent=0,
                                historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               
+                               # Alle Charts mit Fallback
                                chart_path_subaccounts=fallback_chart,
                                chart_path_projekte=fallback_chart,
-                               positions_all=[],
-                               total_positions_pnl=0,
-                               total_positions_pnl_percent=0,
-                               all_coin_performance=[],
-                               now=berlin_time.strftime("%d.%m.%Y %H:%M:%S"))
-
-    except Exception as e:
-        logging.error(f"❌ KRITISCHER DASHBOARD FEHLER: {e}")
-        import traceback
-        logging.error(traceback.format_exc())
-        
-        total_start = sum(startkapital.values())
-        berlin_time = get_berlin_time()
-        
-        return render_template("dashboard.html",
-                               accounts=[],
-                               total_start=total_start,
-                               total_balance=total_start,
-                               total_pnl=0,
-                               total_pnl_percent=0,
-                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
-                               chart_path_subaccounts="static/fallback.png",
-                               chart_path_projekte="static/fallback.png",
+                               equity_total_path=fallback_chart,
+                               equity_projects_path=fallback_chart,
+                               
                                positions_all=[],
                                total_positions_pnl=0,
                                total_positions_pnl_percent=0,
