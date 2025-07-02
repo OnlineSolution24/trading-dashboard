@@ -30,6 +30,34 @@ import threading
 import subprocess
 import sys
 
+# Progressive Import System Integration
+try:
+    from progressive_import_system import (
+        ProgressiveTradeImporter, 
+        ProgressDatabase,
+        get_progressive_import_status,
+        get_all_import_progress,
+        start_progressive_import
+    )
+    PROGRESSIVE_IMPORT_AVAILABLE = True
+    logging.info("✅ Progressive Import System geladen")
+except ImportError as e:
+    PROGRESSIVE_IMPORT_AVAILABLE = False
+    logging.warning(f"⚠️ Progressive Import System nicht verfügbar: {e}")
+
+# Progressive Status Variable (nach den anderen globalen Variablen)
+progressive_status = {
+    'running': False,
+    'progress': 0,
+    'message': 'Bereit',
+    'session_id': '',
+    'current_account': '',
+    'total_accounts': 0,
+    'completed_accounts': 0,
+    'total_trades': 0,
+    'estimated_completion': None
+}
+
 # Globale Cache-Variablen
 cache_lock = Lock()
 dashboard_cache = {}
@@ -1199,6 +1227,145 @@ def get_import_log():
     except Exception as e:
         logging.error(f"❌ Log Route Error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/start_progressive_import', methods=['POST'])
+def start_progressive_import_route():
+    """Starte Progressive Import über Dashboard"""
+    if 'user' not in session:
+        return jsonify({'status': 'error', 'message': 'Nicht authentifiziert'}), 401
+    
+    if not PROGRESSIVE_IMPORT_AVAILABLE:
+        return jsonify({
+            'status': 'error', 
+            'message': 'Progressive Import System nicht verfügbar. Führe: pip install -r requirements.txt aus.'
+        }), 500
+    
+    try:
+        specific_account = request.form.get('account', '').strip()
+        resume = request.form.get('resume', 'true').lower() == 'true'
+        
+        logging.info(f"🎯 Dashboard Progressive Import: account={specific_account or 'alle'}, resume={resume}")
+        
+        if progressive_status['running']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Progressive Import läuft bereits. Bitte warten Sie bis zum Abschluss.'
+            }), 400
+        
+        # Lösche Dashboard Cache für frische Daten nach Import
+        if 'clear_dashboard_cache' in globals():
+            clear_dashboard_cache()
+        
+        # Starte Progressive Import
+        result = start_progressive_import(specific_account, resume)
+        
+        if 'error' in result:
+            return jsonify({
+                'status': 'error',
+                'message': f'Fehler beim Starten: {result["error"]}'
+            }), 500
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Progressive Import gestartet für {specific_account or "alle Accounts"}',
+            'session_id': result['session_id']
+        })
+        
+    except Exception as e:
+        logging.error(f"❌ Progressive Import Route Error: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Fehler beim Starten des Progressive Imports: {str(e)}'
+        }), 500
+
+@app.route('/progressive_import_status')
+def get_progressive_import_status_route():
+    """Hole Progressive Import Status für AJAX Updates"""
+    if 'user' not in session:
+        return jsonify({'status': 'unauthorized'}), 401
+    
+    if not PROGRESSIVE_IMPORT_AVAILABLE:
+        return jsonify({
+            'running': False,
+            'message': 'Progressive Import nicht verfügbar'
+        })
+    
+    try:
+        status = get_progressive_import_status()
+        return jsonify(status)
+        
+    except Exception as e:
+        logging.error(f"❌ Progressive Status Route Error: {e}")
+        return jsonify({
+            'running': False,
+            'message': f'Status-Fehler: {str(e)}'
+        })
+
+@app.route('/progressive_import_progress')
+def get_progressive_import_progress_route():
+    """Hole detaillierte Progress-Informationen für Dashboard"""
+    if 'user' not in session:
+        return jsonify({'status': 'unauthorized'}), 401
+    
+    if not PROGRESSIVE_IMPORT_AVAILABLE:
+        return jsonify({'progress': []})
+    
+    try:
+        progress = get_all_import_progress()
+        
+        # Formatiere für Dashboard
+        formatted_progress = []
+        for p in progress:
+            status_icon = "✅" if p['completed'] else "🔄" if p['status'] == 'in_progress' else "❌" if p['status'] == 'error' else "⏸️"
+            
+            formatted_progress.append({
+                'account': p['account'],
+                'exchange': p['exchange'],
+                'status': p['status'],
+                'status_icon': status_icon,
+                'total_trades': p['total_trades'],
+                'completed': p['completed'],
+                'error_count': p['error_count'],
+                'last_update': p['last_update'],
+                'progress_percent': 100 if p['completed'] else 50 if p['status'] == 'in_progress' else 0
+            })
+        
+        return jsonify({'progress': formatted_progress})
+        
+    except Exception as e:
+        logging.error(f"❌ Progress Route Error: {e}")
+        return jsonify({'error': str(e)})
+
+@app.route('/stop_progressive_import', methods=['POST'])
+def stop_progressive_import_route():
+    """Stoppe Progressive Import"""
+    if 'user' not in session:
+        return jsonify({'status': 'error', 'message': 'Nicht authentifiziert'}), 401
+    
+    try:
+        global progressive_status
+        
+        if not progressive_status['running']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Kein Progressive Import läuft aktuell'
+            }), 400
+        
+        # Setze Stop-Flag
+        progressive_status['running'] = False
+        progressive_status['message'] = 'Import wird gestoppt...'
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Progressive Import wird gestoppt'
+        })
+        
+    except Exception as e:
+        logging.error(f"❌ Stop Progressive Import Error: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Fehler beim Stoppen: {str(e)}'
+        }), 500
 
 @app.route('/dashboard')
 def dashboard():
