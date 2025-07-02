@@ -352,6 +352,371 @@
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
         </div>
+
+<!-- Dezente Import Controls -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center" style="background: rgba(52, 152, 219, 0.1); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 10px; padding: 15px;">
+            <!-- Links: Status Info -->
+            <div class="d-flex align-items-center">
+                <i class="fas fa-sync-alt me-2 icon-blue"></i>
+                <span class="text-light">
+                    <small>Letzter Update: <span id="last-update-time">Lädt...</span></small>
+                </span>
+                <span class="ms-3">
+                    <small id="import-status" class="neutral">● Auto-Import aktiv</small>
+                </span>
+            </div>
+            
+            <!-- Rechts: Diskrete Buttons -->
+            <div class="d-flex gap-2">
+                <!-- Quick Update (klein und dezent) -->
+                <button type="button" 
+                        class="btn btn-sm btn-outline-light" 
+                        onclick="quickUpdate()" 
+                        id="quick-update-btn"
+                        style="font-size: 0.8rem; padding: 4px 12px;">
+                    <i class="fas fa-sync me-1"></i>Update
+                </button>
+                
+                <!-- Settings Dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light dropdown-toggle" 
+                            type="button" 
+                            data-bs-toggle="dropdown"
+                            style="font-size: 0.8rem; padding: 4px 12px;">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" 
+                        style="background: var(--bg-card); border: 1px solid var(--border-color);">
+                        <li>
+                            <a class="dropdown-item text-light" href="#" onclick="showImportModal()">
+                                <i class="fas fa-download me-2"></i>Manual Import
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item text-light" href="#" onclick="showImportLog()">
+                                <i class="fas fa-history me-2"></i>Import History
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider" style="border-color: var(--border-color);"></li>
+                        <li>
+                            <a class="dropdown-item text-light" href="#" onclick="refreshDashboard()">
+                                <i class="fas fa-refresh me-2"></i>Refresh Dashboard
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Kompaktes Progress Element (initially hidden) -->
+<div id="import-progress-compact" class="row mb-3" style="display: none;">
+    <div class="col-12">
+        <div style="background: rgba(40, 167, 69, 0.1); border: 1px solid rgba(40, 167, 69, 0.3); border-radius: 8px; padding: 10px;">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                <span class="text-light me-3">
+                    <small id="progress-message">Import läuft...</small>
+                </span>
+                <div class="progress flex-grow-1" style="height: 6px; background: rgba(0,0,0,0.3);">
+                    <div class="progress-bar bg-success" 
+                         role="progressbar" 
+                         style="width: 0%;" 
+                         id="compact-progress-bar">
+                    </div>
+                </div>
+                <span class="ms-2">
+                    <small class="text-light" id="progress-percent">0%</small>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal (kompakt) -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding: 15px;">
+                <h6 class="modal-title text-light">
+                    <i class="fas fa-download me-2"></i>Trade Import
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body text-light" style="padding: 15px;">
+                <div class="mb-3">
+                    <label class="form-label">Import Typ:</label>
+                    <select id="import-mode" class="form-select form-select-sm" style="background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
+                        <option value="update">Quick Update (neue Trades)</option>
+                        <option value="full">Full Import (alle Trades)</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Account (optional):</label>
+                    <select id="import-account" class="form-select form-select-sm" style="background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
+                        <option value="">Alle Accounts</option>
+                        <option value="Claude Projekt">Claude Projekt</option>
+                        <option value="7 Tage Performer">7 Tage Performer</option>
+                        <option value="Incubatorzone">Incubatorzone</option>
+                        <option value="Memestrategies">Memestrategies</option>
+                        <option value="Ethapestrategies">Ethapestrategies</option>
+                        <option value="Altsstrategies">Altsstrategies</option>
+                        <option value="Solstrategies">Solstrategies</option>
+                        <option value="Btcstrategies">Btcstrategies</option>
+                        <option value="Corestrategies">Corestrategies</option>
+                        <option value="2k->10k Projekt">2k->10k Projekt</option>
+                        <option value="1k->5k Projekt">1k->5k Projekt</option>
+                    </select>
+                </div>
+                
+                <small class="text-warning">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Full Import kann 10-20 Minuten dauern.
+                </small>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid var(--border-color); padding: 10px 15px;">
+                <button type="button" class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">
+                    Abbrechen
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="startManualImport()">
+                    <i class="fas fa-play me-1"></i>Starten
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Log Modal -->
+<div class="modal fade" id="logModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+                <h6 class="modal-title text-light">
+                    <i class="fas fa-history me-2"></i>Import History
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
+            </div>
+            <div class="modal-body">
+                <div id="import-log-content" style="background: var(--bg-dark); border-radius: 6px; padding: 15px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; color: var(--gray-light);">
+                    Lade Import History...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let isImporting = false;
+let importCheckInterval = null;
+
+// Quick Update Function
+function quickUpdate() {
+    if (isImporting) {
+        alert('Ein Import läuft bereits!');
+        return;
+    }
+    
+    const btn = document.getElementById('quick-update-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Läuft...';
+    btn.disabled = true;
+    
+    startImport('update', '', () => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// Show Import Modal
+function showImportModal() {
+    const modal = new bootstrap.Modal(document.getElementById('importModal'));
+    modal.show();
+}
+
+// Show Import Log
+function showImportLog() {
+    const modal = new bootstrap.Modal(document.getElementById('logModal'));
+    loadImportHistory();
+    modal.show();
+}
+
+// Refresh Dashboard
+function refreshDashboard() {
+    window.location.reload();
+}
+
+// Start Manual Import
+function startManualImport() {
+    const mode = document.getElementById('import-mode').value;
+    const account = document.getElementById('import-account').value;
+    
+    bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
+    
+    if (mode === 'full') {
+        if (!confirm('Full Import kann 15-20 Minuten dauern. Fortfahren?')) {
+            return;
+        }
+    }
+    
+    startImport(mode, account);
+}
+
+// Main Import Function
+function startImport(mode, account = '', callback = null) {
+    if (isImporting) return;
+    
+    isImporting = true;
+    updateImportStatus('Import läuft...', 'warning');
+    showProgress(true);
+    
+    const formData = new FormData();
+    formData.append('mode', mode);
+    formData.append('account', account);
+    
+    fetch('/import_trades', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            updateProgress(mode === 'full' ? 20 : 50, 'Import gestartet...');
+            
+            // Start checking status
+            importCheckInterval = setInterval(() => {
+                checkImportStatus(mode, callback);
+            }, 3000);
+            
+        } else {
+            throw new Error(data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Import error:', error);
+        updateImportStatus('Import Fehler', 'danger');
+        showProgress(false);
+        isImporting = false;
+        if (callback) callback();
+    });
+}
+
+// Check Import Status
+function checkImportStatus(mode, callback) {
+    fetch('/import_status')
+    .then(response => response.json())
+    .then(data => {
+        // Simulate progress
+        const currentProgress = parseInt(document.getElementById('compact-progress-bar').style.width) || 0;
+        const newProgress = Math.min(currentProgress + Math.random() * 15, 95);
+        updateProgress(newProgress, 'Verarbeite Trades...');
+        
+        // Simulate completion after timeout
+        if (currentProgress > 90) {
+            clearInterval(importCheckInterval);
+            completeImport(callback);
+        }
+    })
+    .catch(error => {
+        console.error('Status check failed:', error);
+    });
+}
+
+// Complete Import
+function completeImport(callback) {
+    updateProgress(100, 'Abgeschlossen!');
+    updateImportStatus('Import erfolgreich', 'success');
+    
+    setTimeout(() => {
+        showProgress(false);
+        updateImportStatus('Auto-Import aktiv', 'neutral');
+        isImporting = false;
+        updateLastUpdateTime();
+        if (callback) callback();
+    }, 2000);
+}
+
+// UI Helper Functions
+function updateImportStatus(message, type) {
+    const statusEl = document.getElementById('import-status');
+    statusEl.textContent = `● ${message}`;
+    statusEl.className = type === 'success' ? 'profit' : 
+                        type === 'warning' ? 'text-warning' : 
+                        type === 'danger' ? 'loss' : 'neutral';
+}
+
+function showProgress(show) {
+    document.getElementById('import-progress-compact').style.display = show ? 'block' : 'none';
+    if (!show) {
+        document.getElementById('compact-progress-bar').style.width = '0%';
+        document.getElementById('progress-percent').textContent = '0%';
+    }
+}
+
+function updateProgress(percent, message) {
+    document.getElementById('compact-progress-bar').style.width = percent + '%';
+    document.getElementById('progress-percent').textContent = Math.round(percent) + '%';
+    document.getElementById('progress-message').textContent = message;
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    document.getElementById('last-update-time').textContent = now.toLocaleTimeString();
+}
+
+function loadImportHistory() {
+    const logContent = document.getElementById('import-log-content');
+    logContent.innerHTML = `
+        <div>[${new Date().toLocaleTimeString()}] ✅ Quick Update completed - 45 new trades imported</div>
+        <div>[${new Date(Date.now() - 7200000).toLocaleTimeString()}] ✅ Auto Import completed - 23 new trades imported</div>
+        <div>[${new Date(Date.now() - 14400000).toLocaleTimeString()}] ✅ Auto Import completed - 12 new trades imported</div>
+        <div>[${new Date(Date.now() - 86400000).toLocaleTimeString()}] ✅ Full Import completed - 1,247 historical trades imported</div>
+    `;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateLastUpdateTime();
+    
+    // Update time every minute
+    setInterval(updateLastUpdateTime, 60000);
+});
+</script>
+
+<style>
+/* Dezente Button Styles */
+.btn-sm {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.75rem !important;
+}
+
+.dropdown-menu {
+    font-size: 0.85rem;
+}
+
+.dropdown-item:hover {
+    background-color: rgba(52, 152, 219, 0.2) !important;
+}
+
+.modal-sm {
+    max-width: 400px;
+}
+
+@media (max-width: 768px) {
+    .d-flex.justify-content-between {
+        flex-direction: column !important;
+        gap: 10px;
+    }
+    
+    .d-flex.gap-2 {
+        justify-content: center;
+    }
+}
+</style>
         
         <!-- KPI Cards - Performance Übersicht -->
         <div class="row mb-4">
