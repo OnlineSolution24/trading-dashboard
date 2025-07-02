@@ -1,0 +1,38 @@
+name: One-shot CSV-Dashboard
+
+on:                       # keine Auto-Trigger
+  workflow_dispatch: {}   # nur per Button/CLI auslösen
+
+jobs:
+  build-dashboard:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Repo auschecken
+      - uses: actions/checkout@v4
+
+      # 2. Python bereitstellen
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # 3. Abhängigkeiten installieren
+      - name: Install requirements
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      # 4. Skript starten (Pfad anpassen!)
+      - name: Run converter
+        run: |
+          python simple_csv_to_dashboard.py \
+            --csv "Bybit Plan Strategies3.csv"
+
+      # 5. Ergebnis zur Verfügung stellen (optional)
+      - name: Upload output JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-data
+          path: csv_performance_data.json
