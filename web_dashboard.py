@@ -90,29 +90,46 @@ class GoogleSheetsPerformanceReader:
         self._connect()
     
     def _connect(self):
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
+        
+        if not creds_file:
+            logging.warning("GOOGLE_SERVICE_ACCOUNT_JSON nicht gefunden - verwende Demo-Daten")
+            return
+        
+        # FIX: Korrekte JSON Behandlung
         try:
-            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-            creds_file = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
-            
-            if not creds_file:
-                logging.warning("GOOGLE_SERVICE_ACCOUNT_JSON nicht gefunden - verwende Demo-Daten")
-                return
-            
-            creds_data = json.loads(creds_file)
-            credentials = Credentials.from_service_account_info(creds_data, scopes=scope)
-            self.gc = gspread.authorize(credentials)
-            
-            sheet_id = os.environ.get('GOOGLE_SHEET_ID')
-            if not sheet_id:
-                logging.warning("GOOGLE_SHEET_ID nicht gefunden - verwende Demo-Daten")
-                return
-            
-            self.spreadsheet = self.gc.open_by_key(sheet_id)
-            logging.info("✅ Google Sheets Performance Reader verbunden")
-            
-        except Exception as e:
-            logging.error(f"❌ Google Sheets Performance Reader Fehler: {e}")
+            if isinstance(creds_file, str):
+                # Falls Base64 encoded
+                if not creds_file.strip().startswith('{'):
+                    try:
+                        import base64
+                        creds_file = base64.b64decode(creds_file).decode('utf-8')
+                    except:
+                        pass
+                creds_data = json.loads(creds_file)
+            else:
+                creds_data = creds_file
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON Parse Error: {e}")
             self.gc = None
+            return
+        
+        credentials = Credentials.from_service_account_info(creds_data, scopes=scope)
+        self.gc = gspread.authorize(credentials)
+        
+        sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        if not sheet_id:
+            logging.warning("GOOGLE_SHEET_ID nicht gefunden - verwende Demo-Daten")
+            return
+        
+        self.spreadsheet = self.gc.open_by_key(sheet_id)
+        logging.info("✅ Google Sheets Performance Reader verbunden")
+        
+    except Exception as e:
+        logging.error(f"❌ Google Sheets Performance Reader Fehler: {e}")
+        self.gc = None
     
     def get_performance_data(self):
         """Hole Performance-Daten aus Google Sheets"""
@@ -267,46 +284,83 @@ class GoogleSheetsPerformanceReader:
         return demo_data
 
 def init_database():
-    """Initialisiere SQLite Datenbank für Trade History"""
-    conn = sqlite3.connect('trading_data.db')
-    cursor = conn.cursor()
-    
-    # Trades Tabelle
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS trades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            account TEXT NOT NULL,
-            symbol TEXT NOT NULL,
-            strategy TEXT,
-            side TEXT,
-            size REAL,
-            entry_price REAL,
-            exit_price REAL,
-            pnl REAL,
-            pnl_percent REAL,
-            date TEXT,
-            time TEXT,
-            win_loss TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            trade_id TEXT UNIQUE
-        )
-    ''')
-    
-    # Import Log Tabelle
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS import_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            mode TEXT,
-            account TEXT,
-            trades_imported INTEGER,
-            status TEXT,
-            message TEXT
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+    """Verbesserte SQLite Datenbank Initialisierung"""
+    try:
+        conn = sqlite3.connect('trading_data.db')
+        cursor = conn.cursor()
+        
+        # Trades Tabelle mit erweiterten Feldern
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                strategy TEXT,
+                side TEXT,
+                size REAL,
+                entry_price REAL,
+                exit_price REAL,
+                pnl REAL,
+                pnl_percent REAL,
+                fee REAL,
+                date TEXT,
+                time TEXT,
+                win_loss TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                trade_id TEXT UNIQUE,
+                order_id TEXT,
+                exchange TEXT,
+                status TEXT DEFAULT 'Completed'
+            )
+        ''')
+        
+        # Import Log Tabelle
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS import_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                mode TEXT,
+                account TEXT,
+                trades_imported INTEGER,
+                status TEXT,
+                message TEXT,
+                duration_seconds INTEGER
+            )
+        ''')
+        
+        # Performance Cache Tabelle
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS performance_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cache_key TEXT UNIQUE,
+                data TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME
+            )
+        ''')
+        
+        # Indizes für bessere Performance
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_trades_account_symbol 
+            ON trades(account, symbol)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_trades_date 
+            ON trades(date)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_import_log_timestamp 
+            ON import_log(timestamp DESC)
+        ''')
+        
+        conn.commit()
+        conn.close()
+        logging.info("✅ Enhanced Database initialisiert")
+        
+    except Exception as e:
+        logging.error(f"❌ Database Initialisierung fehlgeschlagen: {e}")
 
 def get_berlin_time():
     """Hole korrekte Berliner Zeit"""
@@ -326,6 +380,33 @@ def safe_float_convert(value, default=0.0):
     except (ValueError, TypeError, IndexError):
         return default
 
+def handle_api_error(account_name, error, operation="API call"):
+    """Zentrale Error-Behandlung für API-Calls"""
+    error_msg = str(error)
+    
+    # Klassifiziere Fehler
+    if "rate limit" in error_msg.lower():
+        error_type = "Rate Limit"
+        suggestion = "Reduziere API-Calls oder warte"
+    elif "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+        error_type = "Authentication"
+        suggestion = "Prüfe API-Schlüssel"
+    elif "network" in error_msg.lower() or "timeout" in error_msg.lower():
+        error_type = "Network"
+        suggestion = "Netzwerkverbindung prüfen"
+    else:
+        error_type = "General"
+        suggestion = "Siehe Logs für Details"
+    
+    logging.error(f"❌ {account_name} {operation} [{error_type}]: {error_msg}")
+    logging.info(f"💡 Vorschlag: {suggestion}")
+    
+    return {
+        'error_type': error_type,
+        'message': error_msg,
+        'suggestion': suggestion
+    }
+    
 class BlofinAPI:
     def __init__(self, api_key, api_secret, passphrase):
         self.api_key = api_key
@@ -915,27 +996,33 @@ def get_comprehensive_coin_performance():
         return sheets_reader._get_demo_performance_data()
 
 def import_trades_from_api(mode='update', target_account=None):
-    """Importiere Trades von APIs über das enhanced_trade_importer Script"""
+    """KORRIGIERTE Version - Führt enhanced_trade_importer.py aus"""
     global import_status
     
     try:
         import_status['running'] = True
-        import_status['progress'] = 0
-        import_status['message'] = 'Import gestartet...'
+        import_status['progress'] = 5
+        import_status['message'] = 'Enhanced Import gestartet...'
         import_status['mode'] = mode
         
         logging.info(f"🚀 Starte Enhanced Trade Import: mode={mode}, account={target_account or 'alle'}")
         
-        # Baue Kommando für enhanced_trade_importer
-        cmd = [sys.executable, 'enhanced_trade_importer.py', f'--mode={mode}']
+        # KORRIGIERT: Verwende enhanced_trade_importer.py
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'enhanced_trade_importer.py')
+        
+        if not os.path.exists(script_path):
+            raise Exception(f"Enhanced Trade Importer nicht gefunden: {script_path}")
+        
+        cmd = [sys.executable, script_path, f'--mode={mode}']
         
         if target_account:
             cmd.extend(['--account', target_account])
         
-        # Führe Import aus
-        import_status['progress'] = 10
-        import_status['message'] = 'Führe Trade Import aus...'
+        # Progress Update
+        import_status['progress'] = 15
+        import_status['message'] = 'Führe Enhanced Trade Import aus...'
         
+        # Führe Enhanced Import aus
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -944,33 +1031,53 @@ def import_trades_from_api(mode='update', target_account=None):
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         
-        # Überwache Prozess
-        for i in range(20, 90, 10):
+        # Überwache Prozess mit besserer Progress-Simulation
+        progress_steps = [20, 35, 50, 65, 80]
+        messages = [
+            'Verbinde zu APIs...',
+            'Hole Trading-Daten...',
+            'Verarbeite Trades...',
+            'Speichere in Google Sheets...',
+            'Erstelle Performance Summary...'
+        ]
+        
+        for i, (prog, msg) in enumerate(zip(progress_steps, messages)):
             if process.poll() is not None:
                 break
-            import_status['progress'] = i
-            import_status['message'] = f'Import läuft... ({i}%)'
-            time.sleep(2)
+            import_status['progress'] = prog
+            import_status['message'] = msg
+            time.sleep(3)
         
         # Warte auf Abschluss
         stdout, stderr = process.communicate()
         
         if process.returncode == 0:
             import_status['progress'] = 100
-            import_status['message'] = 'Import erfolgreich abgeschlossen'
+            import_status['message'] = 'Enhanced Import erfolgreich abgeschlossen'
             import_status['last_update'] = get_berlin_time().isoformat()
             logging.info(f"✅ Enhanced Trade Import erfolgreich")
-            logging.info(f"Output: {stdout}")
+            
+            # Log das Ergebnis
+            if stdout:
+                logging.info(f"Import Output: {stdout[-500:]}")  # Letzte 500 Zeichen
         else:
-            import_status['message'] = f'Import Fehler: {stderr}'
-            logging.error(f"❌ Enhanced Trade Import Fehler: {stderr}")
+            error_msg = stderr if stderr else "Unbekannter Fehler"
+            import_status['message'] = f'Enhanced Import Fehler: {error_msg[:100]}'
+            logging.error(f"❌ Enhanced Trade Import Fehler: {error_msg}")
         
     except Exception as e:
-        logging.error(f"❌ Import Process Error: {e}")
-        import_status['message'] = f'Import Fehler: {str(e)}'
+        logging.error(f"❌ Enhanced Import Process Error: {e}")
+        import_status['message'] = f'Enhanced Import Fehler: {str(e)[:100]}'
     finally:
         import_status['running'] = False
 
+def clear_dashboard_cache():
+    """Lösche Dashboard Cache für frische Daten"""
+    global dashboard_cache
+    with cache_lock:
+        dashboard_cache.clear()
+    logging.info("🗑️ Dashboard Cache gelöscht")
+    
 # Alle anderen Funktionen bleiben gleich...
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -984,32 +1091,60 @@ def login():
             return render_template('login.html', error="Login fehlgeschlagen.")
     return render_template('login.html')
 
+@app.route('/clear_cache')
+def clear_cache():
+    """Lösche Dashboard Cache (nur für eingeloggte Benutzer)"""
+    if 'user' not in session:
+        return jsonify({'status': 'unauthorized'}), 401
+    
+    try:
+        clear_dashboard_cache()
+        return jsonify({'status': 'success', 'message': 'Cache gelöscht'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# 6. VERBESSERTE /import_trades Route
 @app.route('/import_trades', methods=['POST'])
 def import_trades():
-    """Manueller Trade Import über Dashboard"""
+    """VERBESSERTE Manueller Trade Import über Dashboard"""
     if 'user' not in session:
         return jsonify({'status': 'error', 'message': 'Nicht authentifiziert'}), 401
     
     try:
         mode = request.form.get('mode', 'update')
-        account = request.form.get('account', '')
+        account = request.form.get('account', '').strip()
         
-        logging.info(f"🎯 Manueller Enhanced Trade Import: mode={mode}, account={account or 'alle'}")
+        logging.info(f"🎯 Dashboard Import Request: mode={mode}, account={account or 'alle'}")
         
         if import_status['running']:
-            return jsonify({'status': 'error', 'message': 'Import läuft bereits'}), 400
+            return jsonify({
+                'status': 'error', 
+                'message': 'Import läuft bereits. Bitte warten Sie bis zum Abschluss.'
+            }), 400
+        
+        # Validiere Account-Name falls angegeben
+        if account:
+            valid_accounts = [acc['name'] for acc in subaccounts]
+            if account not in valid_accounts:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Unbekannter Account: {account}. Verfügbar: {", ".join(valid_accounts)}'
+                }), 400
+        
+        # Lösche Cache für frische Daten nach Import
+        clear_dashboard_cache()
         
         # Starte Enhanced Import in separatem Thread
         import_thread = threading.Thread(
             target=import_trades_from_api,
-            args=(mode, account if account else None)
+            args=(mode, account if account else None),
+            daemon=True
         )
-        import_thread.daemon = True
         import_thread.start()
         
         return jsonify({
             'status': 'success',
-            'message': f'Enhanced Trade Import ({mode}) gestartet'
+            'message': f'Enhanced Trade Import ({mode}) für {account or "alle Accounts"} gestartet'
         })
         
     except Exception as e:
@@ -1073,14 +1208,26 @@ def dashboard():
     try:
         logging.info("=== ENHANCED DASHBOARD START ===")
         
-        # Hole Account-Daten
+        # Cache-Key für Performance
+        cache_key = f"dashboard_{get_berlin_time().strftime('%Y%m%d_%H')}"
+        
+        # Prüfe Cache (1 Stunde gültig)
+        with cache_lock:
+            if cache_key in dashboard_cache:
+                cached_data = dashboard_cache[cache_key]
+                if cached_data.get('timestamp') and \
+                   (datetime.now() - cached_data['timestamp']).seconds < 3600:
+                    logging.info("✅ Verwende gecachte Dashboard-Daten")
+                    return render_template("dashboard.html", **cached_data['data'])
+        
+        # Hole frische Daten
         data = get_all_account_data()
         account_data = data['account_data']
         total_balance = data['total_balance']
         positions_all = data['positions_all']
         total_positions_pnl = data['total_positions_pnl']
         
-        # Berechne Gesamtstatistiken
+        # Berechne Statistiken
         total_start = sum(startkapital.values())
         total_pnl = total_balance - total_start
         total_pnl_percent = (total_pnl / total_start * 100) if total_start > 0 else 0
@@ -1092,13 +1239,14 @@ def dashboard():
             '30_day': total_pnl * 0.80
         }
         
-        # Erstelle Charts
-        logging.info("🎨 Starte Chart-Erstellung...")
+        # Charts
+        logging.info("🎨 Erstelle Charts...")
         charts = create_all_charts(account_data)
         
-        # Hole ECHTE Coin Performance aus Google Sheets
+        # ECHTE Coin Performance aus Google Sheets
         try:
             all_coin_performance = get_comprehensive_coin_performance()
+            logging.info(f"📊 Performance-Daten geladen: {len(all_coin_performance)} Strategien")
         except Exception as e:
             logging.error(f"❌ Coin Performance Fehler: {e}")
             all_coin_performance = []
@@ -1107,33 +1255,48 @@ def dashboard():
         berlin_time = get_berlin_time()
         now = berlin_time.strftime("%d.%m.%Y %H:%M:%S")
         
+        # Template Data zusammenstellen
+        template_data = {
+            # Account Data
+            'accounts': account_data,
+            'total_start': total_start,
+            'total_balance': total_balance,
+            'total_pnl': total_pnl,
+            'total_pnl_percent': total_pnl_percent,
+            'historical_performance': historical_performance,
+            
+            # Chart Paths
+            'chart_path_subaccounts': charts.get('subaccounts', 'static/chart_fallback.png'),
+            'chart_path_projekte': charts.get('projekte', 'static/chart_fallback.png'),
+            
+            # Position Data
+            'positions_all': positions_all,
+            'total_positions_pnl': total_positions_pnl,
+            'total_positions_pnl_percent': total_positions_pnl_percent,
+            
+            # Performance Data
+            'all_coin_performance': all_coin_performance,
+            'now': now
+        }
+        
+        # Cache speichern
+        with cache_lock:
+            dashboard_cache[cache_key] = {
+                'data': template_data,
+                'timestamp': datetime.now()
+            }
+            # Halte Cache klein (max 5 Einträge)
+            if len(dashboard_cache) > 5:
+                oldest_key = min(dashboard_cache.keys())
+                del dashboard_cache[oldest_key]
+        
         logging.info(f"✅ ENHANCED DASHBOARD BEREIT:")
         logging.info(f"   📊 Charts: {list(charts.keys())}")
         logging.info(f"   💰 Total: ${total_balance:.2f} (PnL: {total_pnl_percent:.2f}%)")
         logging.info(f"   📈 Accounts: {len(account_data)}")
         logging.info(f"   🎯 Strategien: {len(all_coin_performance)}")
 
-        return render_template("dashboard.html",
-                               # Account Data
-                               accounts=account_data,
-                               total_start=total_start,
-                               total_balance=total_balance,
-                               total_pnl=total_pnl,
-                               total_pnl_percent=total_pnl_percent,
-                               historical_performance=historical_performance,
-                               
-                               # Chart Paths
-                               chart_path_subaccounts=charts.get('subaccounts', 'static/chart_fallback.png'),
-                               chart_path_projekte=charts.get('projekte', 'static/chart_fallback.png'),
-                               
-                               # Position Data
-                               positions_all=positions_all,
-                               total_positions_pnl=total_positions_pnl,
-                               total_positions_pnl_percent=total_positions_pnl_percent,
-                               
-                               # ECHTE Coin Performance aus Google Sheets
-                               all_coin_performance=all_coin_performance,
-                               now=now)
+        return render_template("dashboard.html", **template_data)
 
     except Exception as e:
         logging.error(f"❌ KRITISCHER ENHANCED DASHBOARD FEHLER: {e}")
@@ -1145,23 +1308,23 @@ def dashboard():
         berlin_time = get_berlin_time()
         fallback_chart = create_fallback_chart()
         
-        return render_template("dashboard.html",
-                               accounts=[],
-                               total_start=total_start,
-                               total_balance=total_start,
-                               total_pnl=0,
-                               total_pnl_percent=0,
-                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
-                               
-                               # Alle Charts mit Fallback
-                               chart_path_subaccounts=fallback_chart,
-                               chart_path_projekte=fallback_chart,
-                               
-                               positions_all=[],
-                               total_positions_pnl=0,
-                               total_positions_pnl_percent=0,
-                               all_coin_performance=[],
-                               now=berlin_time.strftime("%d.%m.%Y %H:%M:%S"))
+        fallback_data = {
+            'accounts': [],
+            'total_start': total_start,
+            'total_balance': total_start,
+            'total_pnl': 0,
+            'total_pnl_percent': 0,
+            'historical_performance': {'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+            'chart_path_subaccounts': fallback_chart,
+            'chart_path_projekte': fallback_chart,
+            'positions_all': [],
+            'total_positions_pnl': 0,
+            'total_positions_pnl_percent': 0,
+            'all_coin_performance': [],
+            'now': berlin_time.strftime("%d.%m.%Y %H:%M:%S")
+        }
+        
+        return render_template("dashboard.html", **fallback_data)
 
 @app.route('/logout')
 def logout():
@@ -1169,7 +1332,37 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    os.makedirs('static', exist_ok=True)
-    init_database()
-    logging.info("🚀 ENHANCED DASHBOARD STARTET...")
-    app.run(debug=True, host='0.0.0.0', port=10000)
+    try:
+        # Erstelle notwendige Verzeichnisse
+        os.makedirs('static', exist_ok=True)
+        os.makedirs('logs', exist_ok=True)
+        os.makedirs('templates', exist_ok=True)
+        
+        # Initialisiere Database
+        init_database()
+        
+        # Erstelle Fallback Chart
+        create_fallback_chart()
+        
+        # Prüfe Environment Variables
+        required_env_vars = [
+            'GOOGLE_SERVICE_ACCOUNT_JSON',
+            'GOOGLE_SHEET_ID'
+        ]
+        
+        missing_vars = [var for var in required_env_vars if not os.environ.get(var)]
+        if missing_vars:
+            logging.warning(f"⚠️ Fehlende Environment Variables: {missing_vars}")
+            logging.warning("Dashboard läuft im Demo-Modus")
+        
+        logging.info("🚀 ENHANCED DASHBOARD STARTET...")
+        logging.info(f"🌐 URL: http://localhost:10000")
+        logging.info(f"👤 Login: admin / deinpasswort123")
+        
+        app.run(debug=True, host='0.0.0.0', port=10000)
+        
+    except Exception as e:
+        logging.error(f"❌ Startup Fehler: {e}")
+        import traceback
+        logging.error(traceback.format_exc())
+        sys.exit(1)
