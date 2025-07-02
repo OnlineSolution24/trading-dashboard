@@ -165,7 +165,6 @@ def _connect(self):
         except json.JSONDecodeError as e:
             raise Exception(f"GOOGLE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON: {e}"
             
-            creds_data = json.loads(creds_file)
             credentials = Credentials.from_service_account_info(creds_data, scopes=scope)
             self.gc = gspread.authorize(credentials)
             
