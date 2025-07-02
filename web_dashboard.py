@@ -1,20 +1,3 @@
-def get_fallback_coin_performance():
-    """Fallback Coin Performance Daten falls Google Sheets nicht verfügbar"""
-    coin_data = [
-        # Claude Projekt - Echte Daten
-        {'symbol': 'RUNE', 'account': 'Claude Projekt', 'strategy': 'AI vs. Ninja Turtle', 'total_trades': 1, 'total_pnl': -14.70, 'month_trades': 1, 'month_pnl': -14.70, 'week_pnl': -14.70, 'month_win_rate': 0.0, 'month_profit_factor': 0.0, 'month_performance_score': 15, 'status': 'Active', 'daily_volume': 0},
-        {'symbol': 'CVX', 'account': 'Claude Projekt', 'strategy': 'Stiff Zone', 'total_trades': 1, 'total_pnl': -20.79, 'month_trades': 1, 'month_pnl': -20.79, 'week_pnl': -20.79, 'month_win_rate': 0.0, 'month_profit_factor': 0.0, 'month_performance_score': 15, 'status': 'Active', 'daily_volume': 0},
-        {'symbol': 'BTC', 'account': 'Claude Projekt', 'strategy': 'XMA', 'total_trades': 0, 'total_pnl': 0.0, 'month_trades': 0, 'month_pnl': 0.0, 'week_pnl': 0.0, 'month_win_rate': 0.0, 'month_profit_factor': 0.0, 'month_performance_score': 0, 'status': 'Inactive', 'daily_volume': 0},
-        
-        # 7 Tage Performer - Basierend auf erwarteter Performance (+71% Account Performance)
-        {'symbol': 'WIF', 'account': '7 Tage Performer', 'strategy': 'MACD LIQUIDITY SPECTRUM', 'total_trades': 8, 'total_pnl': 420.50, 'month_trades': 8, 'month_pnl': 420.50, 'week_pnl': 185.20, 'month_win_rate': 75.0, 'month_profit_factor': 2.8, 'month_performance_score': 85, 'status': 'Active', 'daily_volume': 0},
-        {'symbol': 'ARB', 'account': '7 Tage Performer', 'strategy': 'STIFFZONE ETH', 'total_trades': 12, 'total_pnl': 278.30, 'month_trades': 12, 'month_pnl': 278.30, 'week_pnl': 125.80, 'month_win_rate': 66.7, 'month_profit_factor': 2.2, 'month_performance_score': 75, 'status': 'Active', 'daily_volume': 0},
-        {'symbol': 'AVAX', 'account': '7 Tage Performer', 'strategy': 'PRECISION TREND MASTERY', 'total_trades': 15, 'total_pnl': 312.70, 'month_trades': 15, 'month_pnl': 312.70, 'week_pnl': 142.50, 'month_win_rate': 73.3, 'month_profit_factor': 2.6, 'month_performance_score': 80, 'status': 'Active', 'daily_volume': 0},
-        {'symbol': 'ALGO', 'account': '7 Tage Performer', 'strategy': 'TRIGGERHAPPY2 INJ', 'total_trades': 6, 'total_pnl': -45.90, 'month_trades': 6, 'month_pnl': -45.90, 'week_pnl': -22.40, 'month_win_rate': 33.3, 'month_profit_factor': 0.7, 'month_performance_score': 25, 'status': 'Active', 'daily_volume': 0}
-    ]
-    
-    logging.info(f"⚠️ Fallback Coin Performance: {len(coin_data)} Strategien")
-    return coin_dataimport os
 import logging
 import matplotlib
 matplotlib.use('Agg')
@@ -1099,6 +1082,100 @@ def dashboard():
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+# Füge diese Routes in deine web_dashboard.py ein (vor if __name__ == '__main__':)
+
+@app.route('/import_trades', methods=['POST'])
+def import_trades():
+    """Manueller Trade Import über Dashboard"""
+    if 'user' not in session:
+        return {'status': 'error', 'message': 'Nicht authentifiziert'}, 401
+    
+    try:
+        mode = request.form.get('mode', 'update')
+        account = request.form.get('account', '')
+        
+        logging.info(f"🎯 Manueller Trade Import: mode={mode}, account={account or 'alle'}")
+        
+        # Hier könntest du den echten TradeImporter verwenden
+        # Für jetzt simulieren wir den Import
+        import threading
+        import time
+        
+        def simulate_import():
+            try:
+                # Simuliere Import-Zeit
+                sleep_time = 15 if mode == 'full' else 5
+                time.sleep(sleep_time)
+                
+                logging.info(f"✅ Simulierter {mode} Import abgeschlossen")
+                
+                # Hier würdest du den echten Import-Status speichern
+                # z.B. in einer Datei oder Datenbank
+                
+            except Exception as e:
+                logging.error(f"❌ Import Simulation Error: {e}")
+        
+        # Starte Import in Background Thread
+        import_thread = threading.Thread(target=simulate_import)
+        import_thread.daemon = True
+        import_thread.start()
+        
+        return {
+            'status': 'success',
+            'message': f'Trade Import ({mode}) gestartet'
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ Import Route Error: {e}")
+        return {
+            'status': 'error', 
+            'message': f'Fehler beim Starten des Imports: {str(e)}'
+        }
+
+@app.route('/import_status')
+def import_status():
+    """Hole Import-Status für AJAX Updates"""
+    if 'user' not in session:
+        return {'status': 'unauthorized'}, 401
+    
+    try:
+        # Hier würdest du den echten Import-Status abfragen
+        # Für jetzt geben wir einen Standard-Status zurück
+        
+        return {
+            'status': 'idle',  # idle, running, success, error
+            'last_import': {
+                'timestamp': get_berlin_time().isoformat(),
+                'mode': 'update',
+                'trades_imported': 0
+            },
+            'message': 'Bereit für Import'
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ Status Route Error: {e}")
+        return {'status': 'error', 'message': str(e)}, 500
+
+@app.route('/trigger_github_import')
+def trigger_github_import():
+    """Trigger GitHub Actions Import (optional)"""
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        # Hier könntest du GitHub Actions über API triggern
+        # Für jetzt nur eine Info-Meldung
+        
+        logging.info("🚀 GitHub Actions Import würde hier getriggert")
+        
+        return {
+            'status': 'info',
+            'message': 'GitHub Actions Import läuft automatisch alle 3 Stunden'
+        }
+        
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 
 if __name__ == '__main__':
     # Erstelle static Ordner
