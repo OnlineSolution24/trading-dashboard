@@ -390,19 +390,6 @@
                 <i class="fas fa-chart-line me-3"></i>Trading Dashboard
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
-            
-            <!-- Navigation Buttons -->
-            <div class="btn-group mt-4" role="group">
-                <a href="/dashboard" class="btn btn-outline-light active">
-                    <i class="fas fa-home me-2"></i>Dashboard
-                </a>
-                <a href="/trading-journal" class="btn btn-outline-light">
-                    <i class="fas fa-book me-2"></i>Trading Journal
-                </a>
-                <a href="/logout" class="btn btn-outline-danger">
-                    <i class="fas fa-sign-out-alt me-2"></i>Logout
-                </a>
-            </div>
         </div>
 
         <!-- Erweiterte Import Controls -->
@@ -626,7 +613,7 @@
             </div>
         </div>
 
-        <!-- Charts Section - 4 Charts in 2x2 Grid -->
+        <!-- Charts Section - 2 Charts in einer Reihe -->
         <div class="row mb-4">
             <!-- Subaccount Performance Chart -->
             <div class="col-lg-6">
@@ -657,42 +644,6 @@
                         <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: var(--text-light);">
                             <i class="fas fa-exclamation-triangle me-2"></i>
                             Projekt Chart wird geladen...
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <div class="row mb-4">
-            <!-- Portfolio Equity Curve -->
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-chart-area me-2 icon-blue"></i>Portfolio & Top Accounts Equity
-                    </h5>
-                    {% if equity_total_path and equity_total_path != 'static/chart_fallback.png' %}
-                        <img src="{{ equity_total_path }}" class="chart-img" alt="Portfolio Equity Curve">
-                    {% else %}
-                        <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: var(--text-light);">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Portfolio Equity wird geladen...
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-            
-            <!-- Projekt Equity Curves -->
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <h5 class="chart-title">
-                        <i class="fas fa-sitemap me-2 icon-blue"></i>Projekt Equity Curves
-                    </h5>
-                    {% if equity_projects_path and equity_projects_path != 'static/chart_fallback.png' %}
-                        <img src="{{ equity_projects_path }}" class="chart-img" alt="Projekt Equity Curves">
-                    {% else %}
-                        <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: var(--text-light);">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Projekt Equity wird geladen...
                         </div>
                     {% endif %}
                 </div>
