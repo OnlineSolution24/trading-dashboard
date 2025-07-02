@@ -22,8 +22,7 @@ jobs:
       - name: Run trade importer
         run: |
           python complete_trade_importer.py \
-            --days 30 \
-            --account "Claude Projekt"
+            --days 90
 
       # Optional: Ergebnisdateien hochladen
       - name: Upload artifacts
