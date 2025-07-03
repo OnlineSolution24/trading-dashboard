@@ -483,7 +483,7 @@ class GoogleSheetsManager:
 class EnhancedTradeImporter:
     """Verbesserter Trade Importer mit robuster Datenverarbeitung"""
     
-    def __init__(self, mode='update', days=30):
+    def __init__(self, mode='update', days=90):
         self.sheets_manager = GoogleSheetsManager()
         self.mode = mode
         self.days = days
