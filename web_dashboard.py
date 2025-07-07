@@ -20,15 +20,13 @@ import base64
 import uuid
 import random
 from functools import wraps
-from threading import Lock
+import threading
 import numpy as np
 from urllib.parse import urlencode
 import sqlite3
 import threading
 
-# Globale Cache-Variablen
-cache_lock = Lock()
-dashboard_cache = {}
+# Cache entfernt für immer aktuelle Daten
 
 app = Flask(__name__)
 app.secret_key = 'supergeheim'
@@ -424,8 +422,11 @@ def create_fallback_chart():
         return "static/default.png"
 
 def create_subaccount_performance_chart(account_data):
-    """Erstelle Subaccount Performance Chart"""
+    """Erstelle Subaccount Performance Chart - OHNE CACHE"""
     try:
+        # Füge Timestamp zum Dateinamen hinzu für einzigartige Charts
+        timestamp = get_berlin_time().strftime("%Y%m%d_%H%M%S")
+        
         dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
         
         fig, ax = plt.subplots(figsize=(14, 8))
@@ -469,11 +470,11 @@ def create_subaccount_performance_chart(account_data):
         plt.tight_layout()
         
         os.makedirs('static', exist_ok=True)
-        chart_path = "static/chart_subaccounts.png"
+        chart_path = f"static/chart_subaccounts_{timestamp}.png"
         fig.savefig(chart_path, dpi=120, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         
-        logging.info(f"✅ Subaccount Performance Chart erstellt: {chart_path}")
+        logging.info(f"✅ Frischer Subaccount Chart erstellt: {chart_path}")
         return chart_path
         
     except Exception as e:
@@ -481,8 +482,11 @@ def create_subaccount_performance_chart(account_data):
         return create_fallback_chart()
 
 def create_project_performance_chart(account_data):
-    """Erstelle Projekt Performance Chart"""
+    """Erstelle Projekt Performance Chart - OHNE CACHE"""
     try:
+        # Füge Timestamp zum Dateinamen hinzu für einzigartige Charts
+        timestamp = get_berlin_time().strftime("%Y%m%d_%H%M%S")
+        
         dates = pd.date_range(start=get_berlin_time() - timedelta(days=30), end=get_berlin_time(), freq='D')
         
         fig, ax = plt.subplots(figsize=(12, 6))
@@ -531,29 +535,59 @@ def create_project_performance_chart(account_data):
         plt.tight_layout()
         
         os.makedirs('static', exist_ok=True)
-        chart2_path = "static/chart_projekte.png"
+        chart2_path = f"static/chart_projekte_{timestamp}.png"
         fig.savefig(chart2_path, dpi=100, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         
-        logging.info("✅ Projekt Performance Chart erstellt")
+        logging.info(f"✅ Frischer Projekt Chart erstellt: {chart2_path}")
         return chart2_path
         
     except Exception as e:
         logging.error(f"❌ Projekt Chart Fehler: {e}")
         return create_fallback_chart()
 
+def cleanup_old_charts():
+    """Bereinige alte Chart-Dateien um Speicher zu sparen"""
+    try:
+        import glob
+        static_path = 'static'
+        if not os.path.exists(static_path):
+            return
+        
+        # Finde alle Chart-Dateien mit Timestamp
+        chart_files = glob.glob(os.path.join(static_path, 'chart_*_*.png'))
+        
+        # Sortiere nach Änderungsdatum (neueste zuerst)
+        chart_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        # Behalte nur die neuesten 10 Chart-Dateien, lösche den Rest
+        files_to_delete = chart_files[10:]
+        
+        for file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+                logging.info(f"🗑️ Alte Chart-Datei gelöscht: {os.path.basename(file_path)}")
+            except Exception as e:
+                logging.warning(f"⚠️ Konnte Chart-Datei nicht löschen: {e}")
+                
+    except Exception as e:
+        logging.warning(f"⚠️ Chart-Cleanup Fehler: {e}")
+
 def create_all_charts(account_data):
-    """Erstelle alle benötigten Charts für das Dashboard"""
+    """Erstelle alle benötigten Charts für das Dashboard - OHNE CACHE"""
     charts = {}
     
     try:
-        logging.info("🎨 Erstelle Subaccount Performance Chart...")
+        # Bereinige alte Charts vor der Erstellung neuer
+        cleanup_old_charts()
+        
+        logging.info("🎨 Erstelle Subaccount Performance Chart (frisch)...")
         charts['subaccounts'] = create_subaccount_performance_chart(account_data)
         
-        logging.info("🎨 Erstelle Projekt Performance Chart...")
+        logging.info("🎨 Erstelle Projekt Performance Chart (frisch)...")
         charts['projekte'] = create_project_performance_chart(account_data)
         
-        logging.info(f"✅ Alle Charts erstellt: {list(charts.keys())}")
+        logging.info(f"✅ Alle Charts frisch erstellt: {list(charts.keys())}")
         return charts
         
     except Exception as e:
@@ -563,13 +597,6 @@ def create_all_charts(account_data):
             'subaccounts': fallback_path,
             'projekte': fallback_path
         }
-
-def clear_dashboard_cache():
-    """Lösche Dashboard Cache für frische Daten"""
-    global dashboard_cache
-    with cache_lock:
-        dashboard_cache.clear()
-    logging.info("🗑️ Dashboard Cache gelöscht")
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -589,21 +616,9 @@ def dashboard():
         return redirect(url_for('login'))
 
     try:
-        logging.info("=== BEREINIGTES DASHBOARD START ===")
+        logging.info("=== BEREINIGTES DASHBOARD START (OHNE CACHE) ===")
         
-        # Cache-Key für Performance
-        cache_key = f"dashboard_{get_berlin_time().strftime('%Y%m%d_%H')}"
-        
-        # Prüfe Cache (1 Stunde gültig)
-        with cache_lock:
-            if cache_key in dashboard_cache:
-                cached_data = dashboard_cache[cache_key]
-                if cached_data.get('timestamp') and \
-                   (datetime.now() - cached_data['timestamp']).seconds < 3600:
-                    logging.info("✅ Verwende gecachte Dashboard-Daten")
-                    return render_template("dashboard.html", **cached_data['data'])
-        
-        # Hole frische Daten
+        # Hole IMMER frische Daten - kein Caching
         data = get_all_account_data()
         account_data = data['account_data']
         total_balance = data['total_balance']
@@ -623,8 +638,8 @@ def dashboard():
             '30_day': total_pnl * 0.80    # 80% der Gesamt-PnL
         }
         
-        # Charts erstellen
-        logging.info("🎨 Erstelle Charts...")
+        # Charts erstellen - IMMER neu generieren
+        logging.info("🎨 Erstelle Charts (frisch)...")
         charts = create_all_charts(account_data)
         
         # Zeit
@@ -654,18 +669,7 @@ def dashboard():
             'now': now
         }
         
-        # Cache speichern
-        with cache_lock:
-            dashboard_cache[cache_key] = {
-                'data': template_data,
-                'timestamp': datetime.now()
-            }
-            # Halte Cache klein (max 5 Einträge)
-            if len(dashboard_cache) > 5:
-                oldest_key = min(dashboard_cache.keys())
-                del dashboard_cache[oldest_key]
-        
-        logging.info(f"✅ BEREINIGTES DASHBOARD BEREIT:")
+        logging.info(f"✅ BEREINIGTES DASHBOARD BEREIT (LIVE DATA):")
         logging.info(f"   📊 Charts: {list(charts.keys())}")
         logging.info(f"   💰 Total: ${total_balance:.2f} (PnL: {total_pnl_percent:.2f}%)")
         logging.info(f"   📈 Accounts: {len(account_data)}")
