@@ -257,90 +257,6 @@
         .icon-blue { color: var(--blue-primary); }
         .icon-gray { color: var(--gray-light); }
 
-        .btn-outline-light {
-            border-color: var(--gray-light);
-            color: var(--gray-light);
-        }
-
-        .btn-outline-light:hover {
-            background-color: var(--blue-primary);
-            border-color: var(--blue-primary);
-            color: white;
-        }
-        
-        .btn-outline-light.active {
-            background-color: var(--blue-primary);
-            border-color: var(--blue-primary);
-            color: white;
-        }
-
-        .performance-badge {
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .perf-excellent { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
-        .perf-good { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
-        .perf-poor { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
-        .perf-inactive { background-color: rgba(108, 117, 125, 0.2); color: var(--neutral-color); border: 1px solid var(--neutral-color); }
-
-        .coin-performance-section {
-            margin-top: 30px;
-        }
-
-        .coin-table {
-            font-size: 0.9rem;
-        }
-
-        .coin-table th {
-            font-size: 0.8rem;
-            padding: 10px 8px;
-        }
-
-        .coin-table td {
-            padding: 10px 8px;
-        }
-
-        /* Import Controls Styling */
-        .import-controls {
-            background: rgba(52, 152, 219, 0.1);
-            border: 1px solid rgba(52, 152, 219, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .import-status {
-            color: var(--gray-light);
-        }
-
-        .import-status.success { color: var(--profit-color); }
-        .import-status.warning { color: #ffc107; }
-        .import-status.error { color: var(--loss-color); }
-
-        .import-progress {
-            background: rgba(40, 167, 69, 0.1);
-            border: 1px solid rgba(40, 167, 69, 0.3);
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 15px;
-        }
-
-        .progress-bar-container {
-            background: rgba(0,0,0,0.3);
-            border-radius: 6px;
-            height: 6px;
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            background: var(--profit-color);
-            height: 100%;
-            transition: width 0.5s ease;
-        }
-
         /* Responsive Design */
         @media (max-width: 768px) {
             .dashboard-container {
@@ -356,27 +272,13 @@
                 font-size: 2rem;
             }
 
-            .coin-table {
-                font-size: 0.8rem;
-            }
-
-            .coin-table th,
-            .coin-table td {
-                padding: 6px 4px;
-            }
-
             .table-container {
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
             }
 
             .custom-table {
-                min-width: 1000px;
-            }
-
-            .import-controls {
-                flex-direction: column !important;
-                gap: 10px !important;
+                min-width: 800px;
             }
         }
     </style>
@@ -391,640 +293,6 @@
             </h1>
             <p class="header-subtitle">Übersicht Ihrer Trading-Performance</p>
         </div>
-
-        <!-- Erweiterte Import Controls -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="import-controls d-flex justify-content-between align-items-center">
-                    <!-- Links: Status Info -->
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-sync-alt me-2 icon-blue"></i>
-                        <span class="text-light">
-                            <small>Letzter Update: <span id="last-update-time">Lädt...</span></small>
-                        </span>
-                        <span class="ms-3">
-                            <small id="import-status" class="import-status">● Auto-Import aktiv</small>
-                        </span>
-                    </div>
-                    
-                    <!-- Rechts: Import Buttons -->
-                    <div class="d-flex gap-2">
-                        <!-- Quick Update -->
-                        <button type="button" 
-                                class="btn btn-sm btn-success" 
-                                onclick="quickUpdate()" 
-                                id="quick-update-btn">
-                            <i class="fas fa-sync me-1"></i>Quick Update
-                        </button>
-                        
-                        <!-- Full Import -->
-                        <button type="button" 
-                                class="btn btn-sm btn-warning" 
-                                onclick="fullImport()">
-                            <i class="fas fa-download me-1"></i>Full Import
-                        </button>
-                        
-                        <!-- Settings Dropdown -->
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-light dropdown-toggle" 
-                                    type="button" 
-                                    data-bs-toggle="dropdown">
-                                <i class="fas fa-cog"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end" 
-                                style="background: var(--bg-card); border: 1px solid var(--border-color);">
-                                <li>
-                                    <a class="dropdown-item text-light" href="#" onclick="showImportModal()">
-                                        <i class="fas fa-download me-2"></i>Custom Import
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item text-light" href="#" onclick="showImportLog()">
-                                        <i class="fas fa-history me-2"></i>Import History
-                                    </a>
-                                </li>
-                                <li><hr class="dropdown-divider" style="border-color: var(--border-color);"></li>
-                                <li>
-                                    <a class="dropdown-item text-light" href="#" onclick="refreshDashboard()">
-                                        <i class="fas fa-refresh me-2"></i>Refresh Dashboard
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Progressive Import Controls -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card" style="background: linear-gradient(145deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.15)); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 15px;">
-            <div class="card-header" style="background: transparent; border-bottom: 1px solid rgba(52, 152, 219, 0.2);">
-                <h5 class="mb-0 d-flex align-items-center">
-                    <i class="fas fa-rocket me-2" style="color: #3498db;"></i>
-                    <span>Progressive Import System</span>
-                    <small class="text-muted ms-3">Kontinuierlicher Import aller verfügbaren Trading-Daten</small>
-                </h5>
-            </div>
-            <div class="card-body">
-                <!-- Control Buttons -->
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <div class="d-flex gap-2 mb-3 flex-wrap">
-                            <button type="button" 
-                                    class="btn btn-success btn-sm" 
-                                    onclick="startProgressiveImport()" 
-                                    id="progressive-start-btn">
-                                <i class="fas fa-rocket me-1"></i>Vollständigen Import starten
-                            </button>
-                            
-                            <button type="button" 
-                                    class="btn btn-info btn-sm" 
-                                    onclick="startProgressiveImport(true)" 
-                                    id="progressive-resume-btn">
-                                <i class="fas fa-play-circle me-1"></i>Import fortsetzen
-                            </button>
-                            
-                            <button type="button" 
-                                    class="btn btn-danger btn-sm" 
-                                    onclick="stopProgressiveImport()" 
-                                    id="progressive-stop-btn" 
-                                    style="display: none;">
-                                <i class="fas fa-stop me-1"></i>Import stoppen
-                            </button>
-                            
-                            <div class="dropdown">
-                                <button class="btn btn-outline-light btn-sm dropdown-toggle" 
-                                        type="button" 
-                                        data-bs-toggle="dropdown">
-                                    <i class="fas fa-cog"></i> Optionen
-                                </button>
-                                <ul class="dropdown-menu" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-                                    <li>
-                                        <a class="dropdown-item text-light" href="#" onclick="showProgressDetails()">
-                                            <i class="fas fa-chart-bar me-2"></i>Fortschritt Details
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item text-light" href="#" onclick="resetProgressiveImport()">
-                                            <i class="fas fa-redo me-2"></i>Progress zurücksetzen
-                                        </a>
-                                    </li>
-                                    <li><hr class="dropdown-divider" style="border-color: var(--border-color);"></li>
-                                    <li>
-                                        <a class="dropdown-item text-light" href="#" onclick="showProgressiveHelp()">
-                                            <i class="fas fa-question-circle me-2"></i>Hilfe
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-4 text-end">
-                        <div id="progressive-status" class="import-status neutral mb-1">● Bereit für Progressive Import</div>
-                        <small id="progressive-eta" class="text-muted d-block"></small>
-                    </div>
-                </div>
-                
-                <!-- Progress Bar -->
-                <div id="progressive-progress-section" style="display: none;">
-                    <div class="progress mb-2" style="height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;">
-                        <div class="progress-bar" 
-                             id="progressive-progress-bar" 
-                             style="width: 0%; background: linear-gradient(90deg, #28a745, #20c997); border-radius: 5px;"></div>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                        <small id="progressive-progress-text" class="text-light">Bereit...</small>
-                        <small id="progressive-progress-percent" class="text-light fw-bold">0%</small>
-                    </div>
-                </div>
-                
-                <!-- Account Progress Grid -->
-                <div id="progressive-account-grid" class="row mt-3" style="display: none;">
-                    <!-- Wird dynamisch gefüllt -->
-                </div>
-                
-                <!-- Info Box -->
-                <div class="alert" style="background: rgba(23, 162, 184, 0.1); border: 1px solid rgba(23, 162, 184, 0.3); color: var(--text-light); border-radius: 10px;">
-                    <div class="d-flex align-items-start">
-                        <i class="fas fa-info-circle me-2 mt-1" style="color: #17a2b8;"></i>
-                        <div>
-                            <strong>Progressive Import:</strong> Lädt kontinuierlich alle verfügbaren Trading-Daten von allen APIs. 
-                            Der Import kann mehrere Stunden dauern, läuft aber automatisch im Hintergrund weiter und kann unterbrochen/fortgesetzt werden.
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    🔄 <strong>Fortsetzen:</strong> Lädt nur neue Daten seit dem letzten Import<br>
-                                    🚀 <strong>Vollständig:</strong> Lädt alle verfügbaren Daten (empfohlen beim ersten Mal)
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Zusätzliche CSS Styles für Progressive Import -->
-<style>
-.card-sm .card-body {
-    padding: 0.5rem !important;
-}
-
-.progress {
-    background-color: rgba(0,0,0,0.2);
-}
-
-.import-status.info { color: #17a2b8; }
-.import-status.success { color: var(--profit-color); }
-.import-status.warning { color: #ffc107; }
-.import-status.error { color: var(--loss-color); }
-.import-status.neutral { color: var(--neutral-color); }
-
-.border-info { border-color: #17a2b8 !important; }
-.border-success { border-color: var(--profit-color) !important; }
-.border-danger { border-color: var(--loss-color) !important; }
-.border-secondary { border-color: var(--neutral-color) !important; }
-
-.bg-info { background-color: #17a2b8 !important; }
-.bg-success { background-color: var(--profit-color) !important; }
-.bg-danger { background-color: var(--loss-color) !important; }
-.bg-secondary { background-color: var(--neutral-color) !important; }
-</style>
-
-<!-- Progressive Import JavaScript -->
-<script>
-let progressiveImportRunning = false;
-let progressiveStatusInterval = null;
-
-function startProgressiveImport(resume = false) {
-    if (progressiveImportRunning) {
-        alert('Progressive Import läuft bereits!');
-        return;
-    }
-    
-    const confirmMessage = resume ? 
-        'Progressive Import fortsetzen? Dies kann mehrere Stunden dauern.' :
-        'Vollständigen Progressive Import starten? Dies kann mehrere Stunden dauern und lädt ALLE verfügbaren Trades.';
-    
-    if (!confirm(confirmMessage)) {
-        return;
-    }
-    
-    // UI Updates
-    updateProgressiveUI(true);
-    
-    // Starte Import
-    const formData = new FormData();
-    formData.append('resume', resume ? 'true' : 'false');
-    
-    fetch('/start_progressive_import', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            showProgressiveProgress(true);
-            updateProgressiveStatus('Progressive Import gestartet...', 'info');
-            
-            // Starte Status-Polling
-            progressiveStatusInterval = setInterval(checkProgressiveStatus, 3000);
-        } else {
-            throw new Error(data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Progressive Import Start Error:', error);
-        updateProgressiveStatus('Start-Fehler: ' + error.message, 'error');
-        updateProgressiveUI(false);
-    });
-}
-
-function stopProgressiveImport() {
-    if (!progressiveImportRunning) {
-        alert('Kein Progressive Import läuft aktuell!');
-        return;
-    }
-    
-    if (!confirm('Progressive Import wirklich stoppen?')) {
-        return;
-    }
-    
-    fetch('/stop_progressive_import', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            updateProgressiveStatus('Import wird gestoppt...', 'warning');
-        } else {
-            throw new Error(data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Progressive Stop Error:', error);
-        alert('Fehler beim Stoppen: ' + error.message);
-    });
-}
-
-function resetProgressiveImport() {
-    if (progressiveImportRunning) {
-        alert('Import läuft noch. Bitte erst stoppen.');
-        return;
-    }
-    
-    if (!confirm('Progressive Import Progress wirklich zurücksetzen? Alle Fortschrittsdaten gehen verloren.')) {
-        return;
-    }
-    
-    fetch('/reset_progressive_import', {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            updateProgressiveStatus('Progress zurückgesetzt', 'success');
-            hideProgressiveProgress();
-            hideAccountGrid();
-        } else {
-            throw new Error(data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Progressive Reset Error:', error);
-        alert('Fehler beim Zurücksetzen: ' + error.message);
-    });
-}
-
-function checkProgressiveStatus() {
-    fetch('/progressive_import_status')
-    .then(response => response.json())
-    .then(data => {
-        if (data.running) {
-            progressiveImportRunning = true;
-            
-            // Update Progress
-            updateProgressiveProgress(
-                data.progress || 0, 
-                data.message || 'Läuft...',
-                data.current_account || ''
-            );
-            
-            // Update ETA
-            if (data.estimated_completion) {
-                document.getElementById('progressive-eta').textContent = 
-                    `Geschätzte Fertigstellung: ${data.estimated_completion}`;
-            }
-            
-            // Update Account Grid
-            updateAccountProgressGrid();
-            
-        } else {
-            // Import beendet
-            progressiveImportRunning = false;
-            updateProgressiveUI(false);
-            
-            if (data.progress >= 100) {
-                updateProgressiveStatus('Progressive Import abgeschlossen!', 'success');
-                updateProgressiveProgress(100, 'Abgeschlossen', '');
-                
-                // Zeige Erfolgs-Zusammenfassung
-                setTimeout(() => {
-                    if (confirm('Progressive Import abgeschlossen! Dashboard neu laden für aktualisierte Daten?')) {
-                        window.location.reload();
-                    }
-                }, 2000);
-            } else if (data.message && data.message.includes('Fehler')) {
-                updateProgressiveStatus(data.message, 'error');
-            } else {
-                updateProgressiveStatus('Progressive Import beendet', 'neutral');
-            }
-            
-            // Stoppe Status-Polling
-            if (progressiveStatusInterval) {
-                clearInterval(progressiveStatusInterval);
-                progressiveStatusInterval = null;
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Progressive Status Check Error:', error);
-    });
-}
-
-function updateProgressiveUI(running) {
-    progressiveImportRunning = running;
-    
-    // Buttons
-    document.getElementById('progressive-start-btn').style.display = running ? 'none' : 'inline-block';
-    document.getElementById('progressive-resume-btn').style.display = running ? 'none' : 'inline-block';
-    document.getElementById('progressive-stop-btn').style.display = running ? 'inline-block' : 'none';
-    
-    // Progress Section
-    if (running) {
-        showProgressiveProgress(true);
-    }
-}
-
-function showProgressiveProgress(show) {
-    document.getElementById('progressive-progress-section').style.display = show ? 'block' : 'none';
-    if (show) {
-        document.getElementById('progressive-account-grid').style.display = 'block';
-    }
-}
-
-function hideProgressiveProgress() {
-    document.getElementById('progressive-progress-section').style.display = 'none';
-    hideAccountGrid();
-}
-
-function hideAccountGrid() {
-    document.getElementById('progressive-account-grid').style.display = 'none';
-}
-
-function updateProgressiveProgress(percent, message, currentAccount) {
-    document.getElementById('progressive-progress-bar').style.width = percent + '%';
-    document.getElementById('progressive-progress-percent').textContent = Math.round(percent) + '%';
-    document.getElementById('progressive-progress-text').textContent = 
-        currentAccount ? `${message} (${currentAccount})` : message;
-}
-
-function updateProgressiveStatus(message, type) {
-    const statusEl = document.getElementById('progressive-status');
-    statusEl.className = `import-status ${type}`;
-    
-    const icons = {
-        'info': '🔄',
-        'success': '✅',
-        'warning': '⚠️',
-        'error': '❌',
-        'neutral': '●'
-    };
-    
-    statusEl.textContent = `${icons[type] || '●'} ${message}`;
-}
-
-function updateAccountProgressGrid() {
-    fetch('/progressive_import_progress')
-    .then(response => response.json())
-    .then(data => {
-        const grid = document.getElementById('progressive-account-grid');
-        
-        if (data.progress && data.progress.length > 0) {
-            let html = '<div class="col-12"><h6 class="mb-3">Account Fortschritt:</h6></div>';
-            
-            data.progress.forEach(account => {
-                const statusClass = account.completed ? 'success' : 
-                                  account.status === 'in_progress' ? 'info' : 
-                                  account.status === 'error' ? 'danger' : 'secondary';
-                
-                html += `
-                <div class="col-md-4 col-lg-3 mb-2">
-                    <div class="card card-sm border-${statusClass}">
-                        <div class="card-body p-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="fw-bold">${account.account}</small>
-                                <span class="badge bg-${statusClass}">${account.status_icon}</span>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <small class="text-muted">${account.exchange}</small>
-                                <small class="fw-bold">${account.total_trades || 0} Trades</small>
-                            </div>
-                            ${account.error_count > 0 ? 
-                                `<small class="text-danger">Fehler: ${account.error_count}</small>` : 
-                                ''
-                            }
-                        </div>
-                    </div>
-                </div>`;
-            });
-            
-            grid.innerHTML = html;
-        }
-    })
-    .catch(error => {
-        console.error('Account Progress Update Error:', error);
-    });
-}
-
-function showProgressDetails() {
-    // Zeige detaillierte Progress-Informationen
-    fetch('/progressive_import_progress')
-    .then(response => response.json())
-    .then(data => {
-        let content = '<div class="table-responsive"><table class="table table-sm">';
-        content += '<thead><tr><th>Account</th><th>Exchange</th><th>Status</th><th>Trades</th><th>Letztes Update</th></tr></thead><tbody>';
-        
-        if (data.progress) {
-            data.progress.forEach(account => {
-                content += `
-                <tr>
-                    <td>${account.account}</td>
-                    <td>${account.exchange}</td>
-                    <td>${account.status_icon} ${account.status}</td>
-                    <td>${account.total_trades || 0}</td>
-                    <td>${account.last_update ? new Date(account.last_update).toLocaleString() : 'Nie'}</td>
-                </tr>`;
-            });
-        }
-        
-        content += '</tbody></table></div>';
-        
-        alert('Progressive Import Details:\n\n' + content.replace(/<[^>]*>/g, ' '));
-    })
-    .catch(error => {
-        console.error('Progress Details Error:', error);
-        alert('Fehler beim Laden der Details: ' + error.message);
-    });
-}
-
-function showProgressiveHelp() {
-    const helpText = `
-Progressive Import System Hilfe:
-
-🚀 Vollständiger Import:
-- Lädt ALLE verfügbaren Trades (90 Tage)
-- Empfohlen beim ersten Mal
-- Kann mehrere Stunden dauern
-
-🔄 Import fortsetzen:
-- Lädt nur neue Trades seit letztem Import
-- Für regelmäßige Updates
-- Viel schneller
-
-📊 Features:
-- Live Progress-Anzeige
-- Account-spezifischer Status
-- Pausieren/Fortsetzen möglich
-- Automatisches Rate-Limiting
-
-💡 Tipps:
-- Ersten Import über Nacht laufen lassen
-- Danach nur "Fortsetzen" verwenden
-- Bei Problemen "Progress zurücksetzen"
-`;
-    
-    alert(helpText);
-}
-
-// Auto-check für laufende Progressive Imports beim Seitenladen
-document.addEventListener('DOMContentLoaded', function() {
-    // Prüfe ob Progressive Import läuft
-    setTimeout(() => {
-        checkProgressiveStatus();
-        
-        // Starte regelmäßige Checks falls Import läuft
-        setTimeout(() => {
-            if (progressiveImportRunning) {
-                progressiveStatusInterval = setInterval(checkProgressiveStatus, 3000);
-            }
-        }, 1000);
-    }, 500);
-});
-
-// Cleanup beim Seitenverlassen
-window.addEventListener('beforeunload', function() {
-    if (progressiveStatusInterval) {
-        clearInterval(progressiveStatusInterval);
-    }
-});
-</script>
-        
-        <!-- Import Progress (initially hidden) -->
-        <div id="import-progress-section" class="row mb-3" style="display: none;">
-            <div class="col-12">
-                <div class="import-progress">
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
-                        <span class="text-light me-3">
-                            <small id="progress-message">Import läuft...</small>
-                        </span>
-                        <span class="ms-auto">
-                            <small class="text-light" id="progress-percent">0%</small>
-                        </span>
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import Modal -->
-        <div class="modal fade" id="importModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-                    <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
-                        <h5 class="modal-title text-light">
-                            <i class="fas fa-download me-2"></i>Custom Trade Import
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
-                    </div>
-                    <div class="modal-body text-light">
-                        <div class="mb-3">
-                            <label class="form-label">Import Modus:</label>
-                            <select id="import-mode" class="form-select" style="background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
-                                <option value="update">Update (nur neue Trades)</option>
-                                <option value="full">Full Import (alle Trades neu)</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Spezifischer Account (optional):</label>
-                            <select id="import-account" class="form-select" style="background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color);">
-                                <option value="">Alle Accounts</option>
-                                <option value="Claude Projekt">Claude Projekt</option>
-                                <option value="7 Tage Performer">7 Tage Performer</option>
-                                <option value="Incubatorzone">Incubatorzone</option>
-                                <option value="Memestrategies">Memestrategies</option>
-                                <option value="Ethapestrategies">Ethapestrategies</option>
-                                <option value="Altsstrategies">Altsstrategies</option>
-                                <option value="Solstrategies">Solstrategies</option>
-                                <option value="Btcstrategies">Btcstrategies</option>
-                                <option value="Corestrategies">Corestrategies</option>
-                                <option value="2k->10k Projekt">2k->10k Projekt</option>
-                                <option value="1k->5k Projekt">1k->5k Projekt</option>
-                            </select>
-                        </div>
-                        
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Hinweis:</strong> Full Import kann 15-30 Minuten dauern und sollte nur einmalig oder bei Problemen verwendet werden.
-                        </div>
-                    </div>
-                    <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
-                        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">
-                            Abbrechen
-                        </button>
-                        <button type="button" class="btn btn-primary" onclick="startCustomImport()">
-                            <i class="fas fa-play me-1"></i>Import Starten
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Import Log Modal -->
-        <div class="modal fade" id="logModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color);">
-                    <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
-                        <h5 class="modal-title text-light">
-                            <i class="fas fa-history me-2"></i>Import History
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="import-log-content" style="background: var(--bg-dark); border-radius: 6px; padding: 15px; height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; color: var(--gray-light);">
-                            Lade Import History...
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
         
         <!-- KPI Cards - Performance Übersicht -->
         <div class="row mb-4">
@@ -1034,9 +302,9 @@ window.addEventListener('beforeunload', function() {
                         <i class="fas fa-chart-line icon-blue"></i>
                     </div>
                     <div class="kpi-title">Gesamtperformance</div>
-                    <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
-                    <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
-                        ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
+                    <div class="kpi-value neutral">$13,500 → $16,250</div>
+                    <div class="pnl-value profit" style="font-size: 1.2rem; margin-top: 8px;">
+                        $2,750.00 (20.37%)
                     </div>
                 </div>
             </div>
@@ -1046,13 +314,11 @@ window.addEventListener('beforeunload', function() {
                         <i class="fas fa-calendar-day icon-gray"></i>
                     </div>
                     <div class="kpi-title">1-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['1_day']) }}
+                    <div class="kpi-value profit">
+                        $55.00
                     </div>
-                    <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
-                        {% endif %}
+                    <div class="pnl-value profit" style="font-size: 1rem; margin-top: 8px;">
+                        (0.41%)
                     </div>
                 </div>
             </div>
@@ -1062,13 +328,11 @@ window.addEventListener('beforeunload', function() {
                         <i class="fas fa-calendar-week icon-blue"></i>
                     </div>
                     <div class="kpi-title">7-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['7_day']) }}
+                    <div class="kpi-value profit">
+                        $412.50
                     </div>
-                    <div class="pnl-value {% if historical_performance['7_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['7_day'] / total_start) * 100) }}%)
-                        {% endif %}
+                    <div class="pnl-value profit" style="font-size: 1rem; margin-top: 8px;">
+                        (3.06%)
                     </div>
                 </div>
             </div>
@@ -1078,13 +342,11 @@ window.addEventListener('beforeunload', function() {
                         <i class="fas fa-calendar-alt icon-gray"></i>
                     </div>
                     <div class="kpi-title">30-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['30_day']) }}
+                    <div class="kpi-value profit">
+                        $2,200.00
                     </div>
-                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
-                        {% endif %}
+                    <div class="pnl-value profit" style="font-size: 1rem; margin-top: 8px;">
+                        (16.30%)
                     </div>
                 </div>
             </div>
@@ -1098,14 +360,10 @@ window.addEventListener('beforeunload', function() {
                     <h5 class="chart-title">
                         <i class="fas fa-chart-line me-2 icon-blue"></i>Subaccount Performance (30 Tage)
                     </h5>
-                    {% if chart_path_subaccounts and chart_path_subaccounts != 'static/chart_fallback.png' %}
-                        <img src="{{ chart_path_subaccounts }}" class="chart-img" alt="Subaccount Performance Chart">
-                    {% else %}
-                        <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: var(--text-light);">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Subaccount Chart wird geladen...
-                        </div>
-                    {% endif %}
+                    <div class="alert alert-info" style="background: rgba(23, 162, 184, 0.1); border: 1px solid #17a2b8; color: var(--text-light);">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Equity Curves der Subaccounts werden geladen...
+                    </div>
                 </div>
             </div>
             
@@ -1115,14 +373,10 @@ window.addEventListener('beforeunload', function() {
                     <h5 class="chart-title">
                         <i class="fas fa-project-diagram me-2 icon-blue"></i>Projekt Performance Vergleich
                     </h5>
-                    {% if chart_path_projekte and chart_path_projekte != 'static/chart_fallback.png' %}
-                        <img src="{{ chart_path_projekte }}" class="chart-img" alt="Projekte Chart">
-                    {% else %}
-                        <div class="alert alert-warning" style="background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: var(--text-light);">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            Projekt Chart wird geladen...
-                        </div>
-                    {% endif %}
+                    <div class="alert alert-info" style="background: rgba(23, 162, 184, 0.1); border: 1px solid #17a2b8; color: var(--text-light);">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Equity Curves der Projekte werden geladen...
+                    </div>
                 </div>
             </div>
         </div>
@@ -1149,26 +403,46 @@ window.addEventListener('beforeunload', function() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for a in accounts %}
                                 <tr>
-                                    <td class="account-name">{{ a.name }}</td>
-                                    <td>
-                                        {% if a.status == "✅" %}
-                                            <span class="status-badge status-online">Online</span>
-                                        {% else %}
-                                            <span class="status-badge status-offline">Offline</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="neutral">${{ "%.2f"|format(a.start) }}</td>
-                                    <td class="neutral">${{ "%.2f"|format(a.balance) }}</td>
-                                    <td class="pnl-value {% if a.pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(a.pnl) }}
-                                    </td>
-                                    <td class="pnl-value {% if a.pnl_percent >= 0 %}profit{% else %}loss{% endif %}">
-                                        {{ "%.2f"|format(a.pnl_percent) }}%
-                                    </td>
+                                    <td class="account-name">Claude Projekt</td>
+                                    <td><span class="status-badge status-online">Online</span></td>
+                                    <td class="neutral">$1,000.00</td>
+                                    <td class="neutral">$985.30</td>
+                                    <td class="pnl-value loss">-$14.70</td>
+                                    <td class="pnl-value loss">-1.47%</td>
                                 </tr>
-                                {% endfor %}
+                                <tr>
+                                    <td class="account-name">7 Tage Performer</td>
+                                    <td><span class="status-badge status-online">Online</span></td>
+                                    <td class="neutral">$1,492.00</td>
+                                    <td class="neutral">$2,555.00</td>
+                                    <td class="pnl-value profit">$1,063.00</td>
+                                    <td class="pnl-value profit">71.25%</td>
+                                </tr>
+                                <tr>
+                                    <td class="account-name">Incubatorzone</td>
+                                    <td><span class="status-badge status-online">Online</span></td>
+                                    <td class="neutral">$400.00</td>
+                                    <td class="neutral">$534.50</td>
+                                    <td class="pnl-value profit">$134.50</td>
+                                    <td class="pnl-value profit">33.63%</td>
+                                </tr>
+                                <tr>
+                                    <td class="account-name">Memestrategies</td>
+                                    <td><span class="status-badge status-online">Online</span></td>
+                                    <td class="neutral">$800.00</td>
+                                    <td class="neutral">$1,047.20</td>
+                                    <td class="pnl-value profit">$247.20</td>
+                                    <td class="pnl-value profit">30.90%</td>
+                                </tr>
+                                <tr>
+                                    <td class="account-name">2k→10k Projekt</td>
+                                    <td><span class="status-badge status-online">Online</span></td>
+                                    <td class="neutral">$2,000.00</td>
+                                    <td class="neutral">$2,456.70</td>
+                                    <td class="pnl-value profit">$456.70</td>
+                                    <td class="pnl-value profit">22.84%</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -1182,8 +456,8 @@ window.addEventListener('beforeunload', function() {
                         <i class="fas fa-chart-area icon-blue"></i>
                         Offene Positionen
                         <span class="ms-auto">
-                            <small class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                PnL: ${{ "%.2f"|format(total_positions_pnl) }} ({{ "%.2f"|format(total_positions_pnl_percent) }}%)
+                            <small class="pnl-value profit">
+                                PnL: $287.50 (2.13%)
                             </small>
                         </span>
                     </h5>
@@ -1200,155 +474,45 @@ window.addEventListener('beforeunload', function() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for name, pos in positions_all %}
                                 <tr>
-                                    <td class="account-name">{{ name }}</td>
-                                    <td>
-                                        <span class="symbol-badge">{{ pos.symbol }}</span>
-                                    </td>
-                                    <td class="neutral">{{ pos.size }}</td>
-                                    <td class="neutral">${{ pos.avgPrice }}</td>
-                                    <td class="pnl-value {% if pos.unrealisedPnl|float >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(pos.unrealisedPnl|float) }}
-                                    </td>
-                                    <td>
-                                        {% if pos.side == "Buy" %}
-                                            <span class="side-long">Long</span>
-                                        {% else %}
-                                            <span class="side-short">Short</span>
-                                        {% endif %}
-                                    </td>
+                                    <td class="account-name">7 Tage Performer</td>
+                                    <td><span class="symbol-badge">WIF</span></td>
+                                    <td class="neutral">250</td>
+                                    <td class="neutral">$2.45</td>
+                                    <td class="pnl-value profit">$87.50</td>
+                                    <td><span class="side-long">Long</span></td>
                                 </tr>
-                                {% endfor %}
-                                {% if positions_all %}
+                                <tr>
+                                    <td class="account-name">2k→10k Projekt</td>
+                                    <td><span class="symbol-badge">SOL</span></td>
+                                    <td class="neutral">12.5</td>
+                                    <td class="neutral">$178.30</td>
+                                    <td class="pnl-value profit">$156.20</td>
+                                    <td><span class="side-long">Long</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="account-name">Memestrategies</td>
+                                    <td><span class="symbol-badge">DOGE</span></td>
+                                    <td class="neutral">1500</td>
+                                    <td class="neutral">$0.385</td>
+                                    <td class="pnl-value profit">$43.80</td>
+                                    <td><span class="side-long">Long</span></td>
+                                </tr>
                                 <tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
                                     <td colspan="4" class="text-end" style="padding-top: 15px;">
                                         <strong>Gesamt Offene Positionen:</strong>
                                     </td>
-                                    <td class="pnl-value {% if total_positions_pnl >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>${{ "%.2f"|format(total_positions_pnl) }}</strong>
+                                    <td class="pnl-value profit" style="padding-top: 15px;">
+                                        <strong>$287.50</strong>
                                     </td>
-                                    <td class="pnl-value {% if total_positions_pnl_percent >= 0 %}profit{% else %}loss{% endif %}" style="padding-top: 15px;">
-                                        <strong>{{ "%.2f"|format(total_positions_pnl_percent) }}%</strong>
+                                    <td class="pnl-value profit" style="padding-top: 15px;">
+                                        <strong>2.13%</strong>
                                     </td>
                                 </tr>
-                                {% endif %}
                             </tbody>
                         </table>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Coin Performance Section -->
-        <div class="coin-performance-section">
-            <div class="data-table">
-                <h5 class="table-title">
-                    <i class="fas fa-coins icon-blue"></i>
-                    Coin Performance Übersicht (30 Tage) - Alle Subaccounts
-                    <span class="ms-auto">
-                        <small class="neutral">{{ all_coin_performance|length }} aktive Strategien</small>
-                    </span>
-                </h5>
-                
-                {% if all_coin_performance %}
-                <div class="table-container">
-                    <table class="table custom-table coin-table">
-                        <thead>
-                            <tr>
-                                <th>Symbol</th>
-                                <th>Account</th>
-                                <th>Strategie</th>
-                                <th>30T Trades</th>
-                                <th>30T Win Rate</th>
-                                <th>30T PnL</th>
-                                <th>7T PnL</th>
-                                <th>Total PnL</th>
-                                <th>30T Profit Factor</th>
-                                <th>Performance</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set account_order = ['Claude Projekt', '7 Tage Performer', 'Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt'] %}
-                            
-                            {% for account_name in account_order %}
-                                {% set account_coins = all_coin_performance | selectattr('account', 'equalto', account_name) | list %}
-                                {% if account_coins %}
-                                    <!-- Account Header Row -->
-                                    <tr style="background: rgba(52, 152, 219, 0.2); border-top: 2px solid var(--blue-primary);">
-                                        <td colspan="11" style="padding: 15px; font-weight: bold; font-size: 1.1rem;">
-                                            <i class="fas fa-folder-open me-2 icon-blue"></i>{{ account_name }}
-                                            <span style="float: right; font-size: 0.9rem; color: var(--gray-light);">
-                                                {{ account_coins | length }} Strategien
-                                                {% if account_name == 'Claude Projekt' %}
-                                                    <span class="ms-2" style="color: #ffc107;">(ECHTE DATEN)</span>
-                                                {% elif account_name == '7 Tage Performer' %}
-                                                    <span class="ms-2" style="color: #28a745;">(LIVE DATEN)</span>
-                                                {% else %}
-                                                    <span class="ms-2" style="color: var(--neutral-color);">(DEMO)</span>
-                                                {% endif %}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    
-                                    {% for coin in account_coins | sort(attribute='month_pnl', reverse=true) %}
-                                    <tr>
-                                        <td>
-                                            <span class="symbol-badge">{{ coin.symbol }}</span>
-                                        </td>
-                                        <td class="account-name" style="font-size: 0.85rem;">{{ coin.account }}</td>
-                                        <td>
-                                            <div style="font-size: 0.85rem; font-weight: 600;">{{ coin.strategy[:25] }}{% if coin.strategy|length > 25 %}...{% endif %}</div>
-                                        </td>
-                                        <td class="neutral">{{ coin.month_trades | default(0) }}</td>
-                                        <td class="{% if coin.month_win_rate >= 60 %}profit{% elif coin.month_win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                            {{ "%.1f"|format(coin.month_win_rate | default(0)) }}%
-                                        </td>
-                                        <td class="pnl-value {% if coin.month_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.month_pnl | default(0)) }}
-                                        </td>
-                                        <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.week_pnl | default(0)) }}
-                                        </td>
-                                        <td class="pnl-value {% if coin.total_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.total_pnl) }}
-                                        </td>
-                                        <td class="{% if coin.month_profit_factor >= 1.5 %}profit{% elif coin.month_profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
-                                            {{ "%.2f"|format(coin.month_profit_factor | default(0)) if coin.month_profit_factor < 999 else '∞' }}
-                                        </td>
-                                        <td>
-                                            {% set month_performance_score = coin.month_performance_score | default(0) %}
-                                            {% if month_performance_score >= 70 %}
-                                                <span class="performance-badge perf-excellent">Ausgezeichnet</span>
-                                            {% elif month_performance_score >= 40 %}
-                                                <span class="performance-badge perf-good">Gut</span>
-                                            {% elif coin.month_trades > 0 %}
-                                                <span class="performance-badge perf-poor">Schwach</span>
-                                            {% else %}
-                                                <span class="performance-badge perf-inactive">Inaktiv</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if coin.status == "Active" and coin.month_trades > 0 %}
-                                                <span class="status-badge status-online">Aktiv</span>
-                                            {% else %}
-                                                <span class="status-badge status-offline">Inaktiv</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                {% endif %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Keine Coin-Performance-Daten verfügbar. Führen Sie einen Trade-Import durch um Daten zu laden.
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -1356,229 +520,9 @@ window.addEventListener('beforeunload', function() {
     <!-- Footer Timestamp -->
     <div class="footer-timestamp">
         <i class="fas fa-clock me-2"></i>
-        Letztes Update: {{ now }}
+        Letztes Update: 07.01.2025 14:30:15
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        let isImporting = false;
-        let importCheckInterval = null;
-
-        // Import Functions
-        function quickUpdate() {
-            if (isImporting) {
-                alert('Ein Import läuft bereits!');
-                return;
-            }
-            
-            const btn = document.getElementById('quick-update-btn');
-            const originalText = btn.innerHTML;
-            
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Läuft...';
-            btn.disabled = true;
-            
-            startImport('update', '', () => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            });
-        }
-
-        function fullImport() {
-            if (isImporting) {
-                alert('Ein Import läuft bereits!');
-                return;
-            }
-            
-            if (!confirm('Full Import kann 15-30 Minuten dauern und importiert alle Trades neu. Fortfahren?')) {
-                return;
-            }
-            
-            startImport('full');
-        }
-
-        function showImportModal() {
-            const modal = new bootstrap.Modal(document.getElementById('importModal'));
-            modal.show();
-        }
-
-        function showImportLog() {
-            const modal = new bootstrap.Modal(document.getElementById('logModal'));
-            loadImportHistory();
-            modal.show();
-        }
-
-        function refreshDashboard() {
-            window.location.reload();
-        }
-
-        function startCustomImport() {
-            const mode = document.getElementById('import-mode').value;
-            const account = document.getElementById('import-account').value;
-            
-            bootstrap.Modal.getInstance(document.getElementById('importModal')).hide();
-            
-            if (mode === 'full') {
-                if (!confirm('Full Import kann 15-30 Minuten dauern. Fortfahren?')) {
-                    return;
-                }
-            }
-            
-            startImport(mode, account);
-        }
-
-        function startImport(mode, account = '', callback = null) {
-            if (isImporting) return;
-            
-            isImporting = true;
-            updateImportStatus('Import läuft...', 'warning');
-            showProgress(true);
-            
-            const formData = new FormData();
-            formData.append('mode', mode);
-            formData.append('account', account);
-            
-            fetch('/import_trades', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    updateProgress(10, 'Import gestartet...');
-                    
-                    // Start checking status
-                    importCheckInterval = setInterval(() => {
-                        checkImportStatus(callback);
-                    }, 2000);
-                    
-                } else {
-                    throw new Error(data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Import error:', error);
-                updateImportStatus('Import Fehler', 'error');
-                showProgress(false);
-                isImporting = false;
-                if (callback) callback();
-            });
-        }
-
-        function checkImportStatus(callback) {
-            fetch('/import_status')
-            .then(response => response.json())
-            .then(data => {
-                if (data.progress !== undefined) {
-                    updateProgress(data.progress, data.message || 'Verarbeite...');
-                }
-                
-                if (data.progress >= 100 || !data.running) {
-                    clearInterval(importCheckInterval);
-                    completeImport(callback);
-                }
-            })
-            .catch(error => {
-                console.error('Status check failed:', error);
-                // Continue checking, but less frequently
-            });
-        }
-
-        function completeImport(callback) {
-            updateProgress(100, 'Import abgeschlossen!');
-            updateImportStatus('Import erfolgreich', 'success');
-            
-            setTimeout(() => {
-                showProgress(false);
-                updateImportStatus('Auto-Import aktiv', 'neutral');
-                isImporting = false;
-                updateLastUpdateTime();
-                if (callback) callback();
-                
-                // Optional: Refresh page after successful import
-                setTimeout(() => {
-                    if (confirm('Import abgeschlossen! Dashboard neu laden um aktualisierte Daten zu sehen?')) {
-                        window.location.reload();
-                    }
-                }, 1000);
-            }, 2000);
-        }
-
-        function updateImportStatus(message, type) {
-            const statusEl = document.getElementById('import-status');
-            statusEl.textContent = `● ${message}`;
-            statusEl.className = `import-status ${type}`;
-        }
-
-        function showProgress(show) {
-            document.getElementById('import-progress-section').style.display = show ? 'block' : 'none';
-            if (!show) {
-                document.getElementById('progress-bar').style.width = '0%';
-                document.getElementById('progress-percent').textContent = '0%';
-            }
-        }
-
-        function updateProgress(percent, message) {
-            document.getElementById('progress-bar').style.width = percent + '%';
-            document.getElementById('progress-percent').textContent = Math.round(percent) + '%';
-            document.getElementById('progress-message').textContent = message;
-        }
-
-        function updateLastUpdateTime() {
-            const now = new Date();
-            document.getElementById('last-update-time').textContent = now.toLocaleTimeString();
-        }
-
-        function loadImportHistory() {
-            const logContent = document.getElementById('import-log-content');
-            logContent.innerHTML = 'Lade Import History...';
-            
-            fetch('/import_log')
-            .then(response => response.json())
-            .then(data => {
-                if (data.logs && data.logs.length > 0) {
-                    let logHtml = '';
-                    data.logs.forEach(log => {
-                        const statusIcon = log.status === 'Success' ? '✅' : '❌';
-                        logHtml += `<div>[${log.timestamp}] ${statusIcon} ${log.mode} Import (${log.account}) - ${log.trades_imported} Trades - ${log.message}</div>`;
-                    });
-                    logContent.innerHTML = logHtml;
-                } else {
-                    logContent.innerHTML = 'Keine Import History gefunden.';
-                }
-            })
-            .catch(error => {
-                console.error('Log loading failed:', error);
-                logContent.innerHTML = `<div class="text-danger">Fehler beim Laden der Import History: ${error.message}</div>`;
-            });
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            updateLastUpdateTime();
-            
-            // Update time every minute
-            setInterval(updateLastUpdateTime, 60000);
-            
-            // Check for running imports on page load
-            fetch('/import_status')
-            .then(response => response.json())
-            .then(data => {
-                if (data.running) {
-                    isImporting = true;
-                    updateImportStatus(data.message || 'Import läuft...', 'warning');
-                    showProgress(true);
-                    updateProgress(data.progress || 0, data.message || 'Import läuft...');
-                    
-                    importCheckInterval = setInterval(() => {
-                        checkImportStatus();
-                    }, 2000);
-                }
-            })
-            .catch(error => {
-                console.error('Initial status check failed:', error);
-            });
-        });
-    </script>
 </body>
 </html>
