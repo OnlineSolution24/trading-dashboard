@@ -1,41 +1,149 @@
-// scripts/trading-data-sync.js - API DEBUG VERSION
+// scripts/trading-data-sync.js
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-class APIDebugSync {
+class WalletBalanceSync {
   constructor() {
     this.startTime = new Date();
+    this.totalRecords = 0;
+    this.errors = [];
+    this.successfulAccounts = 0;
     
-    // Test nur 2 Accounts für detaillierte Diagnose
+    // Alle Accounts für Wallet Balance & Position Tracking
     this.accounts = [
-      {
-        name: 'Bybit Claude Projekt',
-        api: {
-          // Teste verschiedene Endpoints
-          endpoints: [
-            'https://api.bybit.com/v5/execution/list?category=linear&limit=10',
-            'https://api.bybit.com/v5/order/history?category=linear&limit=10',
-            'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
-            'https://api.bybit.com/v5/position/list?category=linear'
-          ],
-          key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
-          secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
-          type: 'bybit'
-        }
-      },
+      // Blofin Account - Account Balance
       {
         name: 'Blofin',
+        sheetName: 'Blofin_Balance',
         api: {
-          endpoints: [
-            'https://openapi.blofin.com/api/v1/trade/fills?limit=10',
-            'https://openapi.blofin.com/api/v1/trade/orders-history?limit=10',
-            'https://openapi.blofin.com/api/v1/account/balance'
-          ],
+          url: 'https://openapi.blofin.com/api/v1/account/balance',
           key: process.env.BLOFIN_API_KEY,
           secret: process.env.BLOFIN_API_SECRET,
           passphrase: process.env.BLOFIN_API_PASSPHRASE,
-          type: 'blofin'
+          type: 'blofin_balance'
+        }
+      },
+      // Alle Bybit Accounts - Wallet Balance
+      {
+        name: 'Bybit 1K',
+        sheetName: 'Bybit_1K_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_1K_API_KEY,
+          secret: process.env.BYBIT_1K_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit 2K',
+        sheetName: 'Bybit_2K_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_2K_API_KEY,
+          secret: process.env.BYBIT_2K_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit AltStrategies',
+        sheetName: 'Bybit_AltStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ALTSSTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit BTC Strategies',
+        sheetName: 'Bybit_BTCStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit Claude Projekt',
+        sheetName: 'Bybit_Claude_Projekt_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
+          secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit Core Strategies',
+        sheetName: 'Bybit_CoreStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit ETH Ape Strategies',
+        sheetName: 'Bybit_ETHApeStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit Incubator Zone',
+        sheetName: 'Bybit_IncubatorZone_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_INCUBATORZONE_API_KEY,
+          secret: process.env.BYBIT_INCUBATORZONE_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit Meme Strategies',
+        sheetName: 'Bybit_MemeStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      {
+        name: 'Bybit SOL Strategies',
+        sheetName: 'Bybit_SOLStrategies_Balance',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET,
+          type: 'bybit_balance'
+        }
+      },
+      // Zusätzlich: Positionen für einige Accounts
+      {
+        name: 'Bybit Claude Projekt Positions',
+        sheetName: 'Bybit_Claude_Projekt_Positions',
+        api: {
+          url: 'https://api.bybit.com/v5/position/list?category=linear',
+          key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
+          secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
+          type: 'bybit_positions'
+        }
+      },
+      {
+        name: 'Bybit Core Strategies Positions',
+        sheetName: 'Bybit_CoreStrategies_Positions',
+        api: {
+          url: 'https://api.bybit.com/v5/position/list?category=linear',
+          key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
+          type: 'bybit_positions'
         }
       }
     ];
@@ -59,24 +167,128 @@ class APIDebugSync {
     return crypto.createHmac('sha256', secret).update(prehash).digest('base64');
   }
 
-  async testEndpoint(account, endpoint) {
+  async initializeGoogleSheets() {
     try {
-      this.log('info', `🔍 TESTING ${account.name} - ${endpoint}`);
+      this.log('info', '🔗 Initializing Google Sheets connection...');
+      
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GOOGLE_CLIENT_EMAIL,
+          private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        },
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+
+      this.sheets = google.sheets({ version: 'v4', auth });
+      this.spreadsheetId = process.env.GOOGLE_SHEET_ID;
+      
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+      
+      this.log('info', `📊 Connected to: "${response.data.properties.title}"`);
+      
+      await this.ensureAllSheets();
+      
+      return true;
+      
+    } catch (error) {
+      this.log('error', 'Google Sheets failed', { error: error.message });
+      throw error;
+    }
+  }
+
+  async ensureAllSheets() {
+    try {
+      const spreadsheet = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+      
+      const existingSheets = spreadsheet.data.sheets.map(sheet => sheet.properties.title);
+      this.log('info', `📋 Found existing sheets: ${existingSheets.length} sheets`);
+      
+      for (const account of this.accounts) {
+        if (!existingSheets.includes(account.sheetName)) {
+          await this.createSheet(account.sheetName, account.api.type);
+          this.log('info', `✅ Created sheet: ${account.sheetName}`);
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      
+    } catch (error) {
+      this.log('error', 'Failed to ensure sheets', { error: error.message });
+    }
+  }
+
+  async createSheet(sheetName, type) {
+    try {
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: sheetName
+              }
+            }
+          }]
+        }
+      });
+      
+      let headers = [];
+      
+      if (type === 'bybit_balance') {
+        headers = [
+          'timestamp', 'account_name', 'coin', 'wallet_balance', 'available_balance', 
+          'locked_balance', 'transferable_balance', 'bonus', 'available_to_withdraw',
+          'usd_value', 'unrealized_pnl', 'cum_realized_pnl', 'sync_id', 'raw_data'
+        ];
+      } else if (type === 'bybit_positions') {
+        headers = [
+          'timestamp', 'account_name', 'category', 'symbol', 'side', 'size', 
+          'position_value', 'entry_price', 'mark_price', 'liq_price', 'leverage',
+          'unrealized_pnl', 'cum_realized_pnl', 'position_status', 'sync_id', 'raw_data'
+        ];
+      } else if (type === 'blofin_balance') {
+        headers = [
+          'timestamp', 'account_name', 'ccy', 'available_balance', 'frozen_balance',
+          'equity', 'usd_equity', 'sync_id', 'raw_data'
+        ];
+      }
+      
+      if (headers.length > 0) {
+        const endCol = String.fromCharCode(64 + headers.length);
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!A1:${endCol}1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] },
+        });
+      }
+      
+    } catch (error) {
+      this.log('error', `Failed to create sheet ${sheetName}`, { error: error.message });
+    }
+  }
+
+  async fetchAccountData(account) {
+    try {
+      this.log('info', `📡 Fetching ${account.api.type} from ${account.name}...`);
       
       if (!account.api.key) {
-        this.log('error', `❌ No API key for ${account.name}`);
-        return;
+        this.log('warn', `⚠️ ${account.name}: API key missing, skipping`);
+        return [];
       }
       
       const headers = {
-        'User-Agent': 'Trading-Debug/1.0',
+        'User-Agent': 'Trading-Dashboard/1.0',
         'Accept': 'application/json'
       };
       
-      if (account.api.type === 'bybit') {
+      if (account.api.type.startsWith('bybit')) {
         const timestamp = Date.now().toString();
         const recvWindow = '5000';
-        const queryString = new URL(endpoint).search.substring(1);
+        const queryString = new URL(account.api.url).search.substring(1);
         
         headers['X-BAPI-API-KEY'] = account.api.key;
         headers['X-BAPI-TIMESTAMP'] = timestamp;
@@ -85,12 +297,10 @@ class APIDebugSync {
           timestamp, account.api.key, recvWindow, queryString, account.api.secret
         );
         
-        this.log('info', `🔐 Bybit Auth: Key=${account.api.key.substring(0,10)}..., Timestamp=${timestamp}`);
-        
-      } else if (account.api.type === 'blofin') {
+      } else if (account.api.type === 'blofin_balance') {
         const timestamp = new Date().toISOString();
         const method = 'GET';
-        const requestPath = new URL(endpoint).pathname + new URL(endpoint).search;
+        const requestPath = new URL(account.api.url).pathname;
         
         headers['BF-ACCESS-KEY'] = account.api.key;
         headers['BF-ACCESS-TIMESTAMP'] = timestamp;
@@ -98,109 +308,199 @@ class APIDebugSync {
         headers['BF-ACCESS-SIGN'] = this.createBlofinSignature(
           timestamp, method, requestPath, '', account.api.secret
         );
-        
-        this.log('info', `🔐 Blofin Auth: Key=${account.api.key.substring(0,10)}..., Timestamp=${timestamp}`);
       }
       
-      this.log('info', `📡 Making request...`);
-      
-      const response = await fetch(endpoint, {
+      const response = await fetch(account.api.url, {
         method: 'GET',
         headers: headers
       });
       
-      this.log('info', `📊 Response Status: ${response.status} ${response.statusText}`);
-      this.log('info', `📋 Response Headers:`, Object.fromEntries(response.headers.entries()));
-      
       if (!response.ok) {
         const errorText = await response.text();
-        this.log('error', `❌ HTTP Error Response:`, {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        return;
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
       const data = await response.json();
+      this.log('info', `✅ ${account.name}: Retrieved ${account.api.type} data`);
       
-      this.log('info', `📦 SUCCESS! Response Structure:`, {
-        topLevelKeys: Object.keys(data),
-        hasResult: !!data.result,
-        hasData: !!data.data,
-        hasCode: !!data.code,
-        hasMessage: !!data.message,
-        retCode: data.retCode,
-        retMsg: data.retMsg
-      });
-      
-      // Zeige ersten Teil der Daten
-      if (data.result) {
-        this.log('info', `📊 Result Structure:`, Object.keys(data.result));
-        if (data.result.list) {
-          this.log('info', `📈 Found ${data.result.list.length} items in result.list`);
-          if (data.result.list.length > 0) {
-            this.log('info', `📝 First item sample:`, data.result.list[0]);
-          }
-        }
-      }
-      
-      if (data.data && Array.isArray(data.data)) {
-        this.log('info', `📈 Found ${data.data.length} items in data array`);
-        if (data.data.length > 0) {
-          this.log('info', `📝 First item sample:`, data.data[0]);
-        }
-      }
-      
-      // Zeige komplette Antwort (begrenzt)
-      const responseString = JSON.stringify(data, null, 2);
-      if (responseString.length > 3000) {
-        this.log('info', `📋 Complete Response (truncated):`, responseString.substring(0, 3000) + '...[TRUNCATED]');
-      } else {
-        this.log('info', `📋 Complete Response:`, data);
-      }
+      return this.processAccountData(account, data);
       
     } catch (error) {
-      this.log('error', `💥 Request failed:`, {
-        error: error.message,
-        stack: error.stack
-      });
+      this.log('error', `❌ ${account.name} failed: ${error.message}`);
+      this.errors.push(`${account.name}: ${error.message}`);
+      return [];
     }
   }
 
-  async runDebug() {
-    this.log('info', '🔍 Starting DETAILED API Debug...');
-    this.log('info', '🎯 Testing multiple endpoints per account...');
+  processAccountData(account, rawData) {
+    const timestamp = new Date().toISOString();
+    const syncId = `sync_${Date.now()}`;
+    const rows = [];
     
-    for (const account of this.accounts) {
-      this.log('info', `\n${'='.repeat(60)}`);
-      this.log('info', `🏦 TESTING ACCOUNT: ${account.name}`);
-      this.log('info', `${'='.repeat(60)}`);
-      
-      for (let i = 0; i < account.api.endpoints.length; i++) {
-        const endpoint = account.api.endpoints[i];
-        
-        this.log('info', `\n📍 ENDPOINT ${i + 1}/${account.api.endpoints.length}:`);
-        await this.testEndpoint(account, endpoint);
-        
-        // Rate limiting zwischen Endpoints
-        if (i < account.api.endpoints.length - 1) {
-          this.log('info', '⏳ Waiting 2 seconds before next endpoint...');
-          await new Promise(r => setTimeout(r, 2000));
+    try {
+      if (account.api.type === 'bybit_balance') {
+        if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
+          rawData.result.list.forEach(wallet => {
+            if (wallet.coin && Array.isArray(wallet.coin)) {
+              wallet.coin.forEach(coin => {
+                // Speichere alle Coins, auch mit 0 Balance für Tracking
+                rows.push([
+                  timestamp,
+                  account.name,
+                  coin.coin,
+                  parseFloat(coin.walletBalance || 0),
+                  parseFloat(coin.availableBalance || 0),
+                  parseFloat(coin.locked || 0),
+                  parseFloat(coin.transferBalance || 0),
+                  parseFloat(coin.bonus || 0),
+                  parseFloat(coin.availableToWithdraw || 0),
+                  parseFloat(coin.usdValue || 0),
+                  parseFloat(coin.unrealisedPnl || 0),
+                  parseFloat(coin.cumRealisedPnl || 0),
+                  syncId,
+                  JSON.stringify(coin)
+                ]);
+              });
+            }
+          });
+        }
+      } else if (account.api.type === 'bybit_positions') {
+        if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
+          rawData.result.list.forEach(position => {
+            // Nur offene Positionen speichern
+            if (parseFloat(position.size || 0) > 0) {
+              rows.push([
+                timestamp,
+                account.name,
+                position.category || 'linear',
+                position.symbol,
+                position.side,
+                parseFloat(position.size || 0),
+                parseFloat(position.positionValue || 0),
+                parseFloat(position.avgPrice || 0),
+                parseFloat(position.markPrice || 0),
+                parseFloat(position.liqPrice || 0),
+                parseFloat(position.leverage || 0),
+                parseFloat(position.unrealisedPnl || 0),
+                parseFloat(position.cumRealisedPnl || 0),
+                position.positionStatus,
+                syncId,
+                JSON.stringify(position)
+              ]);
+            }
+          });
+        }
+      } else if (account.api.type === 'blofin_balance') {
+        if (rawData.data && Array.isArray(rawData.data)) {
+          rawData.data.forEach(balance => {
+            rows.push([
+              timestamp,
+              account.name,
+              balance.ccy,
+              parseFloat(balance.availBal || 0),
+              parseFloat(balance.frozenBal || 0),
+              parseFloat(balance.eq || 0),
+              parseFloat(balance.usdEq || 0),
+              syncId,
+              JSON.stringify(balance)
+            ]);
+          });
         }
       }
       
-      this.log('info', '⏳ Waiting 5 seconds before next account...');
-      await new Promise(r => setTimeout(r, 5000));
+      this.log('info', `📊 ${account.name}: Processed ${rows.length} records`);
+      
+    } catch (error) {
+      this.log('error', `Error processing ${account.name} data: ${error.message}`);
     }
     
-    this.log('info', '✅ API Debug completed!');
-    this.log('info', '📝 Check the logs above to see which endpoints work and what data they return.');
+    return rows;
+  }
+
+  async saveToGoogleSheet(account, data) {
+    if (data.length === 0) {
+      this.log('info', `ℹ️ ${account.name}: No data to save`);
+      return 0;
+    }
     
-    // Erfolgreicher Exit
-    process.exit(0);
+    try {
+      this.log('info', `💾 ${account.name}: Saving ${data.length} records...`);
+      
+      const existingData = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${account.sheetName}!A:A`,
+      });
+      
+      const nextRow = (existingData.data.values?.length || 1) + 1;
+      
+      let endCol = 'N'; // Default für balance
+      if (account.api.type === 'bybit_positions') endCol = 'P';
+      if (account.api.type === 'blofin_balance') endCol = 'I';
+      
+      const range = `${account.sheetName}!A${nextRow}:${endCol}${nextRow + data.length - 1}`;
+      
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: range,
+        valueInputOption: 'RAW',
+        resource: { values: data },
+      });
+      
+      this.log('info', `✅ ${account.name}: Saved ${data.length} records!`);
+      return data.length;
+      
+    } catch (error) {
+      this.log('error', `${account.name}: Save failed - ${error.message}`);
+      return 0;
+    }
+  }
+
+  async runSync() {
+    this.log('info', '🚀 Starting Wallet Balance & Position Sync...');
+    this.log('info', '💰 Tracking account balances and positions...');
+    this.log('info', `📊 Processing ${this.accounts.length} accounts...`);
+    
+    try {
+      await this.initializeGoogleSheets();
+      
+      for (const account of this.accounts) {
+        const data = await this.fetchAccountData(account);
+        const savedCount = await this.saveToGoogleSheet(account, data);
+        
+        if (savedCount > 0) {
+          this.successfulAccounts++;
+          this.totalRecords += savedCount;
+        }
+        
+        this.log('info', '⏳ Rate limiting: 2 seconds between accounts...');
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      
+      const duration = (new Date() - this.startTime) / 1000;
+      const summary = {
+        duration: `${duration.toFixed(1)}s`,
+        totalRecords: this.totalRecords,
+        successfulAccounts: this.successfulAccounts,
+        totalAccounts: this.accounts.length,
+        errors: this.errors.length
+      };
+      
+      this.log('info', '🎉 Wallet Balance & Position Sync completed!', summary);
+      this.log('info', `💰 Total records saved: ${this.totalRecords}`);
+      
+      if (this.errors.length > 0) {
+        this.log('warn', '⚠️ Some accounts had errors:', { errors: this.errors });
+      }
+      
+      const exitCode = this.successfulAccounts > 0 ? 0 : 1;
+      process.exit(exitCode);
+      
+    } catch (error) {
+      this.log('error', `💥 Wallet Balance Sync failed: ${error.message}`);
+      process.exit(1);
+    }
   }
 }
 
-const debugger = new APIDebugSync();
-debugger.runDebug();
+const syncer = new WalletBalanceSync();
+syncer.runSync();
