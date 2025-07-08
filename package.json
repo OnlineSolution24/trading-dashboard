@@ -1,15 +1,16 @@
 {
   "name": "trading-dashboard-sync",
   "version": "1.0.0",
-  "description": "Node.js cron job for trading data sync",
+  "description": "Trading data sync cron job",
   "main": "scripts/renderCronSync.js",
+  "type": "module",
   "scripts": {
-    "sync": "node scripts/renderCronSync.js"
+    "sync": "node scripts/renderCronSync.js",
+    "test": "node --version && npm list"
   },
   "dependencies": {
     "google-spreadsheet": "^4.1.2",
-    "node-fetch": "^3.3.2",
-    "crypto": "^1.0.1"
+    "node-fetch": "^3.3.2"
   },
   "engines": {
     "node": ">=18.0.0"
