@@ -1,5 +1,5 @@
 // scripts/renderCronSync.js
-import { GoogleSpreadsheet } from 'google-spreadsheet';
+const { GoogleSpreadsheet } = require('google-spreadsheet');
 
 class TradingDataSync {
   constructor() {
