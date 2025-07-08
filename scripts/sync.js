@@ -1,5 +1,6 @@
 // scripts/sync.js
-const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { google } = require('googleapis');
+const fetch = require('node-fetch');
 
 class TradingDataSync {
   constructor() {
@@ -36,6 +37,7 @@ class TradingDataSync {
     try {
       this.log('info', '🔗 Initializing Google Sheets connection...');
       
+      // Environment Variables prüfen
       if (!process.env.GOOGLE_SHEET_ID) {
         throw new Error('GOOGLE_SHEET_ID environment variable is missing');
       }
@@ -46,23 +48,28 @@ class TradingDataSync {
         throw new Error('GOOGLE_PRIVATE_KEY environment variable is missing');
       }
 
-      const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID);
+      // Google Auth Setup
+      const auth = new google.auth.GoogleAuth({
+        credentials: {
+          client_email: process.env.GOOGLE_CLIENT_EMAIL,
+          private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        },
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+
+      this.sheets = google.sheets({ version: 'v4', auth });
+      this.spreadsheetId = process.env.GOOGLE_SHEET_ID;
       
-      await doc.useServiceAccountAuth({
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      // Test connection
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
       });
       
-      await doc.loadInfo();
-      this.log('info', `📊 Connected to sheet: "${doc.title}"`);
+      this.log('info', `📊 Connected to sheet: "${response.data.properties.title}"`);
       
-      if (doc.sheetsByIndex.length === 0) {
-        this.sheet = await doc.addSheet({ title: 'TradingData' });
-        this.log('info', '📝 Created new sheet: TradingData');
-      } else {
-        this.sheet = doc.sheetsByIndex[0];
-        this.log('info', `📄 Using existing sheet: "${this.sheet.title}"`);
-      }
+      // Verwende erstes Sheet
+      this.sheetName = response.data.sheets[0].properties.title;
+      this.log('info', `📄 Using sheet: "${this.sheetName}"`);
       
       await this.ensureHeaders();
       
@@ -76,21 +83,37 @@ class TradingDataSync {
 
   async ensureHeaders() {
     try {
-      const headers = await this.sheet.headerValues;
-      const requiredHeaders = [
-        'timestamp', 
-        'source', 
-        'symbol', 
-        'price_usd', 
-        'change_24h_percent', 
-        'market_cap_usd',
-        'volume_24h',
-        'sync_id',
-        'raw_data'
-      ];
+      // Prüfe ob Header vorhanden sind
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!A1:I1`,
+      });
+      
+      const headers = response.data.values ? response.data.values[0] : [];
       
       if (headers.length === 0) {
-        await this.sheet.setHeaderRow(requiredHeaders);
+        // Header erstellen
+        const requiredHeaders = [
+          'timestamp', 
+          'source', 
+          'symbol', 
+          'price_usd', 
+          'change_24h_percent', 
+          'market_cap_usd',
+          'volume_24h',
+          'sync_id',
+          'raw_data'
+        ];
+        
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.sheetName}!A1:I1`,
+          valueInputOption: 'RAW',
+          resource: {
+            values: [requiredHeaders],
+          },
+        });
+        
         this.log('info', '✅ Header row created in Google Sheet');
       } else {
         this.log('info', `📋 Found ${headers.length} existing headers`);
@@ -119,9 +142,6 @@ class TradingDataSync {
       if (api.name === 'Bybit' && api.apiKey) {
         headers['X-BAPI-API-KEY'] = api.apiKey;
       }
-      
-      // Use node-fetch for Node.js compatibility
-      const fetch = require('node-fetch');
       
       const response = await fetch(api.url, {
         method: 'GET',
@@ -153,32 +173,32 @@ class TradingDataSync {
     try {
       if (source === 'CoinGecko') {
         Object.entries(rawData).forEach(([coinId, data]) => {
-          processedData.push({
+          processedData.push([
             timestamp,
             source,
-            symbol: coinId.toUpperCase(),
-            price_usd: data.usd || 0,
-            change_24h_percent: data.usd_24h_change || 0,
-            market_cap_usd: data.usd_market_cap || 0,
-            volume_24h: null,
-            sync_id: syncId,
-            raw_data: JSON.stringify(data)
-          });
+            coinId.toUpperCase(),
+            data.usd || 0,
+            data.usd_24h_change || 0,
+            data.usd_market_cap || 0,
+            null,
+            syncId,
+            JSON.stringify(data)
+          ]);
         });
       } else if (source === 'Bybit') {
         if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
           rawData.result.list.forEach(item => {
-            processedData.push({
+            processedData.push([
               timestamp,
               source,
-              symbol: item.symbol,
-              price_usd: parseFloat(item.lastPrice || 0),
-              change_24h_percent: parseFloat(item.price24hPcnt || 0) * 100,
-              market_cap_usd: null,
-              volume_24h: parseFloat(item.volume24h || 0),
-              sync_id: syncId,
-              raw_data: JSON.stringify(item)
-            });
+              item.symbol,
+              parseFloat(item.lastPrice || 0),
+              parseFloat(item.price24hPcnt || 0) * 100,
+              null,
+              parseFloat(item.volume24h || 0),
+              syncId,
+              JSON.stringify(item)
+            ]);
           });
         }
       }
@@ -199,7 +219,25 @@ class TradingDataSync {
     try {
       this.log('info', `💾 Saving ${allData.length} records to Google Sheets...`);
       
-      await this.sheet.addRows(allData);
+      // Finde die nächste leere Zeile
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!A:A`,
+      });
+      
+      const existingRows = response.data.values ? response.data.values.length : 1;
+      const startRow = existingRows + 1;
+      const endRow = startRow + allData.length - 1;
+      
+      // Daten hinzufügen
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.sheetName}!A${startRow}:I${endRow}`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: allData,
+        },
+      });
       
       this.log('info', `✅ Successfully saved ${allData.length} records to Google Sheets`);
       return allData.length;
