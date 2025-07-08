@@ -3,150 +3,128 @@ const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-class CompleteTradingDataSync {
+class TradingHistorySync {
   constructor() {
     this.startTime = new Date();
     this.totalRecords = 0;
     this.errors = [];
     this.successfulAccounts = 0;
     
-    // Alle Trading Accounts mit verschiedenen API Endpoints
+    // Alle Trading Accounts für History-Import
     this.accounts = [
-      // Blofin Account - Market Data
+      // Blofin Account - Trade History
       {
         name: 'Blofin',
-        sheetName: 'Blofin_Market',
+        sheetName: 'Blofin_Trades',
         api: {
-          url: 'https://openapi.blofin.com/api/v1/market/tickers',
+          url: 'https://openapi.blofin.com/api/v1/trade/fills',
           key: process.env.BLOFIN_API_KEY,
           secret: process.env.BLOFIN_API_SECRET,
           passphrase: process.env.BLOFIN_API_PASSPHRASE,
-          type: 'blofin_market'
+          type: 'blofin_trades'
         }
       },
-      // Alle Bybit Accounts - Wallet Balance
+      // Alle Bybit Accounts - Trade History
       {
         name: 'Bybit 1K',
-        sheetName: 'Bybit_1K_Wallet',
+        sheetName: 'Bybit_1K_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_1K_API_KEY,
           secret: process.env.BYBIT_1K_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit 2K',
-        sheetName: 'Bybit_2K_Wallet',
+        sheetName: 'Bybit_2K_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_2K_API_KEY,
           secret: process.env.BYBIT_2K_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit AltStrategies',
-        sheetName: 'Bybit_AltStrategies_Wallet',
+        sheetName: 'Bybit_AltStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_ALTSSTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit BTC Strategies',
-        sheetName: 'Bybit_BTCStrategies_Wallet',
+        sheetName: 'Bybit_BTCStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit Claude Projekt',
-        sheetName: 'Bybit_Claude_Projekt_Wallet',
+        sheetName: 'Bybit_Claude_Projekt_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
           secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit Core Strategies',
-        sheetName: 'Bybit_CoreStrategies_Wallet',
+        sheetName: 'Bybit_CoreStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit ETH Ape Strategies',
-        sheetName: 'Bybit_ETHApeStrategies_Wallet',
+        sheetName: 'Bybit_ETHApeStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit Incubator Zone',
-        sheetName: 'Bybit_IncubatorZone_Wallet',
+        sheetName: 'Bybit_IncubatorZone_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_INCUBATORZONE_API_KEY,
           secret: process.env.BYBIT_INCUBATORZONE_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit Meme Strategies',
-        sheetName: 'Bybit_MemeStrategies_Wallet',
+        sheetName: 'Bybit_MemeStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
+          type: 'bybit_trades'
         }
       },
       {
         name: 'Bybit SOL Strategies',
-        sheetName: 'Bybit_SOLStrategies_Wallet',
+        sheetName: 'Bybit_SOLStrategies_Trades',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET,
-          type: 'bybit_wallet'
-        }
-      },
-      // Zusätzliche Bybit Position Daten für jeden Account
-      {
-        name: 'Bybit 1K Positions',
-        sheetName: 'Bybit_1K_Positions',
-        api: {
-          url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-          key: process.env.BYBIT_1K_API_KEY,
-          secret: process.env.BYBIT_1K_API_SECRET,
-          type: 'bybit_positions'
-        }
-      },
-      {
-        name: 'Bybit 2K Positions',
-        sheetName: 'Bybit_2K_Positions',
-        api: {
-          url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-          key: process.env.BYBIT_2K_API_KEY,
-          secret: process.env.BYBIT_2K_API_SECRET,
-          type: 'bybit_positions'
+          type: 'bybit_trades'
         }
       }
-      // Weitere Position Sheets für andere Accounts können hier hinzugefügt werden
     ];
   }
 
@@ -158,13 +136,11 @@ class CompleteTradingDataSync {
     }
   }
 
-  // HMAC SHA256 Signatur für Bybit
   createBybitSignature(timestamp, apiKey, recvWindow, queryString, secret) {
     const param = timestamp + apiKey + recvWindow + queryString;
     return crypto.createHmac('sha256', secret).update(param).digest('hex');
   }
 
-  // HMAC SHA256 Signatur für Blofin
   createBlofinSignature(timestamp, method, requestPath, body, secret) {
     const prehash = timestamp + method.toUpperCase() + requestPath + (body || '');
     return crypto.createHmac('sha256', secret).update(prehash).digest('base64');
@@ -214,7 +190,7 @@ class CompleteTradingDataSync {
         if (!existingSheets.includes(account.sheetName)) {
           await this.createSheet(account.sheetName, account.api.type);
           this.log('info', `✅ Created sheet: ${account.sheetName}`);
-          await new Promise(r => setTimeout(r, 500)); // Rate limit sheet creation
+          await new Promise(r => setTimeout(r, 500));
         }
       }
       
@@ -238,31 +214,21 @@ class CompleteTradingDataSync {
         }
       });
       
-      // Headers basierend auf Datentyp
       let headers = [];
       
-      if (type === 'bybit_wallet') {
+      if (type === 'bybit_trades') {
         headers = [
-          'timestamp', 'account_name', 'account_type', 'coin', 'wallet_balance', 
-          'available_balance', 'locked_balance', 'bonus', 'transferable_balance',
-          'available_to_withdraw', 'usd_value', 'unrealized_pnl', 'cum_realized_pnl',
-          'sync_id', 'raw_data'
+          'timestamp', 'account_name', 'category', 'symbol', 'exec_id', 'order_id', 
+          'order_link_id', 'side', 'exec_qty', 'exec_price', 'order_type', 'exec_type',
+          'exec_value', 'exec_fee', 'fee_rate', 'trade_iv', 'mark_iv', 'mark_price',
+          'index_price', 'underlying_price', 'block_trade_id', 'closed_size',
+          'seq', 'next_page_cursor', 'exec_time', 'is_maker', 'sync_id', 'raw_data'
         ];
-      } else if (type === 'bybit_positions') {
+      } else if (type === 'blofin_trades') {
         headers = [
-          'timestamp', 'account_name', 'category', 'symbol', 'side', 'size', 
-          'position_value', 'entry_price', 'mark_price', 'liq_price', 'bust_price',
-          'leverage', 'auto_add_margin', 'position_margin', 'occ_closing_fee',
-          'occ_funding_fee', 'unrealized_pnl', 'cum_realized_pnl', 'position_status',
-          'adl_rank_indicator', 'is_reducible_only', 'mm_r_rate', 'im_r_rate',
-          'position_idx', 'risk_id', 'take_profit', 'stop_loss', 'trailing_stop',
-          'created_time', 'updated_time', 'seq', 'sync_id', 'raw_data'
-        ];
-      } else if (type === 'blofin_market') {
-        headers = [
-          'timestamp', 'account_name', 'inst_type', 'inst_id', 'last', 'last_sz',
-          'ask_px', 'ask_sz', 'bid_px', 'bid_sz', 'open_24h', 'high_24h', 'low_24h',
-          'sod_utc0', 'sod_utc8', 'vol_24h', 'vol_ccy_24h', 'ts', 'sync_id', 'raw_data'
+          'timestamp', 'account_name', 'inst_type', 'inst_id', 'trade_id', 'order_id',
+          'cl_ord_id', 'bill_id', 'tag', 'fill_px', 'fill_sz', 'side', 'exec_type',
+          'fee_ccy', 'fee', 'ts', 'sync_id', 'raw_data'
         ];
       }
       
@@ -281,13 +247,71 @@ class CompleteTradingDataSync {
     }
   }
 
+  async getLastSyncTime(account) {
+    try {
+      // Hole letzten Timestamp aus dem Sheet um nur neue Trades zu laden
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${account.sheetName}!A:A`,
+      });
+      
+      if (!response.data.values || response.data.values.length <= 1) {
+        // EINMALIGER HISTORICAL IMPORT: Start ab 06.05.2025
+        const startDate = new Date('2025-05-06T00:00:00.000Z');
+        this.log('info', `📅 ${account.name}: First import - getting all trades since ${startDate.toISOString()}`);
+        return startDate.getTime();
+      }
+      
+      // Hole alle Timestamps und finde den neuesten (für zukünftige Syncs)
+      const timestamps = response.data.values
+        .slice(1) // Skip header
+        .map(row => new Date(row[0]).getTime())
+        .filter(ts => !isNaN(ts))
+        .sort((a, b) => b - a);
+      
+      if (timestamps.length > 0) {
+        const lastSync = new Date(timestamps[0]);
+        this.log('info', `📅 ${account.name}: Incremental sync - getting trades since ${lastSync.toISOString()}`);
+        return timestamps[0]; // Neuester Timestamp
+      }
+      
+      // Fallback: ab 06.05.2025
+      const startDate = new Date('2025-05-06T00:00:00.000Z');
+      return startDate.getTime();
+      
+    } catch (error) {
+      this.log('error', `Failed to get last sync time for ${account.name}`, { error: error.message });
+      // Fallback: ab 06.05.2025
+      const startDate = new Date('2025-05-06T00:00:00.000Z');
+      return startDate.getTime();
+    }
+  }
+
   async fetchAccountData(account) {
     try {
-      this.log('info', `📡 Fetching ${account.name}...`);
+      this.log('info', `📡 Fetching trades from ${account.name}...`);
       
       if (!account.api.key) {
         this.log('warn', `⚠️ ${account.name}: API key missing, skipping`);
         return [];
+      }
+      
+      const lastSyncTime = await this.getLastSyncTime(account);
+      const lastSyncDate = new Date(lastSyncTime);
+      this.log('info', `📅 ${account.name}: Getting trades since ${lastSyncDate.toISOString()}`);
+      
+      // Erweitere URL mit Zeitfilter für KOMPLETTE Historie ab 06.05.2025
+      let apiUrl = account.api.url;
+      if (account.api.type === 'bybit_trades') {
+        // Bybit: startTime parameter hinzufügen - MAXIMALE Anzahl Trades
+        const separator = apiUrl.includes('?') ? '&' : '?';
+        // Entferne das bestehende limit=1000 und setze es höher für Historical Import
+        apiUrl = apiUrl.replace('limit=1000', 'limit=1000'); // Bybit Maximum per request
+        apiUrl += `${separator}startTime=${lastSyncTime}&endTime=${Date.now()}`;
+      } else if (account.api.type === 'blofin_trades') {
+        // Blofin: after parameter hinzufügen - Maximale Anzahl Trades
+        const separator = apiUrl.includes('?') ? '&' : '?';
+        apiUrl += `${separator}after=${Math.floor(lastSyncTime / 1000)}&limit=100&instType=SWAP`; // Blofin Maximum
       }
       
       const headers = {
@@ -295,11 +319,10 @@ class CompleteTradingDataSync {
         'Accept': 'application/json'
       };
       
-      // API-spezifische Authentifikation
-      if (account.api.type.startsWith('bybit')) {
+      if (account.api.type === 'bybit_trades') {
         const timestamp = Date.now().toString();
         const recvWindow = '5000';
-        const queryString = new URL(account.api.url).search.substring(1);
+        const queryString = new URL(apiUrl).search.substring(1);
         
         headers['X-BAPI-API-KEY'] = account.api.key;
         headers['X-BAPI-TIMESTAMP'] = timestamp;
@@ -308,10 +331,10 @@ class CompleteTradingDataSync {
           timestamp, account.api.key, recvWindow, queryString, account.api.secret
         );
         
-      } else if (account.api.type === 'blofin_market') {
+      } else if (account.api.type === 'blofin_trades') {
         const timestamp = new Date().toISOString();
         const method = 'GET';
-        const requestPath = new URL(account.api.url).pathname;
+        const requestPath = new URL(apiUrl).pathname + new URL(apiUrl).search;
         
         headers['BF-ACCESS-KEY'] = account.api.key;
         headers['BF-ACCESS-TIMESTAMP'] = timestamp;
@@ -321,7 +344,7 @@ class CompleteTradingDataSync {
         );
       }
       
-      const response = await fetch(account.api.url, {
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers
       });
@@ -332,7 +355,7 @@ class CompleteTradingDataSync {
       }
       
       const data = await response.json();
-      this.log('info', `✅ ${account.name}: Got data`);
+      this.log('info', `✅ ${account.name}: Retrieved trade data`);
       
       return this.processAccountData(account, data);
       
@@ -344,110 +367,80 @@ class CompleteTradingDataSync {
   }
 
   processAccountData(account, rawData) {
-    const timestamp = new Date().toISOString();
     const syncId = `sync_${Date.now()}`;
     const rows = [];
     
     try {
-      if (account.api.type === 'bybit_wallet') {
+      if (account.api.type === 'bybit_trades') {
         if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
-          rawData.result.list.forEach(wallet => {
-            if (wallet.coin && Array.isArray(wallet.coin)) {
-              wallet.coin.forEach(coin => {
-                rows.push([
-                  timestamp,
-                  account.name,
-                  wallet.accountType || 'UNIFIED',
-                  coin.coin,
-                  parseFloat(coin.walletBalance || 0),
-                  parseFloat(coin.availableBalance || 0),
-                  parseFloat(coin.locked || 0),
-                  parseFloat(coin.bonus || 0),
-                  parseFloat(coin.transferBalance || 0),
-                  parseFloat(coin.availableToWithdraw || 0),
-                  parseFloat(coin.usdValue || 0),
-                  parseFloat(coin.unrealisedPnl || 0),
-                  parseFloat(coin.cumRealisedPnl || 0),
-                  syncId,
-                  JSON.stringify(coin)
-                ]);
-              });
-            }
-          });
-        }
-      } else if (account.api.type === 'bybit_positions') {
-        if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
-          rawData.result.list.forEach(position => {
+          rawData.result.list.forEach(trade => {
+            const tradeTime = new Date(parseInt(trade.execTime || Date.now())).toISOString();
+            
             rows.push([
-              timestamp,
+              tradeTime,
               account.name,
-              position.category || 'linear',
-              position.symbol,
-              position.side,
-              parseFloat(position.size || 0),
-              parseFloat(position.positionValue || 0),
-              parseFloat(position.avgPrice || 0),
-              parseFloat(position.markPrice || 0),
-              parseFloat(position.liqPrice || 0),
-              parseFloat(position.bustPrice || 0),
-              parseFloat(position.leverage || 0),
-              position.autoAddMargin || 0,
-              parseFloat(position.positionIM || 0),
-              parseFloat(position.occClosingFee || 0),
-              parseFloat(position.occFundingFee || 0),
-              parseFloat(position.unrealisedPnl || 0),
-              parseFloat(position.cumRealisedPnl || 0),
-              position.positionStatus,
-              position.adlRankIndicator || 0,
-              position.isReduceOnly || false,
-              parseFloat(position.mmrRate || 0),
-              parseFloat(position.imrRate || 0),
-              position.positionIdx || 0,
-              position.riskId || 0,
-              parseFloat(position.takeProfit || 0),
-              parseFloat(position.stopLoss || 0),
-              parseFloat(position.trailingStop || 0),
-              position.createdTime,
-              position.updatedTime,
-              position.seq || 0,
+              trade.category || 'linear',
+              trade.symbol,
+              trade.execId,
+              trade.orderId,
+              trade.orderLinkId || '',
+              trade.side,
+              parseFloat(trade.execQty || 0),
+              parseFloat(trade.execPrice || 0),
+              trade.orderType,
+              trade.execType,
+              parseFloat(trade.execValue || 0),
+              parseFloat(trade.execFee || 0),
+              parseFloat(trade.feeRate || 0),
+              parseFloat(trade.tradeIv || 0),
+              parseFloat(trade.markIv || 0),
+              parseFloat(trade.markPrice || 0),
+              parseFloat(trade.indexPrice || 0),
+              parseFloat(trade.underlyingPrice || 0),
+              trade.blockTradeId || '',
+              parseFloat(trade.closedSize || 0),
+              trade.seq || 0,
+              trade.nextPageCursor || '',
+              trade.execTime,
+              trade.isMaker || false,
               syncId,
-              JSON.stringify(position)
+              JSON.stringify(trade)
             ]);
           });
         }
-      } else if (account.api.type === 'blofin_market') {
+      } else if (account.api.type === 'blofin_trades') {
         if (rawData.data && Array.isArray(rawData.data)) {
-          rawData.data.forEach(ticker => {
+          rawData.data.forEach(trade => {
+            const tradeTime = new Date(parseInt(trade.ts || Date.now())).toISOString();
+            
             rows.push([
-              timestamp,
+              tradeTime,
               account.name,
-              ticker.instType,
-              ticker.instId,
-              parseFloat(ticker.last || 0),
-              parseFloat(ticker.lastSz || 0),
-              parseFloat(ticker.askPx || 0),
-              parseFloat(ticker.askSz || 0),
-              parseFloat(ticker.bidPx || 0),
-              parseFloat(ticker.bidSz || 0),
-              parseFloat(ticker.open24h || 0),
-              parseFloat(ticker.high24h || 0),
-              parseFloat(ticker.low24h || 0),
-              parseFloat(ticker.sodUtc0 || 0),
-              parseFloat(ticker.sodUtc8 || 0),
-              parseFloat(ticker.vol24h || 0),
-              parseFloat(ticker.volCcy24h || 0),
-              ticker.ts,
+              trade.instType,
+              trade.instId,
+              trade.tradeId,
+              trade.orderId,
+              trade.clOrdId || '',
+              trade.billId || '',
+              trade.tag || '',
+              parseFloat(trade.fillPx || 0),
+              parseFloat(trade.fillSz || 0),
+              trade.side,
+              trade.execType || '',
+              trade.feeCcy || '',
+              parseFloat(trade.fee || 0),
+              trade.ts,
               syncId,
-              JSON.stringify(ticker)
+              JSON.stringify(trade)
             ]);
           });
         }
       }
       
-      this.log('info', `📊 ${account.name}: Processed ${rows.length} records`);
+      this.log('info', `📊 ${account.name}: Processed ${rows.length} trades`);
       
     } catch (error) {
-      this.log('error', `Error processing ${account.name} data: ${error.message}`);
+      this.log('error', `Error processing ${account.name} trade data: ${error.message}`);
     }
     
     return rows;
@@ -455,12 +448,12 @@ class CompleteTradingDataSync {
 
   async saveToGoogleSheet(account, data) {
     if (data.length === 0) {
-      this.log('info', `ℹ️ ${account.name}: No data to save`);
+      this.log('info', `ℹ️ ${account.name}: No new trades to save`);
       return 0;
     }
     
     try {
-      this.log('info', `💾 ${account.name}: Saving ${data.length} records...`);
+      this.log('info', `💾 ${account.name}: Saving ${data.length} trades...`);
       
       const existingData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -468,12 +461,7 @@ class CompleteTradingDataSync {
       });
       
       const nextRow = (existingData.data.values?.length || 1) + 1;
-      
-      // Bestimme End-Spalte basierend auf Datentyp
-      let endCol = 'O'; // Default
-      if (account.api.type === 'bybit_positions') endCol = 'AG';
-      if (account.api.type === 'blofin_market') endCol = 'T';
-      
+      const endCol = account.api.type === 'bybit_trades' ? 'AB' : 'R';
       const range = `${account.sheetName}!A${nextRow}:${endCol}${nextRow + data.length - 1}`;
       
       await this.sheets.spreadsheets.values.update({
@@ -483,7 +471,7 @@ class CompleteTradingDataSync {
         resource: { values: data },
       });
       
-      this.log('info', `✅ ${account.name}: Saved ${data.length} records!`);
+      this.log('info', `✅ ${account.name}: Saved ${data.length} trades!`);
       return data.length;
       
     } catch (error) {
@@ -493,35 +481,41 @@ class CompleteTradingDataSync {
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting Complete Trading Data Sync...');
-    this.log('info', `📊 Processing ${this.accounts.length} data sources...`);
+    this.log('info', '🚀 Starting COMPLETE Trading History Sync...');
+    this.log('info', '📅 Historical Import: Getting ALL trades since 06.05.2025');
+    this.log('info', `📊 Processing ${this.accounts.length} trading accounts...`);
     
     try {
       await this.initializeGoogleSheets();
       
       for (const account of this.accounts) {
-        const data = await this.fetchAccountData(account);
-        const savedCount = await this.saveToGoogleSheet(account, data);
+        const trades = await this.fetchAccountData(account);
+        const savedCount = await this.saveToGoogleSheet(account, trades);
         
         if (savedCount > 0) {
           this.successfulAccounts++;
           this.totalRecords += savedCount;
         }
         
-        // Rate Limiting zwischen API-Calls
-        await new Promise(r => setTimeout(r, 2000));
+        // Längeres Rate Limiting für Historical Import
+        this.log('info', '⏳ Rate limiting: 4 seconds between accounts...');
+        await new Promise(r => setTimeout(r, 4000));
       }
       
       const duration = (new Date() - this.startTime) / 1000;
       const summary = {
         duration: `${duration.toFixed(1)}s`,
-        totalRecords: this.totalRecords,
+        totalTrades: this.totalRecords,
         successfulAccounts: this.successfulAccounts,
         totalAccounts: this.accounts.length,
-        errors: this.errors.length
+        errors: this.errors.length,
+        startDate: '2025-05-06',
+        endDate: new Date().toISOString().split('T')[0]
       };
       
-      this.log('info', '🎉 Complete Trading Data Sync finished!', summary);
+      this.log('info', '🎉 COMPLETE Trading History Sync finished!', summary);
+      this.log('info', `📈 Total trades imported: ${this.totalRecords}`);
+      this.log('info', `📊 Coverage: ${summary.startDate} to ${summary.endDate}`);
       
       if (this.errors.length > 0) {
         this.log('warn', '⚠️ Some accounts had errors:', { errors: this.errors });
@@ -531,11 +525,11 @@ class CompleteTradingDataSync {
       process.exit(exitCode);
       
     } catch (error) {
-      this.log('error', `💥 Complete Trading Data Sync failed: ${error.message}`);
+      this.log('error', `💥 COMPLETE Trading History Sync failed: ${error.message}`);
       process.exit(1);
     }
   }
 }
 
-const syncer = new CompleteTradingDataSync();
+const syncer = new TradingHistorySync();
 syncer.runSync();
