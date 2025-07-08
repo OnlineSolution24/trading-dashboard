@@ -1,5 +1,5 @@
 // scripts/renderCronSync.js
-const { GoogleSpreadsheet } = require('google-spreadsheet');
+import { GoogleSpreadsheet } from 'google-spreadsheet';
 
 class TradingDataSync {
   constructor() {
@@ -351,10 +351,8 @@ class TradingDataSync {
 }
 
 // Hauptprogramm starten
-if (require.main === module) {
-  const syncer = new TradingDataSync();
-  syncer.runSync().catch(error => {
-    console.error('Unhandled error:', error);
-    process.exit(1);
-  });
-}
+const syncer = new TradingDataSync();
+syncer.runSync().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+});
