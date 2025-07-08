@@ -2,27 +2,127 @@
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 
-class TradingDataSync {
+class MultiAccountTradingSync {
   constructor() {
     this.startTime = new Date();
     this.totalRecords = 0;
     this.errors = [];
+    this.successfulAccounts = 0;
     
-    // Nur Bybit und Blofin APIs
-    this.apis = [
-      {
-        name: 'Bybit',
-        url: 'https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT,ETHUSDT,ADAUSDT,SOLUSDT,LINKUSDT,DOTUSDT,AVAXUSDT,MATICUSDT',
-        requiresAuth: true,
-        apiKey: process.env.BYBIT_API_KEY,
-        rateLimitMs: 1000
-      },
+    // Alle Trading Accounts konfigurieren
+    this.accounts = [
+      // Blofin Account
       {
         name: 'Blofin',
-        url: 'https://openapi.blofin.com/api/v1/market/tickers',
-        requiresAuth: true,
-        apiKey: process.env.BLOFIN_API_KEY,
-        rateLimitMs: 2000
+        sheetName: 'Blofin',
+        api: {
+          url: 'https://openapi.blofin.com/api/v1/market/tickers',
+          key: process.env.BLOFIN_API_KEY,
+          secret: process.env.BLOFIN_API_SECRET,
+          passphrase: process.env.BLOFIN_API_PASSPHRASE,
+          type: 'blofin'
+        }
+      },
+      // Alle Bybit Accounts
+      {
+        name: 'Bybit 1K',
+        sheetName: 'Bybit_1K',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_1K_API_KEY,
+          secret: process.env.BYBIT_1K_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit 2K',
+        sheetName: 'Bybit_2K',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_2K_API_KEY,
+          secret: process.env.BYBIT_2K_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit AltStrategies',
+        sheetName: 'Bybit_AltStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ALTSSTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit BTC Strategies',
+        sheetName: 'Bybit_BTCStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit Claude Projekt',
+        sheetName: 'Bybit_Claude_Projekt',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
+          secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit Core Strategies',
+        sheetName: 'Bybit_CoreStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit ETH Ape Strategies',
+        sheetName: 'Bybit_ETHApeStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit Incubator Zone',
+        sheetName: 'Bybit_IncubatorZone',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_INCUBATORZONE_API_KEY,
+          secret: process.env.BYBIT_INCUBATORZONE_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit Meme Strategies',
+        sheetName: 'Bybit_MemeStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
+      },
+      {
+        name: 'Bybit SOL Strategies',
+        sheetName: 'Bybit_SOLStrategies',
+        api: {
+          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET,
+          type: 'bybit'
+        }
       }
     ];
   }
@@ -39,16 +139,6 @@ class TradingDataSync {
     try {
       this.log('info', '🔗 Initializing Google Sheets connection...');
       
-      if (!process.env.GOOGLE_SHEET_ID) {
-        throw new Error('GOOGLE_SHEET_ID missing');
-      }
-      if (!process.env.GOOGLE_CLIENT_EMAIL) {
-        throw new Error('GOOGLE_CLIENT_EMAIL missing');
-      }
-      if (!process.env.GOOGLE_PRIVATE_KEY) {
-        throw new Error('GOOGLE_PRIVATE_KEY missing');
-      }
-
       const auth = new google.auth.GoogleAuth({
         credentials: {
           client_email: process.env.GOOGLE_CLIENT_EMAIL,
@@ -65,9 +155,10 @@ class TradingDataSync {
       });
       
       this.log('info', `📊 Connected to: "${response.data.properties.title}"`);
-      this.sheetName = response.data.sheets[0].properties.title;
       
-      await this.ensureHeaders();
+      // Alle benötigten Sheets erstellen/prüfen
+      await this.ensureAllSheets();
+      
       return true;
       
     } catch (error) {
@@ -76,49 +167,89 @@ class TradingDataSync {
     }
   }
 
-  async ensureHeaders() {
+  async ensureAllSheets() {
     try {
-      const response = await this.sheets.spreadsheets.values.get({
+      const spreadsheet = await this.sheets.spreadsheets.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A1:I1`,
       });
       
-      if (!response.data.values || response.data.values.length === 0) {
-        const headers = [
+      const existingSheets = spreadsheet.data.sheets.map(sheet => sheet.properties.title);
+      this.log('info', `📋 Found existing sheets: ${existingSheets.join(', ')}`);
+      
+      // Erstelle fehlende Sheets
+      for (const account of this.accounts) {
+        if (!existingSheets.includes(account.sheetName)) {
+          await this.createSheet(account.sheetName, account.api.type);
+          this.log('info', `✅ Created sheet: ${account.sheetName}`);
+        }
+      }
+      
+    } catch (error) {
+      this.log('error', 'Failed to ensure sheets', { error: error.message });
+    }
+  }
+
+  async createSheet(sheetName, type) {
+    try {
+      // Sheet erstellen
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: sheetName
+              }
+            }
+          }]
+        }
+      });
+      
+      // Header basierend auf Account-Typ erstellen
+      let headers;
+      if (type === 'bybit') {
+        headers = [
           'timestamp', 
-          'source', 
+          'account_name',
+          'coin', 
+          'wallet_balance', 
+          'available_balance',
+          'locked_balance',
+          'usd_value',
+          'sync_id'
+        ];
+      } else if (type === 'blofin') {
+        headers = [
+          'timestamp',
+          'account_name', 
           'symbol', 
-          'price_usd', 
-          'change_24h_percent', 
-          'volume_24h', 
+          'last_price', 
+          'change_24h',
+          'volume_24h',
           'high_24h',
           'low_24h',
           'sync_id'
         ];
-        
-        await this.sheets.spreadsheets.values.update({
-          spreadsheetId: this.spreadsheetId,
-          range: `${this.sheetName}!A1:I1`,
-          valueInputOption: 'RAW',
-          resource: { values: [headers] },
-        });
-        
-        this.log('info', '✅ Headers created');
-      } else {
-        this.log('info', '📋 Headers exist');
       }
       
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A1:${String.fromCharCode(64 + headers.length)}1`,
+        valueInputOption: 'RAW',
+        resource: { values: [headers] },
+      });
+      
     } catch (error) {
-      this.log('error', 'Header setup failed', { error: error.message });
+      this.log('error', `Failed to create sheet ${sheetName}`, { error: error.message });
     }
   }
 
-  async fetchApiData(api) {
+  async fetchAccountData(account) {
     try {
-      this.log('info', `📡 Fetching ${api.name}...`);
+      this.log('info', `📡 Fetching ${account.name}...`);
       
-      if (api.requiresAuth && !api.apiKey) {
-        this.log('warn', `⚠️ ${api.name}: API key missing, skipping`);
+      if (!account.api.key) {
+        this.log('warn', `⚠️ ${account.name}: API key missing, skipping`);
         return [];
       }
       
@@ -127,21 +258,24 @@ class TradingDataSync {
         'Accept': 'application/json'
       };
       
-      // Bybit Authentication
-      if (api.name === 'Bybit' && api.apiKey) {
-        headers['X-BAPI-API-KEY'] = api.apiKey;
-        headers['X-BAPI-TIMESTAMP'] = Date.now().toString();
+      // API-spezifische Header
+      if (account.api.type === 'bybit') {
+        const timestamp = Date.now().toString();
+        headers['X-BAPI-API-KEY'] = account.api.key;
+        headers['X-BAPI-TIMESTAMP'] = timestamp;
         headers['X-BAPI-RECV-WINDOW'] = '5000';
-      }
-      
-      // Blofin Authentication
-      if (api.name === 'Blofin' && api.apiKey) {
-        headers['BF-ACCESS-KEY'] = api.apiKey;
+        
+        // Hier würde normalerweise die Signatur berechnet werden
+        // Für Demo: vereinfachte Version ohne Signatur
+      } else if (account.api.type === 'blofin') {
+        headers['BF-ACCESS-KEY'] = account.api.key;
         headers['BF-ACCESS-TIMESTAMP'] = new Date().toISOString();
-        // Für vollständige Blofin Auth würde hier auch Signatur berechnet werden
+        
+        // Hier würde normalerweise die Signatur berechnet werden
+        // Für Demo: vereinfachte Version ohne Signatur
       }
       
-      const response = await fetch(api.url, {
+      const response = await fetch(account.api.url, {
         method: 'GET',
         headers: headers
       });
@@ -151,52 +285,59 @@ class TradingDataSync {
       }
       
       const data = await response.json();
-      this.log('info', `✅ ${api.name}: Got data`);
+      this.log('info', `✅ ${account.name}: Got data`);
       
-      return this.processApiData(api.name, data);
+      return this.processAccountData(account, data);
       
     } catch (error) {
-      this.log('error', `❌ ${api.name} failed: ${error.message}`);
-      this.errors.push(`${api.name}: ${error.message}`);
+      this.log('error', `❌ ${account.name} failed: ${error.message}`);
+      this.errors.push(`${account.name}: ${error.message}`);
       return [];
     }
   }
 
-  processApiData(source, rawData) {
+  processAccountData(account, rawData) {
     const timestamp = new Date().toISOString();
     const syncId = `sync_${Date.now()}`;
     const rows = [];
     
     try {
-      if (source === 'Bybit') {
+      if (account.api.type === 'bybit') {
+        // Bybit Wallet Balance Daten verarbeiten
         if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
-          rawData.result.list.forEach(item => {
-            rows.push([
-              timestamp,
-              source,
-              item.symbol,
-              parseFloat(item.lastPrice || 0),
-              parseFloat(item.price24hPcnt || 0) * 100, // Convert to percentage
-              parseFloat(item.volume24h || 0),
-              parseFloat(item.highPrice24h || 0),
-              parseFloat(item.lowPrice24h || 0),
-              syncId
-            ]);
+          rawData.result.list.forEach(wallet => {
+            if (wallet.coin && Array.isArray(wallet.coin)) {
+              wallet.coin.forEach(coin => {
+                // Nur Coins mit Balance > 0 speichern
+                if (parseFloat(coin.walletBalance || 0) > 0) {
+                  rows.push([
+                    timestamp,
+                    account.name,
+                    coin.coin,
+                    parseFloat(coin.walletBalance || 0),
+                    parseFloat(coin.availableBalance || 0),
+                    parseFloat(coin.locked || 0),
+                    parseFloat(coin.usdValue || 0),
+                    syncId
+                  ]);
+                }
+              });
+            }
           });
-          this.log('info', `📊 Bybit: Processed ${rows.length} trading pairs`);
         }
-      } else if (source === 'Blofin') {
+      } else if (account.api.type === 'blofin') {
+        // Blofin Market Data verarbeiten  
         if (rawData.data && Array.isArray(rawData.data)) {
+          // Filter auf wichtigste Trading Pairs
+          const majorPairs = ['BTC-USDT', 'ETH-USDT', 'ADA-USDT', 'SOL-USDT', 'LINK-USDT'];
           rawData.data.forEach(item => {
-            // Filter nur die wichtigsten Trading Pairs
-            const majorPairs = ['BTC-USDT', 'ETH-USDT', 'ADA-USDT', 'SOL-USDT', 'LINK-USDT'];
             if (majorPairs.includes(item.instId)) {
               rows.push([
                 timestamp,
-                source,
+                account.name,
                 item.instId,
                 parseFloat(item.last || 0),
-                parseFloat(item.sodUtc8 || 0), // 24h change
+                parseFloat(item.sodUtc8 || 0),
                 parseFloat(item.vol24h || 0),
                 parseFloat(item.high24h || 0),
                 parseFloat(item.low24h || 0),
@@ -204,100 +345,98 @@ class TradingDataSync {
               ]);
             }
           });
-          this.log('info', `📊 Blofin: Processed ${rows.length} major trading pairs`);
         }
       }
       
+      this.log('info', `📊 ${account.name}: Processed ${rows.length} records`);
+      
     } catch (error) {
-      this.log('error', `Error processing ${source} data: ${error.message}`);
+      this.log('error', `Error processing ${account.name} data: ${error.message}`);
     }
     
     return rows;
   }
 
-  async saveToGoogleSheets(allData) {
-    if (allData.length === 0) {
-      this.log('info', 'ℹ️ No data to save');
+  async saveToGoogleSheet(account, data) {
+    if (data.length === 0) {
+      this.log('info', `ℹ️ ${account.name}: No data to save`);
       return 0;
     }
     
     try {
-      this.log('info', `💾 Saving ${allData.length} records...`);
+      this.log('info', `💾 ${account.name}: Saving ${data.length} records...`);
       
       const existingData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:A`,
+        range: `${account.sheetName}!A:A`,
       });
       
       const nextRow = (existingData.data.values?.length || 1) + 1;
-      const range = `${this.sheetName}!A${nextRow}:I${nextRow + allData.length - 1}`;
+      const endCol = account.api.type === 'bybit' ? 'H' : 'I';
+      const range = `${account.sheetName}!A${nextRow}:${endCol}${nextRow + data.length - 1}`;
       
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.spreadsheetId,
         range: range,
         valueInputOption: 'RAW',
-        resource: { values: allData },
+        resource: { values: data },
       });
       
-      this.log('info', `✅ Saved ${allData.length} trading records!`);
-      return allData.length;
+      this.log('info', `✅ ${account.name}: Saved ${data.length} records!`);
+      return data.length;
       
     } catch (error) {
-      this.log('error', `Save failed: ${error.message}`);
-      throw error;
+      this.log('error', `${account.name}: Save failed - ${error.message}`);
+      return 0;
     }
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting Bybit & Blofin sync...');
+    this.log('info', '🚀 Starting Multi-Account Trading Sync...');
+    this.log('info', `📊 Processing ${this.accounts.length} accounts...`);
     
     try {
       await this.initializeGoogleSheets();
       
-      let allData = [];
-      let successfulApis = 0;
-      
-      for (const api of this.apis) {
-        const data = await this.fetchApiData(api);
-        if (data.length > 0) {
-          allData = allData.concat(data);
-          successfulApis++;
+      // Alle Accounts parallel verarbeiten (mit Rate Limiting)
+      for (const account of this.accounts) {
+        const data = await this.fetchAccountData(account);
+        const savedCount = await this.saveToGoogleSheet(account, data);
+        
+        if (savedCount > 0) {
+          this.successfulAccounts++;
+          this.totalRecords += savedCount;
         }
         
-        // Rate limiting zwischen API-Calls
-        if (api.rateLimitMs) {
-          this.log('info', `⏳ Waiting ${api.rateLimitMs}ms...`);
-          await new Promise(r => setTimeout(r, api.rateLimitMs));
-        }
+        // Rate Limiting zwischen Accounts
+        await new Promise(r => setTimeout(r, 1500));
       }
-      
-      this.totalRecords = await this.saveToGoogleSheets(allData);
       
       const duration = (new Date() - this.startTime) / 1000;
       const summary = {
         duration: `${duration.toFixed(1)}s`,
         totalRecords: this.totalRecords,
-        successfulApis: successfulApis,
-        totalApis: this.apis.length,
+        successfulAccounts: this.successfulAccounts,
+        totalAccounts: this.accounts.length,
         errors: this.errors.length
       };
       
-      this.log('info', '🎉 Sync completed!', summary);
+      this.log('info', '🎉 Multi-Account Sync completed!', summary);
       
       if (this.errors.length > 0) {
-        this.log('warn', '⚠️ Some APIs had errors:', { errors: this.errors });
+        this.log('warn', '⚠️ Some accounts had errors:', { errors: this.errors });
       }
       
       // Exit mit Status basierend auf Erfolg
-      const exitCode = successfulApis > 0 ? 0 : 1;
+      const exitCode = this.successfulAccounts > 0 ? 0 : 1;
       process.exit(exitCode);
       
     } catch (error) {
-      this.log('error', `💥 Sync failed: ${error.message}`);
+      this.log('error', `💥 Multi-Account Sync failed: ${error.message}`);
       process.exit(1);
     }
   }
 }
 
-const syncer = new TradingDataSync();
+const syncer = new MultiAccountTradingSync();
 syncer.runSync();
