@@ -1,4 +1,4 @@
-// scripts/renderCronSync.js
+// scripts/sync.js
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 
 class TradingDataSync {
@@ -20,13 +20,6 @@ class TradingDataSync {
         requiresAuth: true,
         apiKey: process.env.BYBIT_API_KEY,
         rateLimitMs: 1000
-      },
-      {
-        name: 'Blofin',
-        url: 'https://openapi.blofin.com/api/v1/market/tickers',
-        requiresAuth: true,
-        apiKey: process.env.BLOFIN_API_KEY,
-        rateLimitMs: 2000
       }
     ];
   }
@@ -127,9 +120,8 @@ class TradingDataSync {
         headers['X-BAPI-API-KEY'] = api.apiKey;
       }
       
-      if (api.name === 'Blofin' && api.apiKey) {
-        headers['BF-ACCESS-KEY'] = api.apiKey;
-      }
+      // Use node-fetch for Node.js compatibility
+      const fetch = require('node-fetch');
       
       const response = await fetch(api.url, {
         method: 'GET',
@@ -189,22 +181,6 @@ class TradingDataSync {
             });
           });
         }
-      } else if (source === 'Blofin') {
-        if (rawData.data && Array.isArray(rawData.data)) {
-          rawData.data.forEach(item => {
-            processedData.push({
-              timestamp,
-              source,
-              symbol: item.instId || item.symbol,
-              price_usd: parseFloat(item.last || item.lastPrice || 0),
-              change_24h_percent: parseFloat(item.sodUtc8 || item.change24h || 0),
-              market_cap_usd: null,
-              volume_24h: parseFloat(item.vol24h || item.volume24h || 0),
-              sync_id: syncId,
-              raw_data: JSON.stringify(item)
-            });
-          });
-        }
       }
       
     } catch (error) {
@@ -223,23 +199,10 @@ class TradingDataSync {
     try {
       this.log('info', `💾 Saving ${allData.length} records to Google Sheets...`);
       
-      const batchSize = 100;
-      let totalSaved = 0;
+      await this.sheet.addRows(allData);
       
-      for (let i = 0; i < allData.length; i += batchSize) {
-        const batch = allData.slice(i, i + batchSize);
-        await this.sheet.addRows(batch);
-        totalSaved += batch.length;
-        
-        this.log('info', `📝 Saved batch: ${totalSaved}/${allData.length} records`);
-        
-        if (i + batchSize < allData.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      
-      this.log('info', `✅ Successfully saved ${totalSaved} records to Google Sheets`);
-      return totalSaved;
+      this.log('info', `✅ Successfully saved ${allData.length} records to Google Sheets`);
+      return allData.length;
       
     } catch (error) {
       this.log('error', 'Failed to save data to Google Sheets', { error: error.message });
