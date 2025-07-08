@@ -1,0 +1,61 @@
+# .github/workflows/automated-data-sync.yml
+name: Automated Trading Data Sync
+
+on:
+  schedule:
+    # Läuft alle 2 Stunden (UTC Zeit)
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # Ermöglicht manuellen Trigger
+  repository_dispatch:
+    types: [manual-sync]
+
+jobs:
+  sync-trading-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install Dependencies
+        run: npm install
+        
+      - name: Run Automated Data Sync
+        run: node scripts/automatedDataSync.js
+        env:
+          # Google Sheets Credentials
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          
+          # Trading API Keys (passe Namen an deine APIs an)
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          COINBASE_API_KEY: ${{ secrets.COINBASE_API_KEY }}
+          KRAKEN_API_KEY: ${{ secrets.KRAKEN_API_KEY }}
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          TRADINGVIEW_API_KEY: ${{ secrets.TRADINGVIEW_API_KEY }}
+          YAHOO_FINANCE_API_KEY: ${{ secrets.YAHOO_FINANCE_API_KEY }}
+          MARKETSTACK_API_KEY: ${{ secrets.MARKETSTACK_API_KEY }}
+          IEXCLOUD_API_KEY: ${{ secrets.IEXCLOUD_API_KEY }}
+          
+          # Optional: Notification Settings
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          
+      - name: Upload Sync Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
