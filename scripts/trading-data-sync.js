@@ -8,12 +8,21 @@ class TradingDataSync {
     this.totalRecords = 0;
     this.errors = [];
     
+    // Nur Bybit und Blofin APIs
     this.apis = [
       {
-        name: 'CoinGecko',
-        url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,cardano,solana&vs_currencies=usd&include_24hr_change=true',
-        requiresAuth: false,
+        name: 'Bybit',
+        url: 'https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT,ETHUSDT,ADAUSDT,SOLUSDT,LINKUSDT,DOTUSDT,AVAXUSDT,MATICUSDT',
+        requiresAuth: true,
+        apiKey: process.env.BYBIT_API_KEY,
         rateLimitMs: 1000
+      },
+      {
+        name: 'Blofin',
+        url: 'https://openapi.blofin.com/api/v1/market/tickers',
+        requiresAuth: true,
+        apiKey: process.env.BLOFIN_API_KEY,
+        rateLimitMs: 2000
       }
     ];
   }
@@ -75,7 +84,17 @@ class TradingDataSync {
       });
       
       if (!response.data.values || response.data.values.length === 0) {
-        const headers = ['timestamp', 'source', 'symbol', 'price_usd', 'change_24h', 'market_cap', 'volume_24h', 'sync_id', 'raw_data'];
+        const headers = [
+          'timestamp', 
+          'source', 
+          'symbol', 
+          'price_usd', 
+          'change_24h_percent', 
+          'volume_24h', 
+          'high_24h',
+          'low_24h',
+          'sync_id'
+        ];
         
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
@@ -98,12 +117,37 @@ class TradingDataSync {
     try {
       this.log('info', `📡 Fetching ${api.name}...`);
       
+      if (api.requiresAuth && !api.apiKey) {
+        this.log('warn', `⚠️ ${api.name}: API key missing, skipping`);
+        return [];
+      }
+      
+      const headers = {
+        'User-Agent': 'Trading-Sync/1.0',
+        'Accept': 'application/json'
+      };
+      
+      // Bybit Authentication
+      if (api.name === 'Bybit' && api.apiKey) {
+        headers['X-BAPI-API-KEY'] = api.apiKey;
+        headers['X-BAPI-TIMESTAMP'] = Date.now().toString();
+        headers['X-BAPI-RECV-WINDOW'] = '5000';
+      }
+      
+      // Blofin Authentication
+      if (api.name === 'Blofin' && api.apiKey) {
+        headers['BF-ACCESS-KEY'] = api.apiKey;
+        headers['BF-ACCESS-TIMESTAMP'] = new Date().toISOString();
+        // Für vollständige Blofin Auth würde hier auch Signatur berechnet werden
+      }
+      
       const response = await fetch(api.url, {
-        headers: { 'User-Agent': 'Trading-Sync/1.0' }
+        method: 'GET',
+        headers: headers
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
@@ -113,6 +157,7 @@ class TradingDataSync {
       
     } catch (error) {
       this.log('error', `❌ ${api.name} failed: ${error.message}`);
+      this.errors.push(`${api.name}: ${error.message}`);
       return [];
     }
   }
@@ -122,20 +167,49 @@ class TradingDataSync {
     const syncId = `sync_${Date.now()}`;
     const rows = [];
     
-    if (source === 'CoinGecko') {
-      Object.entries(rawData).forEach(([coin, data]) => {
-        rows.push([
-          timestamp,
-          source,
-          coin.toUpperCase(),
-          data.usd || 0,
-          data.usd_24h_change || 0,
-          data.usd_market_cap || 0,
-          null,
-          syncId,
-          JSON.stringify(data)
-        ]);
-      });
+    try {
+      if (source === 'Bybit') {
+        if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
+          rawData.result.list.forEach(item => {
+            rows.push([
+              timestamp,
+              source,
+              item.symbol,
+              parseFloat(item.lastPrice || 0),
+              parseFloat(item.price24hPcnt || 0) * 100, // Convert to percentage
+              parseFloat(item.volume24h || 0),
+              parseFloat(item.highPrice24h || 0),
+              parseFloat(item.lowPrice24h || 0),
+              syncId
+            ]);
+          });
+          this.log('info', `📊 Bybit: Processed ${rows.length} trading pairs`);
+        }
+      } else if (source === 'Blofin') {
+        if (rawData.data && Array.isArray(rawData.data)) {
+          rawData.data.forEach(item => {
+            // Filter nur die wichtigsten Trading Pairs
+            const majorPairs = ['BTC-USDT', 'ETH-USDT', 'ADA-USDT', 'SOL-USDT', 'LINK-USDT'];
+            if (majorPairs.includes(item.instId)) {
+              rows.push([
+                timestamp,
+                source,
+                item.instId,
+                parseFloat(item.last || 0),
+                parseFloat(item.sodUtc8 || 0), // 24h change
+                parseFloat(item.vol24h || 0),
+                parseFloat(item.high24h || 0),
+                parseFloat(item.low24h || 0),
+                syncId
+              ]);
+            }
+          });
+          this.log('info', `📊 Blofin: Processed ${rows.length} major trading pairs`);
+        }
+      }
+      
+    } catch (error) {
+      this.log('error', `Error processing ${source} data: ${error.message}`);
     }
     
     return rows;
@@ -143,7 +217,7 @@ class TradingDataSync {
 
   async saveToGoogleSheets(allData) {
     if (allData.length === 0) {
-      this.log('info', 'No data to save');
+      this.log('info', 'ℹ️ No data to save');
       return 0;
     }
     
@@ -165,7 +239,7 @@ class TradingDataSync {
         resource: { values: allData },
       });
       
-      this.log('info', `✅ Saved ${allData.length} records!`);
+      this.log('info', `✅ Saved ${allData.length} trading records!`);
       return allData.length;
       
     } catch (error) {
@@ -175,22 +249,48 @@ class TradingDataSync {
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting sync...');
+    this.log('info', '🚀 Starting Bybit & Blofin sync...');
     
     try {
       await this.initializeGoogleSheets();
       
       let allData = [];
+      let successfulApis = 0;
+      
       for (const api of this.apis) {
         const data = await this.fetchApiData(api);
-        allData = allData.concat(data);
-        await new Promise(r => setTimeout(r, 1000));
+        if (data.length > 0) {
+          allData = allData.concat(data);
+          successfulApis++;
+        }
+        
+        // Rate limiting zwischen API-Calls
+        if (api.rateLimitMs) {
+          this.log('info', `⏳ Waiting ${api.rateLimitMs}ms...`);
+          await new Promise(r => setTimeout(r, api.rateLimitMs));
+        }
       }
       
-      await this.saveToGoogleSheets(allData);
+      this.totalRecords = await this.saveToGoogleSheets(allData);
       
-      this.log('info', '🎉 Sync completed!');
-      process.exit(0);
+      const duration = (new Date() - this.startTime) / 1000;
+      const summary = {
+        duration: `${duration.toFixed(1)}s`,
+        totalRecords: this.totalRecords,
+        successfulApis: successfulApis,
+        totalApis: this.apis.length,
+        errors: this.errors.length
+      };
+      
+      this.log('info', '🎉 Sync completed!', summary);
+      
+      if (this.errors.length > 0) {
+        this.log('warn', '⚠️ Some APIs had errors:', { errors: this.errors });
+      }
+      
+      // Exit mit Status basierend auf Erfolg
+      const exitCode = successfulApis > 0 ? 0 : 1;
+      process.exit(exitCode);
       
     } catch (error) {
       this.log('error', `💥 Sync failed: ${error.message}`);
