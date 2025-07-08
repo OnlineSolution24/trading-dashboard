@@ -1,7 +1,6 @@
 {
   "name": "trading-dashboard-sync",
   "version": "1.0.0",
-  "main": "scripts/sync.js",
   "dependencies": {
     "googleapis": "^126.0.1",
     "node-fetch": "^2.7.0"
