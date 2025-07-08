@@ -3,19 +3,19 @@ const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-class TradingHistorySync {
+class FlexibleTradingHistorySync {
   constructor() {
     this.startTime = new Date();
     this.totalRecords = 0;
     this.errors = [];
     this.successfulAccounts = 0;
     
-    // Alle Trading Accounts für History-Import
+    // Accounts mit individuellen Start-Daten (falls bekannt)
     this.accounts = [
-      // Blofin Account - Trade History
       {
         name: 'Blofin',
         sheetName: 'Blofin_Trades',
+        startDate: '2025-05-22', // Falls du weißt wann gestartet
         api: {
           url: 'https://openapi.blofin.com/api/v1/trade/fills',
           key: process.env.BLOFIN_API_KEY,
@@ -24,10 +24,10 @@ class TradingHistorySync {
           type: 'blofin_trades'
         }
       },
-      // Alle Bybit Accounts - Trade History
       {
         name: 'Bybit 1K',
         sheetName: 'Bybit_1K_Trades',
+        startDate: null, // Automatisch ermitteln
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_1K_API_KEY,
@@ -38,6 +38,7 @@ class TradingHistorySync {
       {
         name: 'Bybit 2K',
         sheetName: 'Bybit_2K_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_2K_API_KEY,
@@ -48,6 +49,7 @@ class TradingHistorySync {
       {
         name: 'Bybit AltStrategies',
         sheetName: 'Bybit_AltStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
@@ -58,6 +60,7 @@ class TradingHistorySync {
       {
         name: 'Bybit BTC Strategies',
         sheetName: 'Bybit_BTCStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
@@ -68,6 +71,7 @@ class TradingHistorySync {
       {
         name: 'Bybit Claude Projekt',
         sheetName: 'Bybit_Claude_Projekt_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
@@ -78,6 +82,7 @@ class TradingHistorySync {
       {
         name: 'Bybit Core Strategies',
         sheetName: 'Bybit_CoreStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
@@ -88,6 +93,7 @@ class TradingHistorySync {
       {
         name: 'Bybit ETH Ape Strategies',
         sheetName: 'Bybit_ETHApeStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
@@ -98,6 +104,7 @@ class TradingHistorySync {
       {
         name: 'Bybit Incubator Zone',
         sheetName: 'Bybit_IncubatorZone_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_INCUBATORZONE_API_KEY,
@@ -108,6 +115,7 @@ class TradingHistorySync {
       {
         name: 'Bybit Meme Strategies',
         sheetName: 'Bybit_MemeStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
@@ -118,6 +126,7 @@ class TradingHistorySync {
       {
         name: 'Bybit SOL Strategies',
         sheetName: 'Bybit_SOLStrategies_Trades',
+        startDate: null,
         api: {
           url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=1000',
           key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
@@ -247,43 +256,114 @@ class TradingHistorySync {
     }
   }
 
-  async getLastSyncTime(account) {
+  async getOptimalStartTime(account) {
     try {
-      // Hole letzten Timestamp aus dem Sheet um nur neue Trades zu laden
+      // 1. Prüfe ob bereits Daten im Sheet sind
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: `${account.sheetName}!A:A`,
       });
       
-      if (!response.data.values || response.data.values.length <= 1) {
-        // EINMALIGER HISTORICAL IMPORT: Start ab 06.05.2025
-        const startDate = new Date('2025-05-06T00:00:00.000Z');
-        this.log('info', `📅 ${account.name}: First import - getting all trades since ${startDate.toISOString()}`);
+      if (response.data.values && response.data.values.length > 1) {
+        // Sheet hat bereits Daten - inkrementeller Sync
+        const timestamps = response.data.values
+          .slice(1)
+          .map(row => new Date(row[0]).getTime())
+          .filter(ts => !isNaN(ts))
+          .sort((a, b) => b - a);
+        
+        if (timestamps.length > 0) {
+          const lastSync = new Date(timestamps[0]);
+          this.log('info', `📅 ${account.name}: Incremental sync since ${lastSync.toISOString()}`);
+          return timestamps[0];
+        }
+      }
+      
+      // 2. Verwende Account-spezifisches Start-Datum falls definiert
+      if (account.startDate) {
+        const startDate = new Date(`${account.startDate}T00:00:00.000Z`);
+        this.log('info', `📅 ${account.name}: Using defined start date ${startDate.toISOString()}`);
         return startDate.getTime();
       }
       
-      // Hole alle Timestamps und finde den neuesten (für zukünftige Syncs)
-      const timestamps = response.data.values
-        .slice(1) // Skip header
-        .map(row => new Date(row[0]).getTime())
-        .filter(ts => !isNaN(ts))
-        .sort((a, b) => b - a);
+      // 3. Automatische Erkennung: Probe verschiedene Zeiträume
+      const probePeriods = [
+        { name: '7 days', days: 7 },
+        { name: '30 days', days: 30 },
+        { name: '60 days', days: 60 },
+        { name: '90 days', days: 90 }
+      ];
       
-      if (timestamps.length > 0) {
-        const lastSync = new Date(timestamps[0]);
-        this.log('info', `📅 ${account.name}: Incremental sync - getting trades since ${lastSync.toISOString()}`);
-        return timestamps[0]; // Neuester Timestamp
+      for (const period of probePeriods) {
+        const testDate = new Date();
+        testDate.setDate(testDate.getDate() - period.days);
+        
+        const hasData = await this.probeForData(account, testDate.getTime());
+        if (hasData) {
+          this.log('info', `📅 ${account.name}: Auto-detected start: ${period.name} ago (${testDate.toISOString()})`);
+          return testDate.getTime();
+        }
       }
       
-      // Fallback: ab 06.05.2025
-      const startDate = new Date('2025-05-06T00:00:00.000Z');
-      return startDate.getTime();
+      // 4. Fallback: Letzte 7 Tage
+      const fallbackDate = new Date();
+      fallbackDate.setDate(fallbackDate.getDate() - 7);
+      this.log('info', `📅 ${account.name}: Using fallback: last 7 days (${fallbackDate.toISOString()})`);
+      return fallbackDate.getTime();
       
     } catch (error) {
-      this.log('error', `Failed to get last sync time for ${account.name}`, { error: error.message });
-      // Fallback: ab 06.05.2025
-      const startDate = new Date('2025-05-06T00:00:00.000Z');
-      return startDate.getTime();
+      this.log('error', `Failed to determine start time for ${account.name}`, { error: error.message });
+      const fallbackDate = new Date();
+      fallbackDate.setDate(fallbackDate.getDate() - 7);
+      return fallbackDate.getTime();
+    }
+  }
+
+  async probeForData(account, startTime) {
+    try {
+      // Mache einen kleinen Test-Request um zu schauen ob Daten existieren
+      let testUrl = account.api.url.replace('limit=1000', 'limit=1');
+      
+      if (account.api.type === 'bybit_trades') {
+        const separator = testUrl.includes('?') ? '&' : '?';
+        testUrl += `${separator}startTime=${startTime}&endTime=${Date.now()}`;
+      } else if (account.api.type === 'blofin_trades') {
+        const separator = testUrl.includes('?') ? '&' : '?';
+        testUrl += `${separator}after=${Math.floor(startTime / 1000)}&limit=1`;
+      }
+      
+      const headers = { 'User-Agent': 'Trading-Probe/1.0', 'Accept': 'application/json' };
+      
+      if (account.api.type === 'bybit_trades') {
+        const timestamp = Date.now().toString();
+        const recvWindow = '5000';
+        const queryString = new URL(testUrl).search.substring(1);
+        
+        headers['X-BAPI-API-KEY'] = account.api.key;
+        headers['X-BAPI-TIMESTAMP'] = timestamp;
+        headers['X-BAPI-RECV-WINDOW'] = recvWindow;
+        headers['X-BAPI-SIGN'] = this.createBybitSignature(
+          timestamp, account.api.key, recvWindow, queryString, account.api.secret
+        );
+      }
+      
+      const response = await fetch(testUrl, { method: 'GET', headers });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (account.api.type === 'bybit_trades') {
+          return data.result && data.result.list && data.result.list.length > 0;
+        } else if (account.api.type === 'blofin_trades') {
+          return data.data && data.data.length > 0;
+        }
+      }
+      
+      return false;
+      
+    } catch (error) {
+      this.log('warn', `Probe failed for ${account.name}: ${error.message}`);
+      return false;
     }
   }
 
@@ -296,22 +376,17 @@ class TradingHistorySync {
         return [];
       }
       
-      const lastSyncTime = await this.getLastSyncTime(account);
-      const lastSyncDate = new Date(lastSyncTime);
-      this.log('info', `📅 ${account.name}: Getting trades since ${lastSyncDate.toISOString()}`);
+      const startTime = await this.getOptimalStartTime(account);
+      const startDate = new Date(startTime);
+      this.log('info', `📅 ${account.name}: Getting trades since ${startDate.toISOString()}`);
       
-      // Erweitere URL mit Zeitfilter für KOMPLETTE Historie ab 06.05.2025
       let apiUrl = account.api.url;
       if (account.api.type === 'bybit_trades') {
-        // Bybit: startTime parameter hinzufügen - MAXIMALE Anzahl Trades
         const separator = apiUrl.includes('?') ? '&' : '?';
-        // Entferne das bestehende limit=1000 und setze es höher für Historical Import
-        apiUrl = apiUrl.replace('limit=1000', 'limit=1000'); // Bybit Maximum per request
-        apiUrl += `${separator}startTime=${lastSyncTime}&endTime=${Date.now()}`;
+        apiUrl += `${separator}startTime=${startTime}&endTime=${Date.now()}`;
       } else if (account.api.type === 'blofin_trades') {
-        // Blofin: after parameter hinzufügen - Maximale Anzahl Trades
         const separator = apiUrl.includes('?') ? '&' : '?';
-        apiUrl += `${separator}after=${Math.floor(lastSyncTime / 1000)}&limit=100&instType=SWAP`; // Blofin Maximum
+        apiUrl += `${separator}after=${Math.floor(startTime / 1000)}&limit=100`;
       }
       
       const headers = {
@@ -481,8 +556,8 @@ class TradingHistorySync {
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting COMPLETE Trading History Sync...');
-    this.log('info', '📅 Historical Import: Getting ALL trades since 06.05.2025');
+    this.log('info', '🚀 Starting FLEXIBLE Trading History Sync...');
+    this.log('info', '📅 Auto-detecting optimal date ranges per account...');
     this.log('info', `📊 Processing ${this.accounts.length} trading accounts...`);
     
     try {
@@ -497,9 +572,8 @@ class TradingHistorySync {
           this.totalRecords += savedCount;
         }
         
-        // Längeres Rate Limiting für Historical Import
-        this.log('info', '⏳ Rate limiting: 4 seconds between accounts...');
-        await new Promise(r => setTimeout(r, 4000));
+        this.log('info', '⏳ Rate limiting: 3 seconds between accounts...');
+        await new Promise(r => setTimeout(r, 3000));
       }
       
       const duration = (new Date() - this.startTime) / 1000;
@@ -508,14 +582,11 @@ class TradingHistorySync {
         totalTrades: this.totalRecords,
         successfulAccounts: this.successfulAccounts,
         totalAccounts: this.accounts.length,
-        errors: this.errors.length,
-        startDate: '2025-05-06',
-        endDate: new Date().toISOString().split('T')[0]
+        errors: this.errors.length
       };
       
-      this.log('info', '🎉 COMPLETE Trading History Sync finished!', summary);
+      this.log('info', '🎉 FLEXIBLE Trading History Sync completed!', summary);
       this.log('info', `📈 Total trades imported: ${this.totalRecords}`);
-      this.log('info', `📊 Coverage: ${summary.startDate} to ${summary.endDate}`);
       
       if (this.errors.length > 0) {
         this.log('warn', '⚠️ Some accounts had errors:', { errors: this.errors });
@@ -525,11 +596,11 @@ class TradingHistorySync {
       process.exit(exitCode);
       
     } catch (error) {
-      this.log('error', `💥 COMPLETE Trading History Sync failed: ${error.message}`);
+      this.log('error', `💥 FLEXIBLE Trading History Sync failed: ${error.message}`);
       process.exit(1);
     }
   }
 }
 
-const syncer = new TradingHistorySync();
+const syncer = new FlexibleTradingHistorySync();
 syncer.runSync();
