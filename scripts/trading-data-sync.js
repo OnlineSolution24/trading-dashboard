@@ -1,149 +1,149 @@
-// scripts/trading-data-sync.js
+// scripts/trading-data-sync.js - Order History & Trade Activity
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
 
-class WalletBalanceSync {
+class OrderHistorySync {
   constructor() {
     this.startTime = new Date();
     this.totalRecords = 0;
     this.errors = [];
     this.successfulAccounts = 0;
     
-    // Alle Accounts für Wallet Balance & Position Tracking
+    // Alle Accounts für Order History (alle Status: filled, cancelled, rejected)
     this.accounts = [
-      // Blofin Account - Account Balance
+      // Blofin Order History
       {
         name: 'Blofin',
-        sheetName: 'Blofin_Balance',
+        sheetName: 'Blofin_Orders',
         api: {
-          url: 'https://openapi.blofin.com/api/v1/account/balance',
+          url: 'https://openapi.blofin.com/api/v1/trade/orders-history?limit=100',
           key: process.env.BLOFIN_API_KEY,
           secret: process.env.BLOFIN_API_SECRET,
           passphrase: process.env.BLOFIN_API_PASSPHRASE,
-          type: 'blofin_balance'
+          type: 'blofin_orders'
         }
       },
-      // Alle Bybit Accounts - Wallet Balance
+      // Bybit Order History für alle Accounts
       {
         name: 'Bybit 1K',
-        sheetName: 'Bybit_1K_Balance',
+        sheetName: 'Bybit_1K_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_1K_API_KEY,
           secret: process.env.BYBIT_1K_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit 2K',
-        sheetName: 'Bybit_2K_Balance',
+        sheetName: 'Bybit_2K_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_2K_API_KEY,
           secret: process.env.BYBIT_2K_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit AltStrategies',
-        sheetName: 'Bybit_AltStrategies_Balance',
+        sheetName: 'Bybit_AltStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_ALTSSTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit BTC Strategies',
-        sheetName: 'Bybit_BTCStrategies_Balance',
+        sheetName: 'Bybit_BTCStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit Claude Projekt',
-        sheetName: 'Bybit_Claude_Projekt_Balance',
+        sheetName: 'Bybit_Claude_Projekt_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
           secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit Core Strategies',
-        sheetName: 'Bybit_CoreStrategies_Balance',
+        sheetName: 'Bybit_CoreStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit ETH Ape Strategies',
-        sheetName: 'Bybit_ETHApeStrategies_Balance',
+        sheetName: 'Bybit_ETHApeStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit Incubator Zone',
-        sheetName: 'Bybit_IncubatorZone_Balance',
+        sheetName: 'Bybit_IncubatorZone_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_INCUBATORZONE_API_KEY,
           secret: process.env.BYBIT_INCUBATORZONE_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit Meme Strategies',
-        sheetName: 'Bybit_MemeStrategies_Balance',
+        sheetName: 'Bybit_MemeStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
       {
         name: 'Bybit SOL Strategies',
-        sheetName: 'Bybit_SOLStrategies_Balance',
+        sheetName: 'Bybit_SOLStrategies_Orders',
         api: {
-          url: 'https://api.bybit.com/v5/account/wallet-balance?accountType=UNIFIED',
+          url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
           key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
           secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET,
-          type: 'bybit_balance'
+          type: 'bybit_orders'
         }
       },
-      // Zusätzlich: Positionen für einige Accounts
+      // Zusätzlich: Aktive Orders
       {
-        name: 'Bybit Claude Projekt Positions',
-        sheetName: 'Bybit_Claude_Projekt_Positions',
+        name: 'Bybit Claude Projekt Active',
+        sheetName: 'Bybit_Claude_Projekt_ActiveOrders',
         api: {
-          url: 'https://api.bybit.com/v5/position/list?category=linear',
+          url: 'https://api.bybit.com/v5/order/realtime?category=linear&limit=200',
           key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
           secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET,
-          type: 'bybit_positions'
+          type: 'bybit_active_orders'
         }
       },
       {
-        name: 'Bybit Core Strategies Positions',
-        sheetName: 'Bybit_CoreStrategies_Positions',
+        name: 'Bybit Core Strategies Active',
+        sheetName: 'Bybit_CoreStrategies_ActiveOrders',
         api: {
-          url: 'https://api.bybit.com/v5/position/list?category=linear',
+          url: 'https://api.bybit.com/v5/order/realtime?category=linear&limit=200',
           key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
           secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET,
-          type: 'bybit_positions'
+          type: 'bybit_active_orders'
         }
       }
     ];
@@ -237,22 +237,22 @@ class WalletBalanceSync {
       
       let headers = [];
       
-      if (type === 'bybit_balance') {
+      if (type === 'bybit_orders' || type === 'bybit_active_orders') {
         headers = [
-          'timestamp', 'account_name', 'coin', 'wallet_balance', 'available_balance', 
-          'locked_balance', 'transferable_balance', 'bonus', 'available_to_withdraw',
-          'usd_value', 'unrealized_pnl', 'cum_realized_pnl', 'sync_id', 'raw_data'
+          'timestamp', 'account_name', 'category', 'symbol', 'order_id', 'order_link_id',
+          'side', 'order_type', 'qty', 'price', 'time_in_force', 'order_status',
+          'avg_price', 'cum_exec_qty', 'cum_exec_value', 'cum_exec_fee', 'reduce_only',
+          'close_on_trigger', 'created_time', 'updated_time', 'reject_reason',
+          'stop_order_type', 'trigger_price', 'take_profit', 'stop_loss', 'tp_trigger_by',
+          'sl_trigger_by', 'trigger_direction', 'position_idx', 'sync_id', 'raw_data'
         ];
-      } else if (type === 'bybit_positions') {
+      } else if (type === 'blofin_orders') {
         headers = [
-          'timestamp', 'account_name', 'category', 'symbol', 'side', 'size', 
-          'position_value', 'entry_price', 'mark_price', 'liq_price', 'leverage',
-          'unrealized_pnl', 'cum_realized_pnl', 'position_status', 'sync_id', 'raw_data'
-        ];
-      } else if (type === 'blofin_balance') {
-        headers = [
-          'timestamp', 'account_name', 'ccy', 'available_balance', 'frozen_balance',
-          'equity', 'usd_equity', 'sync_id', 'raw_data'
+          'timestamp', 'account_name', 'inst_type', 'inst_id', 'order_id', 'cl_ord_id',
+          'tag', 'px', 'sz', 'ord_type', 'side', 'pos_side', 'td_mode', 'state',
+          'acc_fill_sz', 'fill_px', 'trade_id', 'fill_sz', 'fill_time', 'source',
+          'fee', 'fee_ccy', 'rebate', 'rebate_ccy', 'pnl', 'c_time', 'u_time',
+          'sync_id', 'raw_data'
         ];
       }
       
@@ -271,6 +271,46 @@ class WalletBalanceSync {
     }
   }
 
+  async getLastSyncTime(account) {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${account.sheetName}!A:A`,
+      });
+      
+      if (!response.data.values || response.data.values.length <= 1) {
+        // Erstes Mal: letzte 30 Tage für Order History
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        this.log('info', `📅 ${account.name}: First import - getting orders since ${thirtyDaysAgo.toISOString()}`);
+        return thirtyDaysAgo.getTime();
+      }
+      
+      // Inkrementeller Sync
+      const timestamps = response.data.values
+        .slice(1)
+        .map(row => new Date(row[0]).getTime())
+        .filter(ts => !isNaN(ts))
+        .sort((a, b) => b - a);
+      
+      if (timestamps.length > 0) {
+        const lastSync = new Date(timestamps[0]);
+        this.log('info', `📅 ${account.name}: Incremental sync since ${lastSync.toISOString()}`);
+        return timestamps[0];
+      }
+      
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return sevenDaysAgo.getTime();
+      
+    } catch (error) {
+      this.log('error', `Failed to get last sync time for ${account.name}`, { error: error.message });
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      return threeDaysAgo.getTime();
+    }
+  }
+
   async fetchAccountData(account) {
     try {
       this.log('info', `📡 Fetching ${account.api.type} from ${account.name}...`);
@@ -278,6 +318,20 @@ class WalletBalanceSync {
       if (!account.api.key) {
         this.log('warn', `⚠️ ${account.name}: API key missing, skipping`);
         return [];
+      }
+      
+      const startTime = await this.getLastSyncTime(account);
+      const startDate = new Date(startTime);
+      this.log('info', `📅 ${account.name}: Getting orders since ${startDate.toISOString()}`);
+      
+      // URL mit Zeitfilter erweitern
+      let apiUrl = account.api.url;
+      if (account.api.type.startsWith('bybit')) {
+        const separator = apiUrl.includes('?') ? '&' : '?';
+        apiUrl += `${separator}startTime=${startTime}&endTime=${Date.now()}`;
+      } else if (account.api.type === 'blofin_orders') {
+        const separator = apiUrl.includes('?') ? '&' : '?';
+        apiUrl += `${separator}after=${Math.floor(startTime / 1000)}`;
       }
       
       const headers = {
@@ -288,7 +342,7 @@ class WalletBalanceSync {
       if (account.api.type.startsWith('bybit')) {
         const timestamp = Date.now().toString();
         const recvWindow = '5000';
-        const queryString = new URL(account.api.url).search.substring(1);
+        const queryString = new URL(apiUrl).search.substring(1);
         
         headers['X-BAPI-API-KEY'] = account.api.key;
         headers['X-BAPI-TIMESTAMP'] = timestamp;
@@ -297,10 +351,10 @@ class WalletBalanceSync {
           timestamp, account.api.key, recvWindow, queryString, account.api.secret
         );
         
-      } else if (account.api.type === 'blofin_balance') {
+      } else if (account.api.type === 'blofin_orders') {
         const timestamp = new Date().toISOString();
         const method = 'GET';
-        const requestPath = new URL(account.api.url).pathname;
+        const requestPath = new URL(apiUrl).pathname + new URL(apiUrl).search;
         
         headers['BF-ACCESS-KEY'] = account.api.key;
         headers['BF-ACCESS-TIMESTAMP'] = timestamp;
@@ -310,7 +364,7 @@ class WalletBalanceSync {
         );
       }
       
-      const response = await fetch(account.api.url, {
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers
       });
@@ -323,6 +377,15 @@ class WalletBalanceSync {
       const data = await response.json();
       this.log('info', `✅ ${account.name}: Retrieved ${account.api.type} data`);
       
+      // Debug: Zeige Datenstruktur
+      this.log('info', `🔍 ${account.name}: Data structure:`, {
+        hasResult: !!data.result,
+        hasData: !!data.data,
+        resultKeys: data.result ? Object.keys(data.result) : null,
+        dataKeys: data.data ? Object.keys(data.data) : null,
+        topLevelKeys: Object.keys(data)
+      });
+      
       return this.processAccountData(account, data);
       
     } catch (error) {
@@ -333,85 +396,102 @@ class WalletBalanceSync {
   }
 
   processAccountData(account, rawData) {
-    const timestamp = new Date().toISOString();
     const syncId = `sync_${Date.now()}`;
     const rows = [];
     
     try {
-      if (account.api.type === 'bybit_balance') {
+      if (account.api.type.startsWith('bybit')) {
         if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
-          rawData.result.list.forEach(wallet => {
-            if (wallet.coin && Array.isArray(wallet.coin)) {
-              wallet.coin.forEach(coin => {
-                // Speichere alle Coins, auch mit 0 Balance für Tracking
-                rows.push([
-                  timestamp,
-                  account.name,
-                  coin.coin,
-                  parseFloat(coin.walletBalance || 0),
-                  parseFloat(coin.availableBalance || 0),
-                  parseFloat(coin.locked || 0),
-                  parseFloat(coin.transferBalance || 0),
-                  parseFloat(coin.bonus || 0),
-                  parseFloat(coin.availableToWithdraw || 0),
-                  parseFloat(coin.usdValue || 0),
-                  parseFloat(coin.unrealisedPnl || 0),
-                  parseFloat(coin.cumRealisedPnl || 0),
-                  syncId,
-                  JSON.stringify(coin)
-                ]);
-              });
-            }
-          });
-        }
-      } else if (account.api.type === 'bybit_positions') {
-        if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
-          rawData.result.list.forEach(position => {
-            // Nur offene Positionen speichern
-            if (parseFloat(position.size || 0) > 0) {
-              rows.push([
-                timestamp,
-                account.name,
-                position.category || 'linear',
-                position.symbol,
-                position.side,
-                parseFloat(position.size || 0),
-                parseFloat(position.positionValue || 0),
-                parseFloat(position.avgPrice || 0),
-                parseFloat(position.markPrice || 0),
-                parseFloat(position.liqPrice || 0),
-                parseFloat(position.leverage || 0),
-                parseFloat(position.unrealisedPnl || 0),
-                parseFloat(position.cumRealisedPnl || 0),
-                position.positionStatus,
-                syncId,
-                JSON.stringify(position)
-              ]);
-            }
-          });
-        }
-      } else if (account.api.type === 'blofin_balance') {
-        if (rawData.data && Array.isArray(rawData.data)) {
-          rawData.data.forEach(balance => {
+          this.log('info', `📊 ${account.name}: Found ${rawData.result.list.length} orders in API response`);
+          
+          rawData.result.list.forEach(order => {
+            const orderTime = new Date(parseInt(order.createdTime || Date.now())).toISOString();
+            
             rows.push([
-              timestamp,
+              orderTime,
               account.name,
-              balance.ccy,
-              parseFloat(balance.availBal || 0),
-              parseFloat(balance.frozenBal || 0),
-              parseFloat(balance.eq || 0),
-              parseFloat(balance.usdEq || 0),
+              order.category || 'linear',
+              order.symbol,
+              order.orderId,
+              order.orderLinkId || '',
+              order.side,
+              order.orderType,
+              parseFloat(order.qty || 0),
+              parseFloat(order.price || 0),
+              order.timeInForce,
+              order.orderStatus,
+              parseFloat(order.avgPrice || 0),
+              parseFloat(order.cumExecQty || 0),
+              parseFloat(order.cumExecValue || 0),
+              parseFloat(order.cumExecFee || 0),
+              order.reduceOnly || false,
+              order.closeOnTrigger || false,
+              order.createdTime,
+              order.updatedTime,
+              order.rejectReason || '',
+              order.stopOrderType || '',
+              parseFloat(order.triggerPrice || 0),
+              parseFloat(order.takeProfit || 0),
+              parseFloat(order.stopLoss || 0),
+              order.tpTriggerBy || '',
+              order.slTriggerBy || '',
+              order.triggerDirection || '',
+              order.positionIdx || 0,
               syncId,
-              JSON.stringify(balance)
+              JSON.stringify(order)
             ]);
           });
+        } else {
+          this.log('warn', `⚠️ ${account.name}: No result.list found in API response`);
+        }
+      } else if (account.api.type === 'blofin_orders') {
+        if (rawData.data && Array.isArray(rawData.data)) {
+          this.log('info', `📊 ${account.name}: Found ${rawData.data.length} orders in API response`);
+          
+          rawData.data.forEach(order => {
+            const orderTime = new Date(parseInt(order.cTime || Date.now())).toISOString();
+            
+            rows.push([
+              orderTime,
+              account.name,
+              order.instType,
+              order.instId,
+              order.ordId,
+              order.clOrdId || '',
+              order.tag || '',
+              parseFloat(order.px || 0),
+              parseFloat(order.sz || 0),
+              order.ordType,
+              order.side,
+              order.posSide || '',
+              order.tdMode || '',
+              order.state,
+              parseFloat(order.accFillSz || 0),
+              parseFloat(order.fillPx || 0),
+              order.tradeId || '',
+              parseFloat(order.fillSz || 0),
+              order.fillTime || '',
+              order.source || '',
+              parseFloat(order.fee || 0),
+              order.feeCcy || '',
+              parseFloat(order.rebate || 0),
+              order.rebateCcy || '',
+              parseFloat(order.pnl || 0),
+              order.cTime,
+              order.uTime,
+              syncId,
+              JSON.stringify(order)
+            ]);
+          });
+        } else {
+          this.log('warn', `⚠️ ${account.name}: No data array found in API response`);
         }
       }
       
-      this.log('info', `📊 ${account.name}: Processed ${rows.length} records`);
+      this.log('info', `📊 ${account.name}: Processed ${rows.length} order records`);
       
     } catch (error) {
-      this.log('error', `Error processing ${account.name} data: ${error.message}`);
+      this.log('error', `Error processing ${account.name} order data: ${error.message}`);
     }
     
     return rows;
@@ -419,12 +499,12 @@ class WalletBalanceSync {
 
   async saveToGoogleSheet(account, data) {
     if (data.length === 0) {
-      this.log('info', `ℹ️ ${account.name}: No data to save`);
+      this.log('info', `ℹ️ ${account.name}: No new orders to save`);
       return 0;
     }
     
     try {
-      this.log('info', `💾 ${account.name}: Saving ${data.length} records...`);
+      this.log('info', `💾 ${account.name}: Saving ${data.length} orders...`);
       
       const existingData = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
@@ -433,9 +513,8 @@ class WalletBalanceSync {
       
       const nextRow = (existingData.data.values?.length || 1) + 1;
       
-      let endCol = 'N'; // Default für balance
-      if (account.api.type === 'bybit_positions') endCol = 'P';
-      if (account.api.type === 'blofin_balance') endCol = 'I';
+      let endCol = 'AD'; // Bybit orders
+      if (account.api.type === 'blofin_orders') endCol = 'AB';
       
       const range = `${account.sheetName}!A${nextRow}:${endCol}${nextRow + data.length - 1}`;
       
@@ -446,7 +525,7 @@ class WalletBalanceSync {
         resource: { values: data },
       });
       
-      this.log('info', `✅ ${account.name}: Saved ${data.length} records!`);
+      this.log('info', `✅ ${account.name}: Saved ${data.length} orders!`);
       return data.length;
       
     } catch (error) {
@@ -456,37 +535,37 @@ class WalletBalanceSync {
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting Wallet Balance & Position Sync...');
-    this.log('info', '💰 Tracking account balances and positions...');
+    this.log('info', '🚀 Starting Order History & Trade Activity Sync...');
+    this.log('info', '📋 Fetching order history (filled, cancelled, rejected orders)...');
     this.log('info', `📊 Processing ${this.accounts.length} accounts...`);
     
     try {
       await this.initializeGoogleSheets();
       
       for (const account of this.accounts) {
-        const data = await this.fetchAccountData(account);
-        const savedCount = await this.saveToGoogleSheet(account, data);
+        const orders = await this.fetchAccountData(account);
+        const savedCount = await this.saveToGoogleSheet(account, orders);
         
         if (savedCount > 0) {
           this.successfulAccounts++;
           this.totalRecords += savedCount;
         }
         
-        this.log('info', '⏳ Rate limiting: 2 seconds between accounts...');
-        await new Promise(r => setTimeout(r, 2000));
+        this.log('info', '⏳ Rate limiting: 3 seconds between accounts...');
+        await new Promise(r => setTimeout(r, 3000));
       }
       
       const duration = (new Date() - this.startTime) / 1000;
       const summary = {
         duration: `${duration.toFixed(1)}s`,
-        totalRecords: this.totalRecords,
+        totalOrders: this.totalRecords,
         successfulAccounts: this.successfulAccounts,
         totalAccounts: this.accounts.length,
         errors: this.errors.length
       };
       
-      this.log('info', '🎉 Wallet Balance & Position Sync completed!', summary);
-      this.log('info', `💰 Total records saved: ${this.totalRecords}`);
+      this.log('info', '🎉 Order History & Trade Activity Sync completed!', summary);
+      this.log('info', `📋 Total orders imported: ${this.totalRecords}`);
       
       if (this.errors.length > 0) {
         this.log('warn', '⚠️ Some accounts had errors:', { errors: this.errors });
@@ -496,11 +575,11 @@ class WalletBalanceSync {
       process.exit(exitCode);
       
     } catch (error) {
-      this.log('error', `💥 Wallet Balance Sync failed: ${error.message}`);
+      this.log('error', `💥 Order History Sync failed: ${error.message}`);
       process.exit(1);
     }
   }
 }
 
-const syncer = new WalletBalanceSync();
+const syncer = new OrderHistorySync();
 syncer.runSync();
