@@ -7,29 +7,42 @@ class TradingDataSync {
     this.totalRecords = 0;
     this.errors = [];
     
-    // API Konfiguration - erweitere nach Bedarf
+    // API Konfiguration für Bybit und Blofin
     this.apis = [
       {
-        name: 'CoinGecko',
-        url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,cardano,solana,chainlink&vs_currencies=usd&include_24hr_change=true&include_market_cap=true',
-        requiresAuth: false,
+        name: 'Bybit',
+        url: 'https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT,ETHUSDT,ADAUSDT,SOLUSDT',
+        requiresAuth: true,
+        apiKey: process.env.BYBIT_API_KEY,
+        apiSecret: process.env.BYBIT_API_SECRET,
+        headers: process.env.BYBIT_API_KEY ? { 
+          'X-BAPI-API-KEY': process.env.BYBIT_API_KEY,
+          'X-BAPI-TIMESTAMP': '',
+          'X-BAPI-SIGN': ''
+        } : {},
         rateLimitMs: 1000
       },
       {
-        name: 'Binance',
-        url: 'https://api.binance.com/api/v3/ticker/24hr?symbols=["BTCUSDT","ETHUSDT","ADAUSDT","SOLUSDT","LINKUSDT"]',
+        name: 'Blofin',
+        url: 'https://openapi.blofin.com/api/v1/market/tickers',
         requiresAuth: true,
-        apiKey: process.env.BINANCE_API_KEY,
-        headers: process.env.BINANCE_API_KEY ? { 'X-MBX-APIKEY': process.env.BINANCE_API_KEY } : {},
-        rateLimitMs: 1200
+        apiKey: process.env.BLOFIN_API_KEY,
+        apiSecret: process.env.BLOFIN_API_SECRET,
+        passphrase: process.env.BLOFIN_PASSPHRASE,
+        headers: process.env.BLOFIN_API_KEY ? {
+          'BF-ACCESS-KEY': process.env.BLOFIN_API_KEY,
+          'BF-ACCESS-TIMESTAMP': '',
+          'BF-ACCESS-SIGN': '',
+          'BF-ACCESS-PASSPHRASE': process.env.BLOFIN_PASSPHRASE
+        } : {},
+        rateLimitMs: 2000
       },
       {
-        name: 'CoinCapAPI',
-        url: 'https://api.coincap.io/v2/assets?ids=bitcoin,ethereum,cardano,solana,chainlink',
+        name: 'CoinGecko',
+        url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,cardano,solana&vs_currencies=usd&include_24hr_change=true&include_market_cap=true',
         requiresAuth: false,
         rateLimitMs: 1000
       }
-      // Weitere APIs hier hinzufügen...
     ];
   }
 
@@ -126,13 +139,35 @@ class TradingDataSync {
         return [];
       }
       
+      // Spezielle Authentifikation für verschiedene APIs
+      let headers = {
+        'User-Agent': 'Trading-Dashboard-Sync/1.0',
+        'Accept': 'application/json',
+        ...api.headers
+      };
+      
+      // Bybit Authentifikation
+      if (api.name === 'Bybit' && api.apiKey && api.apiSecret) {
+        const timestamp = Date.now().toString();
+        const queryString = new URL(api.url).search.substring(1);
+        const signaturePayload = timestamp + api.apiKey + '5000' + queryString;
+        
+        // Einfache HMAC-SHA256 Signatur (für Production solltest du crypto verwenden)
+        headers['X-BAPI-TIMESTAMP'] = timestamp;
+        headers['X-BAPI-RECV-WINDOW'] = '5000';
+        // Signatur würde hier berechnet werden - für Demo vereinfacht
+      }
+      
+      // Blofin Authentifikation  
+      if (api.name === 'Blofin' && api.apiKey && api.apiSecret) {
+        const timestamp = new Date().toISOString();
+        headers['BF-ACCESS-TIMESTAMP'] = timestamp;
+        // Signatur würde hier berechnet werden - für Demo vereinfacht
+      }
+      
       const requestOptions = {
         method: 'GET',
-        headers: {
-          'User-Agent': 'Trading-Dashboard-Sync/1.0',
-          'Accept': 'application/json',
-          ...api.headers
-        }
+        headers: headers
       };
       
       const response = await fetch(api.url, requestOptions);
@@ -161,6 +196,42 @@ class TradingDataSync {
     
     try {
       switch (source) {
+        case 'Bybit':
+          if (rawData.result && rawData.result.list && Array.isArray(rawData.result.list)) {
+            rawData.result.list.forEach(item => {
+              processedData.push({
+                timestamp,
+                source,
+                symbol: item.symbol,
+                price_usd: parseFloat(item.lastPrice || 0),
+                change_24h_percent: parseFloat(item.price24hPcnt || 0) * 100,
+                market_cap_usd: null,
+                volume_24h: parseFloat(item.volume24h || 0),
+                sync_id: syncId,
+                raw_data: JSON.stringify(item)
+              });
+            });
+          }
+          break;
+          
+        case 'Blofin':
+          if (rawData.data && Array.isArray(rawData.data)) {
+            rawData.data.forEach(item => {
+              processedData.push({
+                timestamp,
+                source,
+                symbol: item.instId || item.symbol,
+                price_usd: parseFloat(item.last || item.lastPrice || 0),
+                change_24h_percent: parseFloat(item.sodUtc8 || item.change24h || 0),
+                market_cap_usd: null,
+                volume_24h: parseFloat(item.vol24h || item.volume24h || 0),
+                sync_id: syncId,
+                raw_data: JSON.stringify(item)
+              });
+            });
+          }
+          break;
+          
         case 'CoinGecko':
           Object.entries(rawData).forEach(([coinId, data]) => {
             processedData.push({
@@ -175,42 +246,6 @@ class TradingDataSync {
               raw_data: JSON.stringify(data)
             });
           });
-          break;
-          
-        case 'Binance':
-          if (Array.isArray(rawData)) {
-            rawData.forEach(item => {
-              processedData.push({
-                timestamp,
-                source,
-                symbol: item.symbol,
-                price_usd: parseFloat(item.lastPrice || 0),
-                change_24h_percent: parseFloat(item.priceChangePercent || 0),
-                market_cap_usd: null,
-                volume_24h: parseFloat(item.volume || 0),
-                sync_id: syncId,
-                raw_data: JSON.stringify(item)
-              });
-            });
-          }
-          break;
-          
-        case 'CoinCapAPI':
-          if (rawData.data && Array.isArray(rawData.data)) {
-            rawData.data.forEach(item => {
-              processedData.push({
-                timestamp,
-                source,
-                symbol: item.symbol,
-                price_usd: parseFloat(item.priceUsd || 0),
-                change_24h_percent: parseFloat(item.changePercent24Hr || 0),
-                market_cap_usd: parseFloat(item.marketCapUsd || 0),
-                volume_24h: parseFloat(item.volumeUsd24Hr || 0),
-                sync_id: syncId,
-                raw_data: JSON.stringify(item)
-              });
-            });
-          }
           break;
           
         default:
