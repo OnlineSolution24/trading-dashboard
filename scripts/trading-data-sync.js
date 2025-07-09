@@ -73,7 +73,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'BTCStrategies_Positions',
             type: 'positions'
           }
@@ -97,7 +97,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'ETHApeStrategies_Positions',
             type: 'positions'
           }
@@ -121,7 +121,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'AltStrategies_Positions',
             type: 'positions'
           }
@@ -145,7 +145,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'SolStrategies_Positions',
             type: 'positions'
           }
@@ -169,7 +169,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'MemeStrategies_Positions',
             type: 'positions'
           }
@@ -193,7 +193,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'IncubatorZone_Positions',
             type: 'positions'
           }
@@ -217,7 +217,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: '1K_Positions',
             type: 'positions'
           }
@@ -241,7 +241,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: '2K_Positions',
             type: 'positions'
           }
@@ -265,14 +265,14 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'Blofin_Positions',
             type: 'positions'
           }
         },
         api: {
           key: process.env.BLOFIN_API_KEY,
-          secret: process.env.BLOFIN_API_SECRET || process.env.BLOFIN_API_PASSPHRASE
+          secret: process.env.BLOFIN_API_SECRET
         }
       }
     ];
@@ -316,6 +316,64 @@ class ExtendedTradingSync {
     } catch (error) {
       this.log('error', `Google Sheets connection failed: ${error.message}`);
       throw error;
+    }
+  }
+
+  async createSheet(sheetName) {
+    try {
+      this.log('info', `Creating sheet: ${sheetName}`);
+      
+      let headers = [];
+      if (sheetName.includes('Orders')) {
+        headers = [
+          'order_time', 'account_name', 'symbol', 'side', 'quantity', 'price', 'avg_price', 
+          'cum_exec_qty', 'cum_exec_value', 'cum_exec_fee', 'order_status', 'order_type', 
+          'time_in_force', 'order_id', 'order_link_id', 'created_time', 'updated_time', 
+          'data_source', 'import_timestamp', 'raw_data'
+        ];
+      } else if (sheetName.includes('Executions')) {
+        headers = [
+          'execution_time', 'account_name', 'symbol', 'side', 'executed_qty', 'entry_price', 
+          'exit_price', 'realized_pnl', 'execution_type', 'trade_id', 'created_time', 'fee', 
+          'fee_currency', 'data_source', 'import_timestamp', 'raw_data'
+        ];
+      } else if (sheetName.includes('Positions')) {
+        headers = [
+          'position_time', 'account_name', 'category', 'symbol', 'side', 'size', 'position_value', 
+          'avg_price', 'mark_price', 'liq_price', 'unrealised_pnl', 'cum_realised_pnl', 
+          'realised_pnl', 'leverage', 'trade_mode', 'position_status', 'created_time', 
+          'updated_time', 'data_source', 'import_timestamp', 'raw_data'
+        ];
+      }
+      
+      // Create the sheet
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: sheetName
+              }
+            }
+          }]
+        }
+      });
+      
+      // Add headers
+      if (headers.length > 0) {
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: `${sheetName}!A1:${String.fromCharCode(65 + headers.length - 1)}1`,
+          valueInputOption: 'RAW',
+          resource: { values: [headers] }
+        });
+      }
+      
+      this.log('success', `✅ Created sheet: ${sheetName}`);
+      
+    } catch (error) {
+      this.log('error', `Failed to create sheet ${sheetName}: ${error.message}`);
     }
   }
 
@@ -378,63 +436,7 @@ class ExtendedTradingSync {
     }
   }
 
-  async createSheet(sheetName) {
-    try {
-      this.log('info', `Creating sheet: ${sheetName}`);
-      
-      let headers = [];
-      if (sheetName.includes('Orders')) {
-        headers = [
-          'order_time', 'account_name', 'symbol', 'side', 'quantity', 'price', 'avg_price', 
-          'cum_exec_qty', 'cum_exec_value', 'cum_exec_fee', 'order_status', 'order_type', 
-          'time_in_force', 'order_id', 'order_link_id', 'created_time', 'updated_time', 
-          'data_source', 'import_timestamp', 'raw_data'
-        ];
-      } else if (sheetName.includes('Executions')) {
-        headers = [
-          'execution_time', 'account_name', 'symbol', 'side', 'executed_qty', 'entry_price', 
-          'exit_price', 'realized_pnl', 'execution_type', 'trade_id', 'created_time', 'fee', 
-          'fee_currency', 'data_source', 'import_timestamp', 'raw_data'
-        ];
-      } else if (sheetName.includes('Positions')) {
-        headers = [
-          'position_time', 'account_name', 'category', 'symbol', 'side', 'size', 'position_value', 
-          'avg_price', 'mark_price', 'liq_price', 'unrealised_pnl', 'cum_realised_pnl', 
-          'realised_pnl', 'leverage', 'trade_mode', 'position_status', 'created_time', 
-          'updated_time', 'data_source', 'import_timestamp', 'raw_data'
-        ];
-      }
-      
-      // Create the sheet
-      await this.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: this.spreadsheetId,
-        resource: {
-          requests: [{
-            addSheet: {
-              properties: {
-                title: sheetName
-              }
-            }
-          }]
-        }
-      });
-      
-      // Add headers
-      if (headers.length > 0) {
-        await this.sheets.spreadsheets.values.update({
-          spreadsheetId: this.spreadsheetId,
-          range: `${sheetName}!A1:${String.fromCharCode(65 + headers.length - 1)}1`,
-          valueInputOption: 'RAW',
-          resource: { values: [headers] }
-        });
-      }
-      
-      this.log('success', `✅ Created sheet: ${sheetName}`);
-      
-    } catch (error) {
-      this.log('error', `Failed to create sheet ${sheetName}: ${error.message}`);
-    }
-  }
+  async syncAccount(account) {
     this.log('info', `🔄 Syncing ${account.name}...`);
     
     if (!account.api.key || !account.api.secret) {
