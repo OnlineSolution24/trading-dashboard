@@ -250,30 +250,31 @@ class ExtendedTradingSync {
           secret: process.env.BYBIT_2K_API_SECRET
         }
       },
-      {
-        name: 'Blofin',
-        endpoints: {
-          orders: {
-            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-            sheetName: 'Bybit_Blofin_Orders',
-            type: 'orders'
-          },
-          executions: {
-            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-            sheetName: 'Blofin_Executions',
-            type: 'executions'
-          },
-          positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-            sheetName: 'Blofin_Positions',
-            type: 'positions'
-          }
-        },
-        api: {
-          key: process.env.BLOFIN_API_KEY,
-          secret: process.env.BLOFIN_API_SECRET
-        }
-      }
+      // Blofin disabled - different API structure needed
+      // {
+      //   name: 'Blofin',
+      //   endpoints: {
+      //     orders: {
+      //       url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+      //       sheetName: 'Bybit_Blofin_Orders',
+      //       type: 'orders'
+      //     },
+      //     executions: {
+      //       url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+      //       sheetName: 'Blofin_Executions',
+      //       type: 'executions'
+      //     },
+      //     positions: {
+      //       url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
+      //       sheetName: 'Blofin_Positions',
+      //       type: 'positions'
+      //     }
+      //   },
+      //   api: {
+      //     key: process.env.BLOFIN_API_KEY,
+      //     secret: process.env.BLOFIN_API_SECRET
+      //   }
+      // }
     ];
   }
 
@@ -323,6 +324,20 @@ class ExtendedTradingSync {
   async createSheet(sheetName) {
     try {
       this.log('info', `Creating sheet: ${sheetName}`);
+      
+      // Check if sheet already exists to avoid duplicate errors
+      const sheetMetadata = await this.sheets.spreadsheets.get({
+        spreadsheetId: this.spreadsheetId,
+      });
+      
+      const sheetExists = sheetMetadata.data.sheets.some(sheet => 
+        sheet.properties.title === sheetName
+      );
+      
+      if (sheetExists) {
+        this.log('info', `Sheet ${sheetName} already exists, skipping creation`);
+        return;
+      }
       
       let headers = [];
       if (sheetName.includes('Orders')) {
@@ -672,7 +687,7 @@ class ExtendedTradingSync {
       console.log(`⏱️  Duration: ${duration.toFixed(1)}s`);
       console.log(`📊 Total records: ${this.totalRecords}`);
       console.log(`✅ Successful accounts: ${this.successfulAccounts}/${this.accounts.length}`);
-      console.log(`📈 Accounts: Claude, Core, BTC, ETH, Alt, Sol, Meme, Incubator, 1K, 2K, Blofin`);
+      console.log(`📈 Active Accounts: Claude, Core, BTC, ETH, Sol, Meme, Incubator, 1K, 2K`);
       
       if (this.errors.length > 0) {
         console.log(`⚠️  Errors: ${this.errors.length}`);
