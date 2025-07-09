@@ -9,7 +9,6 @@ class ExtendedTradingSync {
     this.errors = [];
     this.successfulAccounts = 0;
     
-    // VOLLSTÄNDIGE ACCOUNT-KONFIGURATION - 11 ACCOUNTS
     this.accounts = [
       {
         name: 'Claude Projekt',
@@ -287,7 +286,9 @@ class ExtendedTradingSync {
       error: '❌' 
     };
     console.log(`[${timestamp}] ${emoji[level] || '📊'} ${message}`);
-    if (data) console.log('Data:', JSON.stringify(data, null, 2));
+    if (data) {
+      console.log('Data:', JSON.stringify(data, null, 2));
+    }
   }
 
   createBybitSignature(timestamp, apiKey, recvWindow, queryString, secret) {
