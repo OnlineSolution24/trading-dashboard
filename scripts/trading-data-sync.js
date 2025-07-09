@@ -1,4 +1,4 @@
-// scripts/trading-data-sync.js - Order History & Trade Activity
+// scripts/trading-data-sync-fixed.js - Order History & Trade Activity (KORRIGIERT)
 const { google } = require('googleapis');
 const fetch = require('node-fetch');
 const crypto = require('crypto');
@@ -279,11 +279,20 @@ class OrderHistorySync {
       });
       
       if (!response.data.values || response.data.values.length <= 1) {
-        // Erstes Mal: letzte 30 Tage für Order History
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        this.log('info', `📅 ${account.name}: First import - getting orders since ${thirtyDaysAgo.toISOString()}`);
-        return thirtyDaysAgo.getTime();
+        // KORRIGIERT: Reduzierter Zeitbereich je nach API Type
+        let daysBack;
+        if (account.api.type === 'bybit_active_orders') {
+          daysBack = 1; // Aktive Orders: nur 1 Tag
+        } else if (account.api.type.startsWith('bybit')) {
+          daysBack = 7; // Bybit Order History: max 7 Tage (wegen cancelled/rejected orders)
+        } else {
+          daysBack = 7; // Blofin: auch 7 Tage zur Sicherheit
+        }
+        
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - daysBack);
+        this.log('info', `📅 ${account.name}: First import - getting orders since ${startDate.toISOString()} (${daysBack} days)`);
+        return startDate.getTime();
       }
       
       // Inkrementeller Sync
@@ -299,15 +308,17 @@ class OrderHistorySync {
         return timestamps[0];
       }
       
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      return sevenDaysAgo.getTime();
+      // Fallback: 1 Tag zurück
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      return oneDayAgo.getTime();
       
     } catch (error) {
       this.log('error', `Failed to get last sync time for ${account.name}`, { error: error.message });
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      return threeDaysAgo.getTime();
+      // KORRIGIERT: Bei Fehlern nur 1 Tag zurück statt 3 Tage
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      return oneDayAgo.getTime();
     }
   }
 
@@ -321,17 +332,34 @@ class OrderHistorySync {
       }
       
       const startTime = await this.getLastSyncTime(account);
-      const startDate = new Date(startTime);
-      this.log('info', `📅 ${account.name}: Getting orders since ${startDate.toISOString()}`);
+      const endTime = Date.now();
+      
+      // KORRIGIERT: Zeitbereich-Validierung
+      const maxDaysForType = {
+        'bybit_orders': 7,          // Order History: max 7 Tage
+        'bybit_active_orders': 365, // Aktive Orders: längerer Zeitbereich OK
+        'blofin_orders': 7          // Blofin: auch 7 Tage
+      };
+      
+      const maxDays = maxDaysForType[account.api.type] || 7;
+      const maxTime = maxDays * 24 * 60 * 60 * 1000;
+      const actualStartTime = Math.max(startTime, endTime - maxTime);
+      
+      if (actualStartTime !== startTime) {
+        this.log('warn', `⚠️ ${account.name}: Zeitbereich reduziert auf ${maxDays} Tage (API Limit)`);
+      }
+      
+      const startDate = new Date(actualStartTime);
+      this.log('info', `📅 ${account.name}: Getting orders from ${startDate.toISOString()} to ${new Date(endTime).toISOString()}`);
       
       // URL mit Zeitfilter erweitern
       let apiUrl = account.api.url;
       if (account.api.type.startsWith('bybit')) {
         const separator = apiUrl.includes('?') ? '&' : '?';
-        apiUrl += `${separator}startTime=${startTime}&endTime=${Date.now()}`;
+        apiUrl += `${separator}startTime=${actualStartTime}&endTime=${endTime}`;
       } else if (account.api.type === 'blofin_orders') {
         const separator = apiUrl.includes('?') ? '&' : '?';
-        apiUrl += `${separator}after=${Math.floor(startTime / 1000)}`;
+        apiUrl += `${separator}after=${Math.floor(actualStartTime / 1000)}`;
       }
       
       const headers = {
@@ -364,32 +392,59 @@ class OrderHistorySync {
         );
       }
       
+      this.log('info', `🔗 ${account.name}: Making API request to ${apiUrl}`);
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers
       });
       
+      // VERBESSERT: Detailliertes Error Logging
       if (!response.ok) {
         const errorText = await response.text();
+        this.log('error', `❌ ${account.name}: HTTP ${response.status} ${response.statusText}`, {
+          url: apiUrl,
+          headers: Object.keys(headers),
+          responseText: errorText.substring(0, 500)
+        });
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
       
       const data = await response.json();
-      this.log('info', `✅ ${account.name}: Retrieved ${account.api.type} data`);
       
-      // Debug: Zeige Datenstruktur
+      // VERBESSERT: Zeige Bybit API Response Code
+      if (account.api.type.startsWith('bybit')) {
+        this.log('info', `📊 ${account.name}: Bybit API Response`, {
+          retCode: data.retCode,
+          retMsg: data.retMsg,
+          hasResult: !!data.result,
+          hasData: !!data.data
+        });
+        
+        if (data.retCode !== 0) {
+          throw new Error(`Bybit API Error ${data.retCode}: ${data.retMsg}`);
+        }
+      }
+      
+      this.log('info', `✅ ${account.name}: Retrieved ${account.api.type} data successfully`);
+      
+      // VERBESSERT: Debug-Info über Datenstruktur
       this.log('info', `🔍 ${account.name}: Data structure:`, {
         hasResult: !!data.result,
         hasData: !!data.data,
         resultKeys: data.result ? Object.keys(data.result) : null,
         dataKeys: data.data ? Object.keys(data.data) : null,
-        topLevelKeys: Object.keys(data)
+        topLevelKeys: Object.keys(data),
+        resultListLength: data.result?.list?.length || 0,
+        dataLength: Array.isArray(data.data) ? data.data.length : 0
       });
       
       return this.processAccountData(account, data);
       
     } catch (error) {
-      this.log('error', `❌ ${account.name} failed: ${error.message}`);
+      this.log('error', `❌ ${account.name} failed: ${error.message}`, {
+        errorStack: error.stack?.split('\n')[0]
+      });
       this.errors.push(`${account.name}: ${error.message}`);
       return [];
     }
@@ -442,7 +497,7 @@ class OrderHistorySync {
             ]);
           });
         } else {
-          this.log('warn', `⚠️ ${account.name}: No result.list found in API response`);
+          this.log('warn', `⚠️ ${account.name}: No result.list found in API response - möglicherweise keine Orders im Zeitraum`);
         }
       } else if (account.api.type === 'blofin_orders') {
         if (rawData.data && Array.isArray(rawData.data)) {
@@ -484,7 +539,7 @@ class OrderHistorySync {
             ]);
           });
         } else {
-          this.log('warn', `⚠️ ${account.name}: No data array found in API response`);
+          this.log('warn', `⚠️ ${account.name}: No data array found in API response - möglicherweise keine Orders im Zeitraum`);
         }
       }
       
@@ -535,14 +590,16 @@ class OrderHistorySync {
   }
 
   async runSync() {
-    this.log('info', '🚀 Starting Order History & Trade Activity Sync...');
-    this.log('info', '📋 Fetching order history (filled, cancelled, rejected orders)...');
+    this.log('info', '🚀 Starting Order History & Trade Activity Sync (FIXED VERSION)...');
+    this.log('info', '📋 Fetching order history with corrected time ranges...');
     this.log('info', `📊 Processing ${this.accounts.length} accounts...`);
     
     try {
       await this.initializeGoogleSheets();
       
       for (const account of this.accounts) {
+        this.log('info', `\n🔄 Processing ${account.name} (${account.api.type})...`);
+        
         const orders = await this.fetchAccountData(account);
         const savedCount = await this.saveToGoogleSheet(account, orders);
         
@@ -564,7 +621,7 @@ class OrderHistorySync {
         errors: this.errors.length
       };
       
-      this.log('info', '🎉 Order History & Trade Activity Sync completed!', summary);
+      this.log('info', '\n🎉 Order History & Trade Activity Sync completed!', summary);
       this.log('info', `📋 Total orders imported: ${this.totalRecords}`);
       
       if (this.errors.length > 0) {
