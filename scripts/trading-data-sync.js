@@ -24,7 +24,7 @@ class ExtendedTradingSync {
             type: 'executions'
           },
           positions: {
-            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
             sheetName: 'Claude_Projekt_Positions',
             type: 'positions'
           }
