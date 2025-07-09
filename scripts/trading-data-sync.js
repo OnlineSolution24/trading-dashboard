@@ -9,6 +9,7 @@ class ExtendedTradingSync {
     this.errors = [];
     this.successfulAccounts = 0;
     
+    // VOLLSTÄNDIGE ACCOUNT-KONFIGURATION - 11 ACCOUNTS
     this.accounts = [
       {
         name: 'Claude Projekt',
@@ -33,13 +34,259 @@ class ExtendedTradingSync {
           key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
           secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET
         }
+      },
+      {
+        name: 'Core Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_CoreStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'CoreStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'CoreStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'BTC Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_BTCStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'BTCStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'BTCStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'ETH Ape Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_ETHApeStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'ETHApeStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'ETHApeStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'Alt Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_AltStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'AltStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'AltStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_ALTSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_ALTSTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'Sol Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_SolStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'SolStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'SolStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'Meme Strategies',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_MemeStrategies_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'MemeStrategies_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'MemeStrategies_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
+          secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET
+        }
+      },
+      {
+        name: 'Incubator Zone',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_IncubatorZone_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'IncubatorZone_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'IncubatorZone_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_INCUBATORZONE_API_KEY,
+          secret: process.env.BYBIT_INCUBATORZONE_API_SECRET
+        }
+      },
+      {
+        name: '1K',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_1K_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: '1K_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: '1K_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_1K_API_KEY,
+          secret: process.env.BYBIT_1K_API_SECRET
+        }
+      },
+      {
+        name: '2K',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_2K_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: '2K_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: '2K_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_2K_API_KEY,
+          secret: process.env.BYBIT_2K_API_SECRET
+        }
+      },
+      {
+        name: 'Blofin',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_Blofin_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'Blofin_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'Blofin_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BLOFIN_API_KEY,
+          secret: process.env.BLOFIN_API_SECRET || process.env.BLOFIN_API_PASSPHRASE
+        }
       }
     ];
   }
 
   log(level, message, data) {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${level.toUpperCase()}: ${message}`);
+    const timestamp = new Date().toISOString().substring(11, 19);
+    const emoji = { 
+      info: '📊', 
+      success: '✅', 
+      warn: '⚠️', 
+      error: '❌' 
+    };
+    console.log(`[${timestamp}] ${emoji[level] || '📊'} ${message}`);
     if (data) console.log('Data:', JSON.stringify(data, null, 2));
   }
 
@@ -63,7 +310,7 @@ class ExtendedTradingSync {
       this.sheets = google.sheets({ version: 'v4', auth });
       this.spreadsheetId = process.env.GOOGLE_SHEET_ID;
       
-      this.log('info', '✅ Google Sheets connected');
+      this.log('success', '✅ Google Sheets connected');
       return true;
       
     } catch (error) {
@@ -97,8 +344,8 @@ class ExtendedTradingSync {
         .sort((a, b) => b - a);
       
       if (timestamps.length > 0) {
-        const lastSync = timestamps[0] + (5 * 60 * 1000);
-        this.log('info', `${sheetName}: Last sync + 5min`);
+        const lastSync = timestamps[0] + (5 * 60 * 1000); // +5 min overlap
+        this.log('info', `${sheetName}: Last sync + 5min buffer`);
         return lastSync;
       }
       
@@ -117,10 +364,12 @@ class ExtendedTradingSync {
   async syncAccount(account) {
     this.log('info', `🔄 Syncing ${account.name}...`);
     
-    if (!account.api.key) {
-      this.log('warn', `⚠️ ${account.name}: API key missing, skipping`);
+    if (!account.api.key || !account.api.secret) {
+      this.log('warn', `⚠️ ${account.name}: API credentials missing, skipping`);
       return;
     }
+    
+    let accountSuccessCount = 0;
     
     for (const [endpointType, endpoint] of Object.entries(account.endpoints)) {
       try {
@@ -130,6 +379,8 @@ class ExtendedTradingSync {
         const endTime = Date.now();
         
         let apiUrl = endpoint.url;
+        
+        // Add time parameters only for orders and executions, not positions
         if (endpointType !== 'positions') {
           const separator = apiUrl.includes('?') ? '&' : '?';
           apiUrl += `${separator}startTime=${startTime}&endTime=${endTime}`;
@@ -140,7 +391,7 @@ class ExtendedTradingSync {
         const queryString = new URL(apiUrl).search.substring(1);
         
         const headers = {
-          'User-Agent': 'Trading-Dashboard-Extended/1.0',
+          'User-Agent': 'Extended-Trading-Dashboard-11Accounts/2.0',
           'Accept': 'application/json',
           'X-BAPI-API-KEY': account.api.key,
           'X-BAPI-TIMESTAMP': timestamp,
@@ -150,7 +401,11 @@ class ExtendedTradingSync {
           )
         };
         
-        const response = await fetch(apiUrl, { method: 'GET', headers });
+        const response = await fetch(apiUrl, { 
+          method: 'GET', 
+          headers,
+          timeout: 30000
+        });
         
         if (!response.ok) {
           const errorText = await response.text();
@@ -164,12 +419,14 @@ class ExtendedTradingSync {
         }
         
         const itemCount = data.result?.list?.length || 0;
-        this.log('info', `✅ ${account.name} ${endpointType}: ${itemCount} items`);
+        this.log('success', `✅ ${account.name} ${endpointType}: ${itemCount} items`);
         
         if (itemCount > 0) {
           await this.saveData(endpoint.sheetName, data.result.list, endpointType, account.name);
+          accountSuccessCount++;
         }
         
+        // Rate limiting - 1 second between requests
         await new Promise(r => setTimeout(r, 1000));
         
       } catch (error) {
@@ -177,13 +434,19 @@ class ExtendedTradingSync {
         this.errors.push(`${account.name} ${endpointType}: ${error.message}`);
       }
     }
+    
+    if (accountSuccessCount > 0) {
+      this.successfulAccounts++;
+    }
+    
+    // Longer pause between accounts to avoid rate limits
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   async saveData(sheetName, items, endpointType, accountName) {
     if (!items || items.length === 0) return;
     
     try {
-      const syncId = `sync_${endpointType}_${Date.now()}`;
       const currentTimestamp = new Date().toISOString();
       const rows = [];
       
@@ -191,61 +454,94 @@ class ExtendedTradingSync {
         if (endpointType === 'executions') {
           const execTime = new Date(parseInt(item.execTime || Date.now())).toISOString();
           rows.push([
-            execTime,
-            accountName,
-            item.symbol,
-            item.side,
-            parseFloat(item.execQty || 0),
-            parseFloat(item.orderPrice || 0),
-            parseFloat(item.execPrice || 0),
-            0,
-            'Trade',
-            item.execId,
-            execTime,
-            parseFloat(item.execFee || 0),
-            item.feeCurrency || 'USDT',
-            'API_SYNC',
-            currentTimestamp,
-            JSON.stringify(item)
+            execTime,                                    // execution_time
+            accountName,                                 // account_name
+            item.symbol,                                 // symbol
+            item.side,                                   // side
+            parseFloat(item.execQty || 0),              // executed_qty
+            parseFloat(item.orderPrice || 0),           // entry_price
+            parseFloat(item.execPrice || 0),            // exit_price
+            0,                                          // realized_pnl
+            'Trade',                                    // execution_type
+            item.execId,                                // trade_id
+            execTime,                                   // created_time
+            parseFloat(item.execFee || 0),              // fee
+            item.feeCurrency || 'USDT',                 // fee_currency
+            'API_SYNC',                                 // data_source
+            currentTimestamp,                           // import_timestamp
+            JSON.stringify(item)                        // raw_data
           ]);
         } else if (endpointType === 'positions') {
           const posTime = new Date(parseInt(item.updatedTime || Date.now())).toISOString();
+          // Only save positions that have actual size
           if (parseFloat(item.size || 0) !== 0) {
             rows.push([
-              posTime,
-              accountName,
-              item.category || 'linear',
-              item.symbol,
-              item.side || 'None',
-              parseFloat(item.size || 0),
-              parseFloat(item.positionValue || 0),
-              parseFloat(item.avgPrice || 0),
-              parseFloat(item.markPrice || 0),
-              parseFloat(item.liqPrice || 0),
-              parseFloat(item.unrealisedPnl || 0),
-              parseFloat(item.cumRealisedPnl || 0),
-              parseFloat(item.cumRealisedPnl || 0),
-              parseFloat(item.leverage || 0),
-              item.tradeMode || 'cross',
-              item.positionStatus || 'Normal',
-              item.createdTime || posTime,
-              item.updatedTime || posTime,
-              'API_SYNC',
-              currentTimestamp,
-              JSON.stringify(item)
+              posTime,                                  // position_time
+              accountName,                              // account_name
+              item.category || 'linear',                // category
+              item.symbol,                              // symbol
+              item.side || 'None',                      // side
+              parseFloat(item.size || 0),               // size
+              parseFloat(item.positionValue || 0),      // position_value
+              parseFloat(item.avgPrice || 0),           // avg_price
+              parseFloat(item.markPrice || 0),          // mark_price
+              parseFloat(item.liqPrice || 0),           // liq_price
+              parseFloat(item.unrealisedPnl || 0),      // unrealised_pnl
+              parseFloat(item.cumRealisedPnl || 0),     // cum_realised_pnl
+              parseFloat(item.cumRealisedPnl || 0),     // realised_pnl
+              parseFloat(item.leverage || 0),           // leverage
+              item.tradeMode || 'cross',                // trade_mode
+              item.positionStatus || 'Normal',          // position_status
+              item.createdTime || posTime,              // created_time
+              item.updatedTime || posTime,              // updated_time
+              'API_SYNC',                               // data_source
+              currentTimestamp,                         // import_timestamp
+              JSON.stringify(item)                      // raw_data
             ]);
           }
+        } else if (endpointType === 'orders') {
+          const orderTime = new Date(parseInt(item.createdTime || Date.now())).toISOString();
+          rows.push([
+            orderTime,                                  // order_time
+            accountName,                                // account_name
+            item.symbol,                                // symbol
+            item.side,                                  // side
+            parseFloat(item.qty || 0),                  // quantity
+            parseFloat(item.price || 0),                // price
+            parseFloat(item.avgPrice || 0),             // avg_price
+            parseFloat(item.cumExecQty || 0),           // cum_exec_qty
+            parseFloat(item.cumExecValue || 0),         // cum_exec_value
+            parseFloat(item.cumExecFee || 0),           // cum_exec_fee
+            item.orderStatus || 'Unknown',              // order_status
+            item.orderType || 'Unknown',                // order_type
+            item.timeInForce || 'GTC',                  // time_in_force
+            item.orderId,                               // order_id
+            item.orderLinkId || '',                     // order_link_id
+            item.createdTime || orderTime,              // created_time
+            item.updatedTime || orderTime,              // updated_time
+            'API_SYNC',                                 // data_source
+            currentTimestamp,                           // import_timestamp
+            JSON.stringify(item)                        // raw_data
+          ]);
         }
       });
       
       if (rows.length > 0) {
+        // Get existing data to determine next row
         const existingData = await this.sheets.spreadsheets.values.get({
           spreadsheetId: this.spreadsheetId,
           range: `${sheetName}!A:A`,
         });
         
         const nextRow = (existingData.data.values?.length || 1) + 1;
-        const endCol = endpointType === 'executions' ? 'P' : endpointType === 'positions' ? 'U' : 'Z';
+        
+        // Determine column range based on endpoint type
+        let endCol;
+        if (endpointType === 'executions') endCol = 'P';
+        else if (endpointType === 'positions') endCol = 'U';
+        else if (endpointType === 'orders') endCol = 'T';
+        else endCol = 'Z';
+        
         const range = `${sheetName}!A${nextRow}:${endCol}${nextRow + rows.length - 1}`;
         
         await this.sheets.spreadsheets.values.update({
@@ -255,38 +551,49 @@ class ExtendedTradingSync {
           resource: { values: rows },
         });
         
-        this.log('info', `💾 Saved ${rows.length} ${endpointType} to ${sheetName}`);
+        this.log('success', `💾 Saved ${rows.length} ${endpointType} to ${sheetName}`);
         this.totalRecords += rows.length;
       }
       
     } catch (error) {
       this.log('error', `Failed to save ${endpointType} data: ${error.message}`);
+      this.errors.push(`Save ${endpointType}: ${error.message}`);
     }
   }
 
   async runExtendedSync() {
-    this.log('info', '🚀 Starting Extended Trading Sync...');
-    this.log('info', '📊 Syncing Orders + Executions + Positions...');
+    this.log('info', '🚀 Starting Extended Trading Sync - 11 Accounts...');
+    this.log('info', '📊 Syncing: Orders + Executions + Positions for all accounts');
     
     try {
       await this.initializeGoogleSheets();
       
+      // Sync all accounts
       for (const account of this.accounts) {
         await this.syncAccount(account);
-        this.successfulAccounts++;
-        await new Promise(r => setTimeout(r, 3000));
       }
       
       const duration = (new Date() - this.startTime) / 1000;
-      this.log('info', `🎉 Extended sync completed in ${duration.toFixed(1)}s`);
-      this.log('info', `📊 Total records: ${this.totalRecords}`);
+      
+      // SUCCESS SUMMARY
+      console.log('\n' + '='.repeat(60));
+      console.log('🎉 EXTENDED SYNC COMPLETED - 11 ACCOUNTS!');
+      console.log('='.repeat(60));
+      console.log(`⏱️  Duration: ${duration.toFixed(1)}s`);
+      console.log(`📊 Total records: ${this.totalRecords}`);
+      console.log(`✅ Successful accounts: ${this.successfulAccounts}/${this.accounts.length}`);
+      console.log(`📈 Accounts: Claude, Core, BTC, ETH, Alt, Sol, Meme, Incubator, 1K, 2K, Blofin`);
       
       if (this.errors.length > 0) {
-        this.log('warn', `⚠️ ${this.errors.length} errors occurred`);
-        this.errors.forEach(error => this.log('error', error));
+        console.log(`⚠️  Errors: ${this.errors.length}`);
+        this.errors.forEach(error => console.log(`   - ${error}`));
       }
       
-      process.exit(this.totalRecords > 0 ? 0 : 1);
+      console.log('='.repeat(60));
+      
+      // Exit with success if we have records or no errors
+      const exitCode = (this.totalRecords > 0 || this.errors.length === 0) ? 0 : 1;
+      process.exit(exitCode);
       
     } catch (error) {
       this.log('error', `💥 Extended sync failed: ${error.message}`);
@@ -295,5 +602,6 @@ class ExtendedTradingSync {
   }
 }
 
+// Start the extended sync for all 11 accounts
 const syncer = new ExtendedTradingSync();
 syncer.runExtendedSync();
