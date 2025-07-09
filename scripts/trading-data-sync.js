@@ -10,264 +10,31 @@ class ExtendedTradingSync {
     this.successfulAccounts = 0;
     
     this.accounts = [
-  // Bybit Accounts
-  {
-    name: 'Bybit 1K',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_1K_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Bybit_1K_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Bybit_1K_Positions',
-        type: 'positions'
+      {
+        name: 'Claude Projekt',
+        endpoints: {
+          orders: {
+            url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
+            sheetName: 'Bybit_Claude_Projekt_Orders',
+            type: 'orders'
+          },
+          executions: {
+            url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
+            sheetName: 'Claude_Projekt_Executions',
+            type: 'executions'
+          },
+          positions: {
+            url: 'https://api.bybit.com/v5/position/list?category=linear',
+            sheetName: 'Claude_Projekt_Positions',
+            type: 'positions'
+          }
+        },
+        api: {
+          key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
+          secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET
+        }
       }
-    },
-    api: {
-      key: process.env.BYBIT_1K_API_KEY,
-      secret: process.env.BYBIT_1K_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit 2K',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_2K_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Bybit_2K_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Bybit_2K_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_2K_API_KEY,
-      secret: process.env.BYBIT_2K_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit AltStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_AltStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Alt_Strategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Alt_Strategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_ALTSSTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_ALTSSTRATEGIES_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit BTCStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_BTCStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'BTC_Strategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'BTC_Strategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_BTCSTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_BTCSTRATEGIES_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit Claude Projekt',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_Claude_Projekt_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Claude_Projekt_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Claude_Projekt_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_CLAUDE_PROJEKT_API_KEY,
-      secret: process.env.BYBIT_CLAUDE_PROJEKT_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit CoreStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_CoreStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Core_Strategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Core_Strategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_CORESTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_CORESTRATEGIES_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit ETHApeStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_ETHApeStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'ETH_Ape_Strategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'ETH_Ape_Strategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_ETHAPESTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_ETHAPESTRATEGIES_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit IncubatorZone',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_IncubatorZone_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Bybit_IncubatorZone_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Bybit_IncubatorZone_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_INCUBATORZONE_API_KEY,
-      secret: process.env.BYBIT_INCUBATORZONE_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit MemeStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_MemeStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Bybit_MemeStrategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Bybit_MemeStrategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_MEMESTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_MEMESTRATEGIES_API_SECRET
-    }
-  },
-  {
-    name: 'Bybit SOLStrategies',
-    endpoints: {
-      orders: {
-        url: 'https://api.bybit.com/v5/order/history?category=linear&limit=200',
-        sheetName: 'Bybit_SOLStrategies_Orders',
-        type: 'orders'
-      },
-      executions: {
-        url: 'https://api.bybit.com/v5/execution/list?category=linear&limit=200',
-        sheetName: 'Bybit_SOLStrategies_Executions',
-        type: 'executions'
-      },
-      positions: {
-        url: 'https://api.bybit.com/v5/position/list?category=linear&settleCoin=USDT',
-        sheetName: 'Bybit_SOLStrategies_Positions',
-        type: 'positions'
-      }
-    },
-    api: {
-      key: process.env.BYBIT_SOLSTRATEGIES_API_KEY,
-      secret: process.env.BYBIT_SOLSTRATEGIES_API_SECRET
-    }
-  },
-  // Blofin Account
-  {
-    name: 'Blofin',
-    endpoints: {
-      orders: {
-        url: 'https://openapi.blofin.com/api/v1/trade/orders-history?limit=100',
-        sheetName: 'Blofin_Orders',
-        type: 'blofin_orders'
-      }
-    },
-    api: {
-      key: process.env.BLOFIN_API_KEY,
-      secret: process.env.BLOFIN_API_SECRET,
-      passphrase: process.env.BLOFIN_API_PASSPHRASE
-    }
-  }
-];
+    ];
   }
 
   log(level, message, data) {
