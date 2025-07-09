@@ -600,6 +600,20 @@ class ExtendedTradingSync {
       });
       
       if (rows.length > 0) {
+        // Check if sheet exists first
+        const sheetMetadata = await this.sheets.spreadsheets.get({
+          spreadsheetId: this.spreadsheetId,
+        });
+        
+        const sheetExists = sheetMetadata.data.sheets.some(sheet => 
+          sheet.properties.title === sheetName
+        );
+        
+        if (!sheetExists) {
+          this.log('warn', `Sheet ${sheetName} does not exist - creating it`);
+          await this.createSheet(sheetName);
+        }
+        
         // Get existing data to determine next row
         const existingData = await this.sheets.spreadsheets.values.get({
           spreadsheetId: this.spreadsheetId,
