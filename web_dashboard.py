@@ -164,8 +164,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
         "Sol": "Solstrategies",
         "Btc": "Btcstrategies",
         "Core": "Corestrategies",
-        "2k->10": "2k->10k Projekt",
-        "1k->5": "1k->5k Projekt",
+        "2k->10k": "2k->10k Projekt",
+        "1k->5k": "1k->5k Projekt",
         "Claude": "Claude Projekt",
         "Blofin-7-Tage": "7 Tage Performer"
     }
