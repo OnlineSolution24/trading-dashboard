@@ -111,47 +111,117 @@ def safe_timestamp_convert(timestamp):
 
 # 📊 Google Sheets Integration
 def setup_google_sheets():
-    """Google Sheets Setup für historische Daten"""
+    """Google Sheets Setup für historische Daten mit verbesserter Fehlerbehandlung"""
     try:
-        service_account_info = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "{}"))
+        # Prüfe ob alle notwendigen Environment Variables vorhanden sind
+        service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
+        
+        if not service_account_json or not spreadsheet_id:
+            logging.warning("Google Sheets Credentials oder Sheet ID fehlen - Google Sheets Integration deaktiviert")
+            return None
+            
+        service_account_info = json.loads(service_account_json)
+        
+        # Prüfe ob die notwendigen Felder im Service Account vorhanden sind
+        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
+        missing_fields = [field for field in required_fields if field not in service_account_info]
+        
+        if missing_fields:
+            logging.warning(f"Service Account Info unvollständig, fehlende Felder: {missing_fields}")
+            return None
+        
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
+        
         credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
         gc = gspread.authorize(credentials)
-        spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
+        
+        # Teste die Verbindung
         spreadsheet = gc.open_by_key(spreadsheet_id)
         sheet = spreadsheet.worksheet("DailyBalances")
+        
+        logging.info("Google Sheets erfolgreich verbunden")
         return sheet
+        
+    except json.JSONDecodeError as e:
+        logging.error(f"Google Service Account JSON ist ungültig: {e}")
+        return None
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code == 403:
+            logging.error("Google Sheets API Fehler 403: Keine Berechtigung. Prüfe die Service Account Berechtigungen und stelle sicher, dass die Sheets API aktiviert ist.")
+        else:
+            logging.error(f"Google Sheets API Fehler {e.response.status_code}: {e}")
+        return None
+    except gspread.exceptions.SpreadsheetNotFound:
+        logging.error(f"Google Spreadsheet mit ID {spreadsheet_id} nicht gefunden oder keine Berechtigung")
+        return None
+    except gspread.exceptions.WorksheetNotFound:
+        logging.error("Worksheet 'DailyBalances' nicht gefunden")
+        return None
     except Exception as e:
-        logging.error(f"Google Sheets Setup Fehler: {e}")
+        logging.error(f"Unerwarteter Fehler bei Google Sheets Setup: {e}")
         return None
 
 def save_daily_data(total_balance, total_pnl, sheet=None):
-    """Tägliche Daten in Google Sheets speichern"""
+    """Tägliche Daten in Google Sheets speichern mit robuster Fehlerbehandlung"""
     if not sheet:
-        return
+        logging.debug("Kein Google Sheet verfügbar - Daten werden nicht gespeichert")
+        return False
     
     try:
         today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-        records = sheet.get_all_records()
+        
+        # Versuche Records zu holen mit Timeout
+        try:
+            records = sheet.get_all_records()
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code == 403:
+                logging.error("Google Sheets Berechtigung verweigert - kann Daten nicht lesen/schreiben")
+                return False
+            else:
+                logging.error(f"Fehler beim Lesen der Google Sheets Daten: {e}")
+                return False
+        
         today_exists = any(record.get('Datum') == today for record in records)
         
         if not today_exists:
-            sheet.append_row([today, total_balance, total_pnl])
-            logging.info(f"Daten für {today} in Google Sheets gespeichert")
+            try:
+                sheet.append_row([today, total_balance, total_pnl])
+                logging.info(f"Daten für {today} in Google Sheets gespeichert")
+                return True
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 403:
+                    logging.error("Keine Berechtigung zum Schreiben in Google Sheets")
+                else:
+                    logging.error(f"Fehler beim Hinzufügen der Zeile: {e}")
+                return False
         else:
+            # Update existierende Zeile
             for i, record in enumerate(records, start=2):
                 if record.get('Datum') == today:
-                    sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
-                    logging.info(f"Daten für {heute} in Google Sheets aktualisiert")
+                    try:
+                        sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                        logging.info(f"Daten für {today} in Google Sheets aktualisiert")
+                        return True
+                    except gspread.exceptions.APIError as e:
+                        if e.response.status_code == 403:
+                            logging.error("Keine Berechtigung zum Aktualisieren in Google Sheets")
+                        else:
+                            logging.error(f"Fehler beim Aktualisieren der Zeile: {e}")
+                        return False
                     break
+                    
     except Exception as e:
-        logging.error(f"Fehler beim Speichern in Google Sheets: {e}")
+        logging.error(f"Unerwarteter Fehler beim Speichern in Google Sheets: {e}")
+        return False
+    
+    return True
 
 def get_historical_performance(total_pnl, sheet=None):
-    """Historische Performance berechnen"""
+    """Historische Performance berechnen mit robuster Fehlerbehandlung"""
     performance_data = {
         '1_day': 0.0,
         '7_day': 0.0,
@@ -159,15 +229,21 @@ def get_historical_performance(total_pnl, sheet=None):
     }
     
     if not sheet:
+        logging.debug("Kein Google Sheet verfügbar für historische Performance")
         return performance_data
     
     try:
         records = sheet.get_all_records()
+        if not records:
+            logging.info("Keine historischen Daten in Google Sheets gefunden")
+            return performance_data
+            
         df = pd.DataFrame(records)
         if df.empty:
             return performance_data
         
-        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y')
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df = df.dropna(subset=['Datum'])  # Entferne Zeilen mit ungültigen Daten
         df = df.sort_values('Datum')
         
         today = datetime.now(timezone("Europe/Berlin")).date()
@@ -175,14 +251,25 @@ def get_historical_performance(total_pnl, sheet=None):
         for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
             target_date = today - timedelta(days=days)
             df['date_diff'] = abs(df['Datum'].dt.date - target_date)
-            closest_idx = df['date_diff'].idxmin()
             
-            if pd.notna(closest_idx):
-                historical_pnl = float(df.loc[closest_idx, 'PnL'])
-                performance_data[key] = total_pnl - historical_pnl
+            if not df.empty:
+                closest_idx = df['date_diff'].idxmin()
+                
+                if pd.notna(closest_idx) and closest_idx in df.index:
+                    try:
+                        historical_pnl = float(df.loc[closest_idx, 'PnL'])
+                        performance_data[key] = total_pnl - historical_pnl
+                    except (ValueError, TypeError, KeyError):
+                        logging.warning(f"Ungültige PnL Daten für {key}")
+                        continue
         
         logging.info(f"Historische Performance berechnet: {performance_data}")
         
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code == 403:
+            logging.error("Keine Berechtigung zum Lesen der Google Sheets für historische Performance")
+        else:
+            logging.error(f"Google Sheets API Fehler bei historischer Performance: {e}")
     except Exception as e:
         logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
     
@@ -612,7 +699,7 @@ def get_all_coin_performance(account_data):
     return coin_performance
 
 def create_cached_charts(account_data):
-    """Erstelle Charts mit Caching"""
+    """Erstelle Charts mit Caching und korrigierten Matplotlib Warnings"""
     cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
     
     if cache_key in dashboard_cache:
@@ -627,7 +714,11 @@ def create_cached_charts(account_data):
         values = [a["pnl_percent"] for a in account_data]
         bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
         ax.axhline(0, color='black')
+        
+        # FIX: Korrekte Verwendung von set_xticks und set_xticklabels
+        ax.set_xticks(range(len(labels)))
         ax.set_xticklabels(labels, rotation=45, ha="right")
+        
         for i, bar in enumerate(bars):
             ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                     f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
@@ -661,7 +752,11 @@ def create_cached_charts(account_data):
         fig2, ax2 = plt.subplots(figsize=(12, 6))
         bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
         ax2.axhline(0, color='black')
+        
+        # FIX: Korrekte Verwendung von set_xticks und set_xticklabels
+        ax2.set_xticks(range(len(proj_labels)))
         ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
+        
         for i, bar in enumerate(bars2):
             ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
                      f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
