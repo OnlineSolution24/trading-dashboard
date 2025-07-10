@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11-Subaccounts Google Sheets Trading Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .icon { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; fill: none; }
+        .progress-bar { 
+            background: linear-gradient(90deg, #10B981 0%, #10B981 var(--progress), #e5e7eb var(--progress), #e5e7eb 100%);
+            height: 8px; 
+            border-radius: 4px; 
+        }
+        .account-slot {
+            border: 2px dashed #d1d5db;
+            transition: all 0.3s ease;
+        }
+        .account-slot.filled {
+            border: 2px solid #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+        }
+        .account-slot.empty:hover {
+            border-color: #3b82f6;
+            background-color: #f8fafc;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root">
+        <div style="padding: 40px; text-align: center; color: #666;">
+            <div style="font-size: 24px; margin-bottom: 16px;">📊</div>
+            <div>Dashboard wird geladen...</div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', function() {
+            if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+                document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red; background: #fee; border: 1px solid #fcc; border-radius: 8px; margin: 20px;">❌ Error: React nicht geladen. Bitte Internet-Verbindung prüfen.</div>';
+                return;
+            }
+            
+            const { useState, useEffect, useCallback, createElement: e } = React;
+            const MAX_ACCOUNTS = 11;
+
+            // Configuration - anpassbar für Render API
+            const RENDER_API_BASE = 'https://YOUR-RENDER-APP.onrender.com/api'; // Ersetzen Sie durch Ihre Render-URL
+            const GOOGLE_SHEET_ID = '1FEtLcvSgi9NbPKqhu2RfeuuM3n15eLqZ9JtMvSM7O7g';
+
+            // Bekannte Subaccount-Mappings
+            const SUBACCOUNT_MAPPINGS = {
+                'Incubator': 'Incubatorzone',
+                'Meme': 'Memestrategies', 
+                'Ethape': 'Ethapestrategies',
+                'Alts': 'Altsstrategies',
+                'Sol': 'Solstrategies',
+                'Btc': 'Btcstrategies',
+                'Core': 'Corestrategies',
+                '2k->10': '2k->10k Projekt',
+                '1k->5': '1k->5k Projekt',
+                'Claude': 'Claude Projekt',
+                'Blofin-7-Tage': '7 Tage Performer'
+            };
+
+            // Icon Components
+            const UploadIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' }),
+                e('polyline', { points: '7,10 12,5 17,10' }),
+                e('line', { x1: '12', x2: '12', y1: '5', y2: '15' })
+            );
+
+            const RefreshIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('polyline', { points: '23,4 23,10 17,10' }),
+                e('polyline', { points: '1,20 1,14 7,14' }),
+                e('path', { d: 'M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15' })
+            );
+
+            const TrendingUpIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('polyline', { points: '22,7 13.5,15.5 8.5,10.5 2,17' }),
+                e('polyline', { points: '16,7 22,7 22,13' })
+            );
+
+            const DollarSignIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('line', { x1: '12', x2: '12', y1: '2', y2: '22' }),
+                e('path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' })
+            );
+
+            const ActivityIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('path', { d: 'M22 12h-4l-3 9L9 3l-3 9H2' })
+            );
+
+            const UsersIcon = () => e('svg', { className: 'icon', viewBox: '0 0 24 24' },
+                e('path', { d: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' }),
+                e('circle', { cx: '9', cy: '7', r: '4' }),
+                e('path', { d: 'M22 21v-2a4 4 0 0 0-3-3.87' }),
+                e('path', { d: 'M16 3.13a4 4 0 0 1 0 7.75' })
+            );
+
+            const EditIcon = () => e('svg', { className: 'icon w-4 h-4', viewBox: '0 0 24 24' },
+                e('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+                e('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' })
+            );
+
+            const InfoIcon = () => e('svg', { className: 'icon w-5 h-5', viewBox: '0 0 24 24' },
+                e('circle', { cx: '12', cy: '12', r: '10' }),
+                e('path', { d: 'M12 16v-4' }),
+                e('path', { d: 'M12 8h.01' })
+            );
+
+            // Mini Chart Component
+            const MiniChart = ({ data, height = 60, showLabels = false, showPercentages = false }) => {
+                if (!data || !data.length) return e('div', { className: 'text-gray-400 text-center text-sm', style: { height: height + 'px', lineHeight: height + 'px' } }, 'Keine Daten');
+                
+                const maxValue = Math.max(...data.map(d => Math.abs(d.netPnl || d.pnl || 0)));
+                const minValue = Math.min(...data.map(d => d.netPnl || d.pnl || 0), 0);
+                const range = maxValue - minValue || 1;
+                const zeroLine = height * (maxValue / range);
+                
+                return e('div', { style: { position: 'relative', height: height + 'px' } },
+                    // Nulllinie
+                    minValue < 0 && e('div', { 
+                        style: { 
+                            position: 'absolute', 
+                            left: '0', 
+                            right: '0', 
+                            top: zeroLine + 'px',
+                            height: '1px', 
+                            backgroundColor: '#6b7280',
+                            zIndex: 1
+                        } 
+                    }),
+                    
+                    // Bars Container
+                    e('div', { style: { display: 'flex', alignItems: 'end', height: height + 'px', gap: '2px', position: 'relative' } },
+                        data.map((item, index) => {
+                            const value = item.netPnl || item.pnl || 0;
+                            const absValue = Math.abs(value);
+                            const heightPercent = maxValue > 0 ? (absValue / maxValue) * (zeroLine / height) * 100 : 0;
+                            const color = value >= 0 ? '#10B981' : '#EF4444';
+                            const barHeight = Math.max(heightPercent, 2);
+                            const isNegative = value < 0;
+                            
+                            const percentage = item.startBalance > 0 ? ((value / item.startBalance) * 100) : 0;
+                            
+                            return e('div', {
+                                key: index,
+                                style: {
+                                    position: 'relative',
+                                    height: height + 'px',
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: isNegative ? 'flex-start' : 'flex-end',
+                                    alignItems: 'center'
+                                }
+                            },
+                                // Bar
+                                e('div', {
+                                    style: {
+                                        height: barHeight + '%',
+                                        backgroundColor: color,
+                                        width: '100%',
+                                        borderRadius: '1px',
+                                        marginTop: isNegative ? zeroLine + 'px' : '0',
+                                        marginBottom: isNegative ? '0' : (height - zeroLine) + 'px'
+                                    },
+                                    title: (item.asset || item.displayName) + ': ' + (value >= 0 ? '+' : '') + value.toFixed(2) + ' USD' + 
+                                           (percentage !== 0 ? ' (' + (percentage >= 0 ? '+' : '') + percentage.toFixed(1) + '%)' : '')
+                                }),
+                                
+                                // Labels
+                                showLabels && e('div', {
+                                    style: {
+                                        position: 'absolute',
+                                        bottom: isNegative ? 'auto' : '-20px',
+                                        top: isNegative ? (zeroLine + barHeight + 5) + 'px' : 'auto',
+                                        fontSize: '8px',
+                                        color: color,
+                                        fontWeight: 'bold',
+                                        textAlign: 'center',
+                                        width: '100%',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                    }
+                                }, 
+                                    showPercentages && percentage !== 0 
+                                        ? (percentage >= 0 ? '+' : '') + percentage.toFixed(1) + '%'
+                                        : (value >= 0 ? '+' : '') + value.toFixed(0)
+                                )
+                            );
+                        })
+                    )
+                );
+            };
+
+            // Asset Performance Chart
+            const AssetPerformanceChart = ({ data, height = 300 }) => {
+                if (!data || !data.length) return e('div', { className: 'text-gray-400 text-center text-sm', style: { height: height + 'px', lineHeight: height + 'px' } }, 'Keine Asset-Daten');
+                
+                const maxValue = Math.max(...data.map(d => Math.abs(d.netPnl)));
+                const minValue = Math.min(...data.map(d => d.netPnl), 0);
+                const range = maxValue - minValue || 1;
+                const zeroLinePosition = (maxValue / range) * (height - 60);
+                
+                const barWidth = Math.max(80, (100 / data.length));
+                
+                return e('div', { style: { position: 'relative', height: height + 'px', overflowX: 'auto', paddingBottom: '40px' } },
+                    // Nulllinie
+                    e('div', { 
+                        style: { 
+                            position: 'absolute', 
+                            left: '0', 
+                            right: '0', 
+                            top: (zeroLinePosition + 20) + 'px',
+                            height: '2px', 
+                            backgroundColor: '#6b7280',
+                            zIndex: 2
+                        } 
+                    }),
+                    
+                    // Chart Container
+                    e('div', { 
+                        style: { 
+                            display: 'flex', 
+                            alignItems: 'end', 
+                            height: (height - 60) + 'px',
+                            gap: '12px', 
+                            padding: '20px 20px 0 20px',
+                            minWidth: (data.length * (barWidth + 12)) + 'px'
+                        } 
+                    },
+                        data.map((item, index) => {
+                            const value = item.netPnl;
+                            const percentage = item.performance || 0;
+                            const isPositive = value >= 0;
+                            const barHeight = Math.max((Math.abs(value) / maxValue) * (height * 0.35), 4);
+                            const color = isPositive ? '#10B981' : '#EF4444';
+                            
+                            return e('div', {
+                                key: index,
+                                style: {
+                                    position: 'relative',
+                                    width: barWidth + 'px',
+                                    height: (height - 60) + 'px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end'
+                                }
+                            },
+                                // Bar
+                                e('div', {
+                                    style: {
+                                        width: '80%',
+                                        height: barHeight + 'px',
+                                        backgroundColor: color,
+                                        borderRadius: '4px 4px 0 0',
+                                        position: 'absolute',
+                                        bottom: isPositive ? ((height - 60) - zeroLinePosition) + 'px' : (zeroLinePosition - (height - 60) + barHeight) + 'px',
+                                        left: '10%',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                        zIndex: 1
+                                    }
+                                }),
+                                
+                                // Wert
+                                e('div', {
+                                    style: {
+                                        position: 'absolute',
+                                        bottom: isPositive 
+                                            ? ((height - 60) - zeroLinePosition + barHeight + 8) + 'px'
+                                            : (zeroLinePosition - (height - 60) - 35) + 'px',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        color: color,
+                                        textAlign: 'center',
+                                        width: '100%',
+                                        background: 'rgba(255,255,255,0.95)',
+                                        padding: '3px 4px',
+                                        borderRadius: '4px',
+                                        border: '1px solid ' + color,
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                                        zIndex: 3
+                                    }
+                                }, 
+                                    e('div', null, (value >= 0 ? '+' : '') + value.toFixed(0) + ' USD'),
+                                    percentage !== 0 && e('div', { style: { fontSize: '9px', marginTop: '1px' } }, 
+                                        (percentage >= 0 ? '+' : '') + percentage.toFixed(1) + '%'
+                                    )
+                                )
+                            );
+                        })
+                    ),
+                    
+                    // Asset Names
+                    e('div', { 
+                        style: { 
+                            position: 'absolute',
+                            bottom: '0px',
+                            left: '20px',
+                            right: '20px',
+                            height: '40px',
+                            display: 'flex',
+                            gap: '12px',
+                            alignItems: 'center',
+                            minWidth: (data.length * (barWidth + 12)) + 'px'
+                        }
+                    },
+                        data.map((item, index) => 
+                            e('div', {
+                                key: index,
+                                style: {
+                                    width: barWidth + 'px',
+                                    textAlign: 'center',
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    color: '#374151',
+                                    background: '#f9fafb',
+                                    padding: '4px 2px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #e5e7eb'
+                                }
+                            }, item.asset)
+                        )
+                    )
+                );
+            };
+
+            // Equity Curve Chart
+            const EquityCurveChart = ({ equityData, startBalance = 0, height = 200 }) => {
+                if (!equityData || !equityData.length) return e('div', { className: 'text-gray-400 text-center text-sm', style: { height: height + 'px', lineHeight: height + 'px' } }, 'Keine Equity-Daten');
+                
+                const values = equityData.map(d => d.cumulativePnL);
+                const minValue = Math.min(...values, 0);
+                const maxValue = Math.max(...values, 0);
+                const range = maxValue - minValue || 1;
+                const chartHeight = height - 80;
+                const chartTop = 40;
+                const zeroLineY = chartTop + ((maxValue - 0) / range) * chartHeight;
+                
+                return e('div', { style: { position: 'relative', height: height + 'px', background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' } },
+                    // Nulllinie
+                    e('div', { 
+                        style: { 
+                            position: 'absolute', 
+                            left: '70px', 
+                            right: '10px', 
+                            top: zeroLineY + 'px',
+                            height: '1px', 
+                            backgroundColor: '#374151',
+                            zIndex: 2
+                        } 
+                    }),
+                    
+                    // SVG Chart
+                    e('svg', { 
+                        style: { position: 'absolute', left: '70px', right: '10px', top: '0', bottom: '0', width: 'calc(100% - 80px)', height: '100%' },
+                        viewBox: '0 0 100 ' + height,
+                        preserveAspectRatio: 'none'
+                    },
+                        // Gefüllter Bereich
+                        equityData.length > 1 && e('path', {
+                            d: 'M 0,' + zeroLineY + ' ' + 
+                               equityData.map((d, i) => {
+                                   const x = (i / (equityData.length - 1)) * 100;
+                                   const y = chartTop + ((maxValue - d.cumulativePnL) / range) * chartHeight;
+                                   return 'L ' + x + ',' + y;
+                               }).join(' ') + 
+                               ' L 100,' + zeroLineY + ' Z',
+                            fill: values[values.length - 1] >= 0 ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            stroke: 'none'
+                        }),
+                        
+                        // Hauptlinie
+                        equityData.length > 1 && e('polyline', {
+                            points: equityData.map((d, i) => {
+                                const x = (i / (equityData.length - 1)) * 100;
+                                const y = chartTop + ((maxValue - d.cumulativePnL) / range) * chartHeight;
+                                return x + ',' + y;
+                            }).join(' '),
+                            fill: 'none',
+                            stroke: values[values.length - 1] >= 0 ? '#22c55e' : '#ef4444',
+                            strokeWidth: '2',
+                            strokeLinecap: 'round',
+                            strokeLinejoin: 'round'
+                        })
+                    ),
+                    
+                    // Aktueller Wert
+                    e('div', { 
+                        style: { 
+                            position: 'absolute', 
+                            top: '10px', 
+                            right: '15px', 
+                            fontSize: '12px', 
+                            fontWeight: 'bold',
+                            color: values[values.length - 1] >= 0 ? '#22c55e' : '#ef4444',
+                            background: 'white',
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid ' + (values[values.length - 1] >= 0 ? '#22c55e' : '#ef4444'),
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                        } 
+                    }, 
+                        e('div', null, (values[values.length - 1] >= 0 ? '+' : '') + values[values.length - 1].toFixed(0) + ' USD'),
+                        startBalance > 0 && e('div', { style: { fontSize: '10px' } }, 
+                            ((values[values.length - 1] / startBalance) * 100).toFixed(1) + '%'
+                        )
+                    )
+                );
+            };
+
+            function GoogleSheetsTradesDashboard() {
+                const [accounts, setAccounts] = useState({});
+                const [selectedAccount, setSelectedAccount] = useState('portfolio');
+                const [selectedPeriod, setSelectedPeriod] = useState('30_days');
+                const [isLoading, setIsLoading] = useState(false);
+                const [lastUpdate, setLastUpdate] = useState(null);
+                const [error, setError] = useState(null);
+                const [editingAccount, setEditingAccount] = useState(null);
+                const [portfolioStartBalance, setPortfolioStartBalance] = useState(14729.37);
+                const [accountStartBalances, setAccountStartBalances] = useState({});
+
+                const periodLabels = {
+                    '7_days': '7 Tage',
+                    '30_days': '30 Tage',
+                    'all_time': 'Gesamt'
+                };
+
+                // Render API functions - verwendet Ihr Backend
+                const fetchSheetData = async (sheetName) => {
+                    try {
+                        console.log('Fetching data via Render API for sheet:', sheetName);
+                        
+                        // Methode 1: Über Ihr Render-Backend (empfohlen)
+                        if (RENDER_API_BASE !== 'https://YOUR-RENDER-APP.onrender.com/api') {
+                            try {
+                                const apiUrl = `${RENDER_API_BASE}/sheets/${GOOGLE_SHEET_ID}/${encodeURIComponent(sheetName)}`;
+                                console.log('Render API URL:', apiUrl);
+                                
+                                const response = await fetch(apiUrl, {
+                                    method: 'GET',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    }
+                                });
+                                
+                                if (response.ok) {
+                                    const data = await response.json();
+                                    console.log(`✅ Render API Success for ${sheetName}:`, data.rows?.length || 0, 'rows');
+                                    return data.rows || [];
+                                } else {
+                                    const errorText = await response.text();
+                                    console.log(`❌ Render API Error for ${sheetName}:`, response.status, errorText);
+                                    throw new Error(`Render API Error: ${response.status}`);
+                                }
+                            } catch (renderError) {
+                                console.log('Render API failed, falling back to direct methods:', renderError.message);
+                            }
+                        }
+                        
+                        // Fallback: Direkte Google Sheets Methoden (für lokale Tests)
+                        console.log('Trying direct Google Sheets access as fallback...');
+                        
+                        // Methode 2: CSV Export (CORS-Problem erwartet)
+                        const csvUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+                        
+                        try {
+                            const csvResponse = await fetch(csvUrl, { mode: 'cors' });
+                            if (csvResponse.ok) {
+                                const csvText = await csvResponse.text();
+                                console.log(`✅ Direct CSV Success for ${sheetName}`);
+                                
+                                // Parse CSV zu Array
+                                const rows = [];
+                                const lines = csvText.split('\n');
+                                
+                                for (const line of lines) {
+                                    if (line.trim()) {
+                                        const row = [];
+                                        let current = '';
+                                        let inQuotes = false;
+                                        
+                                        for (let i = 0; i < line.length; i++) {
+                                            const char = line[i];
+                                            if (char === '"') {
+                                                inQuotes = !inQuotes;
+                                            } else if (char === ',' && !inQuotes) {
+                                                row.push(current.trim().replace(/^"(.*)"$/, '$1'));
+                                                current = '';
+                                            } else {
+                                                current += char;
+                                            }
+                                        }
+                                        row.push(current.trim().replace(/^"(.*)"$/, '$1'));
+                                        rows.push(row);
+                                    }
+                                }
+                                
+                                return rows;
+                            }
+                        } catch (csvError) {
+                            console.log('Direct CSV also failed:', csvError.message);
+                        }
+                        
+                        throw new Error(`Alle Methoden fehlgeschlagen für ${sheetName}. Render API konfiguriert?`);
+                        
+                    } catch (error) {
+                        console.error(`Error fetching ${sheetName}:`, error);
+                        throw error;
+                    }
+                };
+
+                const getAvailableSheets = async () => {
+                    try {
+                        console.log('Getting available sheets via Render API...');
+                        
+                        // Methode 1: Über Render-Backend
+                        if (RENDER_API_BASE !== 'https://YOUR-RENDER-APP.onrender.com/api') {
+                            try {
+                                const apiUrl = `${RENDER_API_BASE}/sheets/${GOOGLE_SHEET_ID}`;
+                                console.log('Render API URL:', apiUrl);
+                                
+                                const response = await fetch(apiUrl);
+                                if (response.ok) {
+                                    const data = await response.json();
+                                    console.log('✅ Available sheets from Render API:', data.sheets);
+                                    return data.sheets || [];
+                                }
+                            } catch (renderError) {
+                                console.log('Render API failed for sheet list:', renderError.message);
+                            }
+                        }
+                        
+                        // Fallback: Teste bekannte Sheets
+                        console.log('Using known sheet names as fallback...');
+                        const knownSheets = Object.keys(SUBACCOUNT_MAPPINGS);
+                        
+                        // Teste welche verfügbar sind
+                        const availableSheets = [];
+                        for (const sheetName of knownSheets.slice(0, 3)) { // Teste nur erste 3 um Zeit zu sparen
+                            try {
+                                await fetchSheetData(sheetName);
+                                availableSheets.push(sheetName);
+                                console.log('✅ Sheet available:', sheetName);
+                            } catch (e) {
+                                console.log('❌ Sheet not available:', sheetName);
+                            }
+                        }
+                        
+                        if (availableSheets.length > 0) {
+                            // Wenn einige verfügbar sind, nehme alle bekannten
+                            return knownSheets;
+                        }
+                        
+                        throw new Error('Keine Sheets verfügbar. Render API konfiguriert?');
+                        
+                    } catch (error) {
+                        console.error('Error getting sheet list:', error);
+                        throw error;
+                    }
+                };
+
+                // Parse trading data from sheet
+                const parseSheetData = (sheetData, sheetName) => {
+                    if (!sheetData || sheetData.length < 2) {
+                        console.log(`Sheet ${sheetName} is empty or has no data rows`);
+                        return [];
+                    }
+                    
+                    const headers = sheetData[0];
+                    console.log(`${sheetName} headers:`, headers);
+                    
+                    // Find relevant columns
+                    let dateCol = -1;
+                    let assetCol = -1;
+                    let pnlCol = -1;
+                    let feeCol = -1;
+                    let sideCol = -1;
+                    
+                    headers.forEach((header, index) => {
+                        const h = header.toLowerCase();
+                        if (h.includes('date') || h.includes('time') || h === 'datum') {
+                            dateCol = index;
+                        } else if (h.includes('asset') || h.includes('symbol') || h.includes('contracts') || h.includes('pair')) {
+                            assetCol = index;
+                        } else if (h.includes('pnl') || h.includes('p&l') || h.includes('realized') || h.includes('profit')) {
+                            pnlCol = index;
+                        } else if (h.includes('fee') || h.includes('gebühr')) {
+                            feeCol = index;
+                        } else if (h.includes('side') || h.includes('type') || h.includes('buy') || h.includes('sell')) {
+                            sideCol = index;
+                        }
+                    });
+                    
+                    console.log(`${sheetName} columns - Date: ${dateCol}, Asset: ${assetCol}, PnL: ${pnlCol}, Fee: ${feeCol}`);
+                    
+                    if (dateCol === -1 || assetCol === -1 || pnlCol === -1) {
+                        console.error(`${sheetName}: Missing required columns`);
+                        return [];
+                    }
+                    
+                    const trades = [];
+                    
+                    for (let i = 1; i < sheetData.length; i++) {
+                        const row = sheetData[i];
+                        
+                        try {
+                            const dateStr = row[dateCol];
+                            const asset = row[assetCol];
+                            const pnlStr = row[pnlCol];
+                            
+                            if (!dateStr || !asset) continue;
+                            
+                            // Parse date
+                            let date;
+                            try {
+                                date = new Date(dateStr);
+                                if (isNaN(date.getTime())) {
+                                    // Try different date formats
+                                    const formats = [
+                                        dateStr.replace(/[-:]/g, '/'),
+                                        dateStr.split(' ')[0] // Take only date part if datetime
+                                    ];
+                                    
+                                    for (const format of formats) {
+                                        date = new Date(format);
+                                        if (!isNaN(date.getTime())) break;
+                                    }
+                                }
+                                
+                                if (isNaN(date.getTime())) {
+                                    console.warn(`Invalid date: ${dateStr}`);
+                                    continue;
+                                }
+                            } catch (e) {
+                                console.warn(`Date parse error: ${dateStr}`);
+                                continue;
+                            }
+                            
+                            // Parse PnL
+                            let pnl = 0;
+                            if (pnlStr && pnlStr !== '' && pnlStr !== '--') {
+                                try {
+                                    const cleanPnl = pnlStr.toString()
+                                        .replace(/[USDT\s$€]/g, '')
+                                        .replace(/,/g, '')
+                                        .trim();
+                                    pnl = parseFloat(cleanPnl) || 0;
+                                } catch (e) {
+                                    pnl = 0;
+                                }
+                            }
+                            
+                            // Parse fee
+                            let fee = 0;
+                            if (feeCol !== -1 && row[feeCol]) {
+                                try {
+                                    const cleanFee = row[feeCol].toString()
+                                        .replace(/[USDT\s$€]/g, '')
+                                        .replace(/,/g, '')
+                                        .trim();
+                                    fee = Math.abs(parseFloat(cleanFee) || 0);
+                                } catch (e) {
+                                    fee = Math.abs(pnl) * 0.001; // Estimate 0.1% fee
+                                }
+                            } else {
+                                fee = Math.abs(pnl) * 0.001; // Estimate 0.1% fee
+                            }
+                            
+                            const trade = {
+                                asset: asset.toString().trim().replace('USDT', ''),
+                                date: date,
+                                dateString: date.toISOString().split('T')[0],
+                                side: sideCol !== -1 ? row[sideCol] || 'Unknown' : 'Unknown',
+                                pnl: pnl,
+                                fee: fee,
+                                netPnl: pnl - fee
+                            };
+                            
+                            trades.push(trade);
+                            
+                        } catch (error) {
+                            console.warn(`Error parsing row ${i} in ${sheetName}:`, error);
+                        }
+                    }
+                    
+                    console.log(`${sheetName}: Parsed ${trades.length} trades`);
+                    return trades.sort((a, b) => a.date - b.date);
+                };
+
+                // Analyze account performance
+                const analyzeAccount = (trades) => {
+                    if (!trades.length) return null;
+                    
+                    const currentDate = new Date(Math.max(...trades.map(t => t.date.getTime())));
+                    const sevenDaysAgo = new Date(currentDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    const thirtyDaysAgo = new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    
+                    const analyzePerformance = (data, fromDate, toDate) => {
+                        const filteredData = data.filter(t => t.date >= fromDate && t.date <= toDate);
+                        if (!filteredData.length) return { trades: 0, pnl: 0, fees: 0, netPnl: 0 };
+                        
+                        return {
+                            trades: filteredData.length,
+                            pnl: filteredData.reduce((sum, t) => sum + t.pnl, 0),
+                            fees: filteredData.reduce((sum, t) => sum + t.fee, 0),
+                            netPnl: filteredData.reduce((sum, t) => sum + t.netPnl, 0)
+                        };
+                    };
+                    
+                    const assets = [...new Set(trades.map(t => t.asset))];
+                    const assetPerformance = {};
+                    
+                    assets.forEach(asset => {
+                        const assetTrades = trades.filter(t => t.asset === asset);
+                        
+                        // Winrate berechnen
+                        const winningTrades = assetTrades.filter(t => t.netPnl > 0).length;
+                        const totalTrades = assetTrades.length;
+                        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+                        
+                        assetPerformance[asset] = {
+                            '7_days': analyzePerformance(assetTrades, sevenDaysAgo, currentDate),
+                            '30_days': analyzePerformance(assetTrades, thirtyDaysAgo, currentDate),
+                            'all_time': analyzePerformance(assetTrades, new Date(0), currentDate),
+                            winRate: winRate
+                        };
+                    });
+                    
+                    // Equity Curve
+                    const dailyPnL = {};
+                    trades.forEach(trade => {
+                        if (!dailyPnL[trade.dateString]) {
+                            dailyPnL[trade.dateString] = 0;
+                        }
+                        dailyPnL[trade.dateString] += trade.netPnl;
+                    });
+                    
+                    const equityCurve = [];
+                    let cumulativePnL = 0;
+                    const startDate = new Date(Math.min(...trades.map(t => t.date.getTime())));
+                    const endDate = new Date(Math.max(...trades.map(t => t.date.getTime())));
+                    
+                    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                        const dateStr = d.toISOString().split('T')[0];
+                        const dayPnL = dailyPnL[dateStr] || 0;
+                        cumulativePnL += dayPnL;
+                        
+                        equityCurve.push({
+                            date: d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+                            dailyPnL: dayPnL,
+                            cumulativePnL: cumulativePnL
+                        });
+                    }
+                    
+                    return {
+                        assets: assetPerformance,
+                        totalStats: {
+                            '7_days': analyzePerformance(trades, sevenDaysAgo, currentDate),
+                            '30_days': analyzePerformance(trades, thirtyDaysAgo, currentDate),
+                            'all_time': analyzePerformance(trades, new Date(0), currentDate)
+                        },
+                        equityCurve,
+                        tradeCount: trades.length
+                    };
+                };
+
+                // Load data from Google Sheets
+                const loadDataFromSheets = async () => {
+                    setIsLoading(true);
+                    setError(null);
+                    
+                    try {
+                        console.log('🚀 Starting Google Sheets data load...');
+                        console.log('Target Sheet ID:', GOOGLE_SHEET_ID);
+                        
+                        // Get list of available sheets
+                        const sheetNames = await getAvailableSheets();
+                        console.log('Available sheets:', sheetNames);
+                        
+                        if (!sheetNames.length) {
+                            throw new Error('Keine Tabellenblätter gefunden');
+                        }
+                        
+                        const newAccounts = {};
+                        let successCount = 0;
+                        let errorCount = 0;
+                        
+                        for (const sheetName of sheetNames.slice(0, MAX_ACCOUNTS)) {
+                            try {
+                                console.log(`\n📊 Loading ${sheetName}...`);
+                                
+                                const sheetData = await fetchSheetData(sheetName);
+                                console.log(`${sheetName}: Received ${sheetData.length} rows`);
+                                
+                                if (sheetData.length > 0) {
+                                    console.log(`${sheetName}: Headers:`, sheetData[0]);
+                                }
+                                
+                                const trades = parseSheetData(sheetData, sheetName);
+                                
+                                if (trades && trades.length > 0) {
+                                    const analysis = analyzeAccount(trades);
+                                    
+                                    if (analysis) {
+                                        const accountName = sheetName.replace(/[^a-zA-Z0-9]/g, '_');
+                                        const displayName = SUBACCOUNT_MAPPINGS[sheetName] || sheetName;
+                                        
+                                        newAccounts[accountName] = {
+                                            name: accountName,
+                                            displayName: displayName,
+                                            sheetName: sheetName,
+                                            analysis,
+                                            trades
+                                        };
+                                        
+                                        successCount++;
+                                        console.log(`✅ ${sheetName}: Successfully loaded with ${trades.length} trades`);
+                                    } else {
+                                        console.log(`❌ ${sheetName}: Analysis failed`);
+                                        errorCount++;
+                                    }
+                                } else {
+                                    console.log(`❌ ${sheetName}: No valid trades found (${sheetData.length} rows processed)`);
+                                    errorCount++;
+                                }
+                            } catch (error) {
+                                console.error(`❌ Error loading ${sheetName}:`, error);
+                                errorCount++;
+                            }
+                        }
+                        
+                        setAccounts(newAccounts);
+                        setLastUpdate(new Date());
+                        
+                        console.log(`\n📊 LOAD SUMMARY: ${successCount} success, ${errorCount} errors`);
+                        
+                        if (successCount === 0) {
+                            setError(`Keine Daten geladen. ${errorCount} Fehler aufgetreten. Prüfen Sie die Konsole für Details.`);
+                        } else {
+                            if (Object.keys(newAccounts).length > 1) {
+                                setSelectedAccount('portfolio');
+                            } else {
+                                setSelectedAccount(Object.keys(newAccounts)[0]);
+                            }
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error loading data from Google Sheets:', error);
+                        setError('Fehler beim Laden der Daten: ' + error.message + '. Überprüfen Sie die Google Sheets-Berechtigung.');
+                    } finally {
+                        setIsLoading(false);
+                    }
+                };
+
+                // Account umbenennen
+                const renameAccount = (accountId, newName) => {
+                    const newAccounts = { ...accounts };
+                    newAccounts[accountId].displayName = newName;
+                    setAccounts(newAccounts);
+                    setEditingAccount(null);
+                };
+
+                // Anfangsbestand setzen
+                const setAccountStartBalance = (accountId, balance) => {
+                    setAccountStartBalances(prev => ({
+                        ...prev,
+                        [accountId]: parseFloat(balance) || 0
+                    }));
+                };
+
+                // Portfolio Summary
+                const getPortfolioSummary = () => {
+                    const accountList = Object.values(accounts);
+                    if (!accountList.length) return null;
+                    
+                    const totalStartBalance = Object.values(accountStartBalances).reduce((sum, balance) => sum + (balance || 0), 0) || portfolioStartBalance;
+                    
+                    const summary = {
+                        accountCount: accountList.length,
+                        totalTrades: accountList.reduce((sum, acc) => sum + acc.analysis.tradeCount, 0),
+                        totalStartBalance: totalStartBalance,
+                        periods: {}
+                    };
+                    
+                    ['7_days', '30_days', 'all_time'].forEach(period => {
+                        const netPnl = accountList.reduce((sum, acc) => sum + acc.analysis.totalStats[period].netPnl, 0);
+                        const pnl = accountList.reduce((sum, acc) => sum + acc.analysis.totalStats[period].pnl, 0);
+                        const fees = accountList.reduce((sum, acc) => sum + acc.analysis.totalStats[period].fees, 0);
+                        const trades = accountList.reduce((sum, acc) => sum + acc.analysis.totalStats[period].trades, 0);
+                        
+                        summary.periods[period] = {
+                            netPnl: netPnl,
+                            pnl: pnl,
+                            fees: fees,
+                            trades: trades,
+                            performance: totalStartBalance > 0 ? (netPnl / totalStartBalance) * 100 : 0,
+                            currentBalance: totalStartBalance + netPnl
+                        };
+                    });
+                    
+                    return summary;
+                };
+
+                // Chart Data
+                const getChartData = () => {
+                    if (selectedAccount === 'portfolio') {
+                        return Object.values(accounts).map(account => {
+                            const netPnl = account.analysis.totalStats[selectedPeriod].netPnl;
+                            const startBalance = accountStartBalances[account.name] || 0;
+                            return {
+                                asset: account.displayName,
+                                netPnl: netPnl,
+                                trades: account.analysis.totalStats[selectedPeriod].trades,
+                                startBalance: startBalance,
+                                performance: startBalance > 0 ? (netPnl / startBalance) * 100 : 0,
+                                displayName: account.displayName
+                            };
+                        });
+                    }
+                    
+                    const account = accounts[selectedAccount];
+                    if (!account) return [];
+                    
+                    return Object.keys(account.analysis.assets).map(asset => {
+                        const netPnl = account.analysis.assets[asset][selectedPeriod].netPnl;
+                        const trades = account.analysis.assets[asset][selectedPeriod].trades;
+                        const winRate = account.analysis.assets[asset].winRate;
+                        
+                        const accountStartBalance = accountStartBalances[account.name] || 0;
+                        const totalTrades = account.analysis.totalStats[selectedPeriod].trades;
+                        const assetStartBalance = totalTrades > 0 ? (accountStartBalance * trades) / totalTrades : 0;
+                        
+                        return {
+                            asset: asset,
+                            netPnl: netPnl,
+                            trades: trades,
+                            fees: account.analysis.assets[asset][selectedPeriod].fees,
+                            grossPnl: account.analysis.assets[asset][selectedPeriod].pnl,
+                            startBalance: assetStartBalance,
+                            performance: assetStartBalance > 0 ? (netPnl / assetStartBalance) * 100 : 0,
+                            winRate: winRate
+                        };
+                    }).filter(item => item.trades > 0);
+                };
+
+                // Load data on component mount
+                useEffect(() => {
+                    // CSV File Upload Handler
+                    const fileInput = document.getElementById('csvFileInput');
+                    if (fileInput) {
+                        fileInput.addEventListener('change', async (event) => {
+                            const files = Array.from(event.target.files);
+                            if (!files.length) return;
+                            
+                            console.log('📁 Starting CSV file upload...', files.length, 'files');
+                            setIsLoading(true);
+                            setError(null);
+                            
+                            const newAccounts = {};
+                            let successCount = 0;
+                            let errorCount = 0;
+                            
+                            for (const file of files.slice(0, MAX_ACCOUNTS)) {
+                                try {
+                                    console.log(`\n📊 Processing file: ${file.name}`);
+                                    
+                                    const content = await file.text();
+                                    const rows = content.split('\n').map(line => {
+                                        const values = [];
+                                        let current = '';
+                                        let inQuotes = false;
+                                        
+                                        for (let i = 0; i < line.length; i++) {
+                                            const char = line[i];
+                                            if (char === '"') {
+                                                inQuotes = !inQuotes;
+                                            } else if (char === ',' && !inQuotes) {
+                                                values.push(current.trim().replace(/^"|"$/g, ''));
+                                                current = '';
+                                            } else {
+                                                current += char;
+                                            }
+                                        }
+                                        values.push(current.trim().replace(/^"|"$/g, ''));
+                                        return values;
+                                    }).filter(row => row.some(cell => cell.length > 0));
+                                    
+                                    const trades = parseSheetData(rows, file.name);
+                                    
+                                    if (trades && trades.length > 0) {
+                                        const analysis = analyzeAccount(trades);
+                                        
+                                        if (analysis) {
+                                            const accountName = file.name.replace(/\.csv$/i, '').replace(/[^a-zA-Z0-9]/g, '_');
+                                            const displayName = file.name.replace(/\.csv$/i, '');
+                                            
+                                            newAccounts[accountName] = {
+                                                name: accountName,
+                                                displayName: displayName,
+                                                fileName: file.name,
+                                                analysis,
+                                                trades
+                                            };
+                                            
+                                            successCount++;
+                                            console.log(`✅ ${file.name}: Successfully loaded with ${trades.length} trades`);
+                                        } else {
+                                            console.log(`❌ ${file.name}: Analysis failed`);
+                                            errorCount++;
+                                        }
+                                    } else {
+                                        console.log(`❌ ${file.name}: No valid trades found`);
+                                        errorCount++;
+                                    }
+                                } catch (error) {
+                                    console.error(`❌ Error processing ${file.name}:`, error);
+                                    errorCount++;
+                                }
+                            }
+                            
+                            if (successCount > 0) {
+                                setAccounts(newAccounts);
+                                setLastUpdate(new Date());
+                                
+                                if (Object.keys(newAccounts).length > 1) {
+                                    setSelectedAccount('portfolio');
+                                } else {
+                                    setSelectedAccount(Object.keys(newAccounts)[0]);
+                                }
+                                
+                                alert(`✅ ${successCount} CSV-Dateien erfolgreich geladen!\n${errorCount} Fehler.`);
+                            } else {
+                                setError(`Keine Daten geladen. ${errorCount} CSV-Dateien konnten nicht verarbeitet werden.`);
+                            }
+                            
+                            setIsLoading(false);
+                            event.target.value = ''; // Reset file input
+                        });
+                    }
+                    
+                    // Initial load attempt (wird wahrscheinlich fehlschlagen, aber zeigt das Problem)
+                    // loadDataFromSheets();
+                }, []);
+
+                const chartData = getChartData();
+                const portfolioSummary = getPortfolioSummary();
+                const currentAccount = selectedAccount === 'portfolio' ? null : accounts[selectedAccount];
+                const currentStats = selectedAccount === 'portfolio' 
+                    ? portfolioSummary?.periods[selectedPeriod] 
+                    : currentAccount?.analysis.totalStats[selectedPeriod];
+
+                const accountSlots = Array.from({ length: MAX_ACCOUNTS }, (_, index) => {
+                    const accountList = Object.entries(accounts);
+                    const account = accountList[index];
+                    return account ? { id: account[0], data: account[1] } : null;
+                });
+
+                return e('div', { className: 'p-6 bg-gray-50 min-h-screen' },
+                    e('div', { className: 'max-w-7xl mx-auto' },
+                        // Header
+                        e('div', { className: 'mb-8' },
+                            e('h1', { className: 'text-3xl font-bold text-gray-900 mb-2' }, '📊 11-Subaccounts Google Sheets Trading Dashboard'),
+                            e('p', { className: 'text-gray-600' },
+                                Object.keys(accounts).length + '/' + MAX_ACCOUNTS + ' Subaccounts geladen' +
+                                (portfolioSummary ? ' | Gesamt Trades: ' + portfolioSummary.totalTrades : '') +
+                                (lastUpdate ? ' | Letzte Aktualisierung: ' + lastUpdate.toLocaleTimeString('de-DE') : '')
+                            ),
+                            e('p', { className: 'text-sm text-blue-600 mt-1' }, '✨ Daten direkt aus Google Sheets - ID: ' + GOOGLE_SHEET_ID)
+                        ),
+
+                        // Error Display
+                        error && e('div', { className: 'mb-6 bg-red-50 border border-red-200 rounded-lg p-4' },
+                            e('div', { className: 'flex items-center' },
+                                e('div', { className: 'text-red-800 font-medium' }, '❌ Fehler: ' + error),
+                                e('button', {
+                                    onClick: () => setError(null),
+                                    className: 'ml-auto text-red-600 hover:text-red-800'
+                                }, '✕')
+                            )
+                        ),
+
+                        // Refresh Controls
+                        e('div', { className: 'mb-8 bg-white p-6 rounded-lg shadow-lg' },
+                            e('div', { className: 'flex items-center justify-between' },
+                                e('div', null,
+                                    e('h3', { className: 'text-lg font-medium text-gray-900 mb-2' }, 'Daten aus Google Sheets'),
+                                    e('p', { className: 'text-gray-600 text-sm' },
+                                        'Lädt automatisch alle Tabellenblätter als Subaccounts. ' +
+                                        (lastUpdate ? 'Zuletzt aktualisiert: ' + lastUpdate.toLocaleString('de-DE') : 'Noch nicht geladen.')
+                                    )
+                                ),
+                                e('div', { className: 'flex space-x-3' },
+                                    e('button', {
+                                        onClick: loadDataFromSheets,
+                                        disabled: isLoading,
+                                        className: 'bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50'
+                                    },
+                                        isLoading && e('div', { className: 'loading-spinner' }),
+                                        e(RefreshIcon),
+                                        e('span', null, isLoading ? 'Lädt...' : 'Aktualisieren')
+                                    ),
+                                    e('a', {
+                                        href: `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit`,
+                                        target: '_blank',
+                                        className: 'bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2'
+                                    },
+                                        e(UploadIcon),
+                                        e('span', null, 'Google Sheet öffnen')
+                                    )
+                                )
+                            )
+                        ),
+
+                        // Loading State
+                        isLoading && e('div', { className: 'mb-8 bg-blue-50 border border-blue-200 rounded-lg p-6 text-center' },
+                            e('div', { className: 'flex items-center justify-center space-x-3 mb-4' },
+                                e('div', { className: 'loading-spinner' }),
+                                e('span', { className: 'text-blue-800 font-medium' }, 'Lade Daten aus Google Sheets...')
+                            ),
+                            e('p', { className: 'text-blue-600 text-sm' }, 'Bitte warten Sie, während die Subaccount-Daten verarbeitet werden.')
+                        ),
+
+                        // Demo message when no accounts
+                        !isLoading && Object.keys(accounts).length === 0 && e('div', { className: 'bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8' },
+                            e('div', { className: 'flex items-center mb-3' },
+                                e('div', { className: 'text-2xl mr-3' }, '🚀'),
+                                e('h3', { className: 'text-lg font-semibold text-blue-900' }, 'Willkommen zum Google Sheets Trading Dashboard!')
+                            ),
+                            e('p', { className: 'text-blue-800 mb-4' }, 
+                                'Klicken Sie auf "Aktualisieren", um Ihre Trading-Daten aus Google Sheets zu laden. ' +
+                                'Jedes Tabellenblatt wird automatisch als Subaccount erkannt und analysiert.'
+                            ),
+                            e('div', { className: 'grid grid-cols-2 md:grid-cols-4 gap-4 text-sm' },
+                                e('div', { className: 'text-center' },
+                                    e('div', { className: 'text-2xl mb-1' }, '📊'),
+                                    e('div', { className: 'font-medium text-blue-900' }, 'Google Sheets Integration')
+                                ),
+                                e('div', { className: 'text-center' },
+                                    e('div', { className: 'text-2xl mb-1' }, '📈'),
+                                    e('div', { className: 'font-medium text-blue-900' }, 'Realtime Sync')
+                                ),
+                                e('div', { className: 'text-center' },
+                                    e('div', { className: 'text-2xl mb-1' }, '🎯'),
+                                    e('div', { className: 'font-medium text-blue-900' }, 'Multi-Account Analysis')
+                                ),
+                                e('div', { className: 'text-center' },
+                                    e('div', { className: 'text-2xl mb-1' }, '💰'),
+                                    e('div', { className: 'font-medium text-blue-900' }, 'Portfolio Overview')
+                                )
+                            )
+                        ),
+
+                        // Main Dashboard Content - wird nur angezeigt wenn Accounts existieren
+                        !isLoading && Object.keys(accounts).length > 0 && e('div', null,
+                            // Account Slots Visual Overview
+                            e('div', { className: 'mb-8 bg-white p-6 rounded-lg shadow-lg' },
+                                e('h3', { className: 'text-lg font-semibold mb-4' }, 'Subaccount Übersicht mit Performance'),
+                                e('div', { className: 'grid grid-cols-6 gap-3' },
+                                    accountSlots.map((slot, index) => 
+                                        e('div', { 
+                                            key: index,
+                                            className: 'account-slot p-3 rounded-lg ' + (slot ? 'filled' : 'empty'),
+                                            onClick: slot ? () => setSelectedAccount(slot.id) : undefined,
+                                            style: { cursor: slot ? 'pointer' : 'default' }
+                                        },
+                                            slot ? e('div', null,
+                                                e('div', { className: 'flex items-center justify-between mb-2' },
+                                                    e('div', { className: 'font-medium text-sm text-green-700' },
+                                                        editingAccount === slot.id 
+                                                            ? e('input', {
+                                                                type: 'text',
+                                                                defaultValue: slot.data.displayName,
+                                                                onBlur: (ev) => renameAccount(slot.id, ev.target.value),
+                                                                onKeyPress: (ev) => ev.key === 'Enter' && ev.target.blur(),
+                                                                className: 'w-full text-xs border border-gray-300 rounded px-1',
+                                                                autoFocus: true
+                                                            })
+                                                            : slot.data.displayName
+                                                    ),
+                                                    e('button', {
+                                                        onClick: (ev) => { ev.stopPropagation(); setEditingAccount(slot.id); },
+                                                        className: 'text-gray-400 hover:text-blue-600'
+                                                    }, e(EditIcon))
+                                                ),
+                                                
+                                                // Anfangsbestand Input
+                                                e('div', { className: 'mb-2' },
+                                                    e('input', {
+                                                        type: 'number',
+                                                        placeholder: 'Startbestand',
+                                                        value: accountStartBalances[slot.id] || '',
+                                                        onChange: (ev) => { ev.stopPropagation(); setAccountStartBalance(slot.id, ev.target.value); },
+                                                        className: 'w-full text-xs border border-gray-300 rounded px-1 py-1',
+                                                        step: '0.01'
+                                                    })
+                                                ),
+                                                
+                                                // Performance Anzeige
+                                                e('div', { className: 'text-xs font-bold ' + (slot.data.analysis.totalStats[selectedPeriod].netPnl >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                    (slot.data.analysis.totalStats[selectedPeriod].netPnl >= 0 ? '+' : '') + slot.data.analysis.totalStats[selectedPeriod].netPnl.toFixed(0) + ' USD'
+                                                ),
+                                                
+                                                // Prozentuale Performance
+                                                accountStartBalances[slot.id] > 0 && e('div', { 
+                                                    className: 'text-xs font-bold ' + (slot.data.analysis.totalStats[selectedPeriod].netPnl >= 0 ? 'text-green-600' : 'text-red-600')
+                                                },
+                                                    (((slot.data.analysis.totalStats[selectedPeriod].netPnl / accountStartBalances[slot.id]) * 100) >= 0 ? '+' : '') + ((slot.data.analysis.totalStats[selectedPeriod].netPnl / accountStartBalances[slot.id]) * 100).toFixed(1) + '%'
+                                                ),
+                                                
+                                                e('div', { className: 'text-xs text-gray-500' },
+                                                    slot.data.analysis.totalStats[selectedPeriod].trades + ' Trades'
+                                                )
+                                            ) : e('div', { className: 'text-center text-gray-400' },
+                                                e('div', { className: 'text-2xl mb-1' }, '+'),
+                                                e('div', { className: 'text-xs' }, 'Slot ' + (index + 1))
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Portfolio Performance Cards
+                            selectedAccount === 'portfolio' && e('div', { className: 'mb-6' },
+                                e('div', { className: 'mb-4 bg-blue-50 p-4 rounded-lg' },
+                                    e('div', { className: 'flex items-center space-x-4' },
+                                        e('label', { className: 'text-sm font-medium text-blue-800' }, 'Portfolio Startkapital:'),
+                                        e('input', {
+                                            type: 'number',
+                                            value: portfolioStartBalance,
+                                            onChange: (ev) => setPortfolioStartBalance(parseFloat(ev.target.value) || 0),
+                                            className: 'px-3 py-1 border border-blue-300 rounded bg-white text-sm w-32',
+                                            step: '0.01',
+                                            placeholder: '14729.37'
+                                        }),
+                                        e('span', { className: 'text-sm text-blue-600' }, 'USD')
+                                    )
+                                ),
+                                
+                                portfolioSummary && e('div', { className: 'grid grid-cols-5 gap-3' },
+                                    e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                        e('div', { className: 'flex items-center' },
+                                            e(DollarSignIcon, { className: 'h-8 w-8 text-blue-600 mr-3' }),
+                                            e('div', null,
+                                                e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Startkapital'),
+                                                e('p', { className: 'text-xl font-bold text-blue-600' },
+                                                    portfolioSummary.totalStartBalance.toFixed(2) + ' USD'
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                        e('div', { className: 'flex items-center' },
+                                            e(TrendingUpIcon, { className: 'h-8 w-8 text-purple-600 mr-3' }),
+                                            e('div', null,
+                                                e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Aktuelles Kapital'),
+                                                e('p', { className: 'text-xl font-bold text-purple-600' },
+                                                    portfolioSummary.periods[selectedPeriod].currentBalance.toFixed(2) + ' USD'
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                        e('div', { className: 'flex items-center' },
+                                            e(DollarSignIcon, { className: 'h-8 w-8 text-green-600 mr-3' }),
+                                            e('div', null,
+                                                e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Netto P&L'),
+                                                e('p', { className: 'text-xl font-bold ' + (portfolioSummary.periods[selectedPeriod].netPnl >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                    (portfolioSummary.periods[selectedPeriod].netPnl >= 0 ? '+' : '') + portfolioSummary.periods[selectedPeriod].netPnl.toFixed(2) + ' USD'
+                                                ),
+                                                e('p', { className: 'text-sm ' + (portfolioSummary.periods[selectedPeriod].performance >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                    (portfolioSummary.periods[selectedPeriod].performance >= 0 ? '+' : '') + portfolioSummary.periods[selectedPeriod].performance.toFixed(2) + '%'
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                        e('div', { className: 'flex items-center' },
+                                            e(ActivityIcon, { className: 'h-8 w-8 text-orange-600 mr-3' }),
+                                            e('div', null,
+                                                e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Trades'),
+                                                e('p', { className: 'text-xl font-bold text-orange-600' }, portfolioSummary.periods[selectedPeriod].trades)
+                                            )
+                                        )
+                                    ),
+                                    e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                        e('div', { className: 'flex items-center' },
+                                            e(UsersIcon, { className: 'h-8 w-8 text-indigo-600 mr-3' }),
+                                            e('div', null,
+                                                e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Subaccounts'),
+                                                e('p', { className: 'text-xl font-bold text-indigo-600' },
+                                                    Object.keys(accounts).length + '/' + MAX_ACCOUNTS
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Controls
+                            e('div', { className: 'mb-6 flex flex-wrap gap-4' },
+                                e('div', null,
+                                    e('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Account'),
+                                    e('select', {
+                                        value: selectedAccount,
+                                        onChange: (ev) => setSelectedAccount(ev.target.value),
+                                        className: 'px-4 py-2 border border-gray-300 rounded-lg bg-white'
+                                    },
+                                        e('option', { value: 'portfolio' }, '📊 Portfolio Übersicht'),
+                                        Object.entries(accounts).map(([accountId, account]) =>
+                                            e('option', { key: accountId, value: accountId }, '📈 ' + account.displayName)
+                                        )
+                                    )
+                                ),
+                                
+                                e('div', null,
+                                    e('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Zeitraum'),
+                                    e('div', { className: 'flex space-x-2' },
+                                        Object.keys(periodLabels).map(period =>
+                                            e('button', {
+                                                key: period,
+                                                onClick: () => setSelectedPeriod(period),
+                                                className: 'px-4 py-2 rounded-lg font-medium transition-colors ' + (
+                                                    selectedPeriod === period
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-100'
+                                                )
+                                            }, periodLabels[period])
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Performance Cards für einzelne Accounts
+                            selectedAccount !== 'portfolio' && currentStats && e('div', { className: 'grid grid-cols-4 gap-3 mb-6' },
+                                e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                    e('div', { className: 'flex items-center' },
+                                        e(DollarSignIcon, { className: 'h-8 w-8 text-green-600 mr-3' }),
+                                        e('div', null,
+                                            e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Netto P&L'),
+                                            e('p', { className: 'text-xl font-bold ' + (currentStats.netPnl >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                (currentStats.netPnl >= 0 ? '+' : '') + currentStats.netPnl.toFixed(2) + ' USD'
+                                            )
+                                        )
+                                    )
+                                ),
+                                e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                    e('div', { className: 'flex items-center' },
+                                        e(TrendingUpIcon, { className: 'h-8 w-8 text-blue-600 mr-3' }),
+                                        e('div', null,
+                                            e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Brutto P&L'),
+                                            e('p', { className: 'text-xl font-bold ' + (currentStats.pnl >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                (currentStats.pnl >= 0 ? '+' : '') + currentStats.pnl.toFixed(2) + ' USD'
+                                            )
+                                        )
+                                    )
+                                ),
+                                e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                    e('div', { className: 'flex items-center' },
+                                        e(ActivityIcon, { className: 'h-8 w-8 text-purple-600 mr-3' }),
+                                        e('div', null,
+                                            e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Trades'),
+                                            e('p', { className: 'text-xl font-bold text-blue-600' }, currentStats.trades)
+                                        )
+                                    )
+                                ),
+                                e('div', { className: 'bg-white p-4 rounded-lg shadow-md' },
+                                    e('div', { className: 'flex items-center' },
+                                        e(UsersIcon, { className: 'h-8 w-8 text-orange-600 mr-3' }),
+                                        e('div', null,
+                                            e('h3', { className: 'text-sm font-medium text-gray-600' }, 'Gebühren'),
+                                            e('p', { className: 'text-xl font-bold text-orange-600' },
+                                                currentStats.fees.toFixed(2) + ' USD'
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Visual Performance Section
+                            e('div', { className: 'grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8' },
+                                // Performance Visualization
+                                e('div', { className: 'bg-white p-6 rounded-lg shadow-lg' },
+                                    e('h3', { className: 'text-xl font-semibold mb-4' },
+                                        selectedAccount === 'portfolio' 
+                                            ? 'Subaccount Performance (' + periodLabels[selectedPeriod] + ')'
+                                            : 'Asset Performance - ' + (accounts[selectedAccount]?.displayName || '') + ' (' + periodLabels[selectedPeriod] + ')'
+                                    ),
+                                    
+                                    selectedAccount === 'portfolio' 
+                                        ? e(MiniChart, { 
+                                            data: chartData, 
+                                            height: 220,
+                                            showLabels: true,
+                                            showPercentages: true
+                                        })
+                                        : e(AssetPerformanceChart, { 
+                                            data: chartData, 
+                                            height: 280
+                                        }),
+                                    
+                                    e('div', { className: 'mt-4 text-sm text-gray-600' },
+                                        chartData.length + ' ' + (selectedAccount === 'portfolio' ? 'Subaccounts' : 'Assets') + ' mit Trades in diesem Zeitraum'
+                                    )
+                                ),
+
+                                // Equity Curve or Summary
+                                e('div', { className: 'bg-white p-6 rounded-lg shadow-lg' },
+                                    e('h3', { className: 'text-xl font-semibold mb-4' },
+                                        selectedAccount === 'portfolio' ? 'Top 5 Subaccounts' : 'Account Equity Trend (Kompletter Verlauf)'
+                                    ),
+                                    selectedAccount === 'portfolio' ? (
+                                        e('div', { className: 'space-y-4' },
+                                            Object.values(accounts)
+                                                .sort((a, b) => b.analysis.totalStats[selectedPeriod].netPnl - a.analysis.totalStats[selectedPeriod].netPnl)
+                                                .slice(0, 5).map((account, index) => {
+                                                const stats = account.analysis.totalStats[selectedPeriod];
+                                                const startBalance = accountStartBalances[account.name] || 0;
+                                                const performance = startBalance > 0 ? (stats.netPnl / startBalance) * 100 : 0;
+                                                const progress = Math.min(Math.abs(stats.netPnl) / 1000 * 100, 100);
+                                                
+                                                return e('div', { key: account.name, className: 'flex items-center justify-between' },
+                                                    e('div', { className: 'flex-1' },
+                                                        e('div', { className: 'flex justify-between items-center mb-1' },
+                                                            e('span', { className: 'text-sm font-medium' }, account.displayName),
+                                                            e('div', { className: 'text-right' },
+                                                                e('span', { className: 'text-sm font-bold ' + (stats.netPnl >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                                    (stats.netPnl >= 0 ? '+' : '') + stats.netPnl.toFixed(0) + ' USD'
+                                                                ),
+                                                                startBalance > 0 && e('div', { className: 'text-xs ' + (performance >= 0 ? 'text-green-600' : 'text-red-600') },
+                                                                    (performance >= 0 ? '+' : '') + performance.toFixed(1) + '%'
+                                                                )
+                                                            )
+                                                        ),
+                                                        e('div', { 
+                                                            className: 'progress-bar',
+                                                            style: { '--progress': progress + '%' }
+                                                        })
+                                                    )
+                                                );
+                                            })
+                                        )
+                                    ) : (
+                                        currentAccount && e('div', null,
+                                            e(EquityCurveChart, { 
+                                                equityData: currentAccount.analysis.equityCurve, 
+                                                startBalance: accountStartBalances[currentAccount.name] || 0,
+                                                height: 200
+                                            }),
+                                            
+                                            e('div', { className: 'mt-4 grid grid-cols-4 gap-4 text-sm' },
+                                                e('div', { className: 'text-center' },
+                                                    e('div', { className: 'text-gray-500' }, 'Start'),
+                                                    e('div', { className: 'font-semibold' }, 
+                                                        accountStartBalances[currentAccount.name] 
+                                                            ? accountStartBalances[currentAccount.name].toFixed(0) + ' USD'
+                                                            : '0 USD'
+                                                    )
+                                                ),
+                                                e('div', { className: 'text-center' },
+                                                    e('div', { className: 'text-gray-500' }, 'Peak'),
+                                                    e('div', { className: 'font-semibold text-green-600' }, 
+                                                        '+' + Math.max(...currentAccount.analysis.equityCurve.map(d => d.cumulativePnL)).toFixed(0) + ' USD'
+                                                    )
+                                                ),
+                                                e('div', { className: 'text-center' },
+                                                    e('div', { className: 'text-gray-500' }, 'Tief'),
+                                                    e('div', { className: 'font-semibold text-red-600' }, 
+                                                        Math.min(...currentAccount.analysis.equityCurve.map(d => d.cumulativePnL)).toFixed(0) + ' USD'
+                                                    )
+                                                ),
+                                                e('div', { className: 'text-center' },
+                                                    e('div', { className: 'text-gray-500' }, 'Aktuell'),
+                                                    e('div', { className: 'font-semibold text-blue-600' },
+                                                        ((currentAccount.analysis.equityCurve[currentAccount.analysis.equityCurve.length - 1]?.cumulativePnL || 0) >= 0 ? '+' : '') + 
+                                                        (currentAccount.analysis.equityCurve[currentAccount.analysis.equityCurve.length - 1]?.cumulativePnL || 0).toFixed(0) + ' USD'
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Performance Table
+                            e('div', { className: 'bg-white rounded-lg shadow-lg overflow-hidden mb-8' },
+                                e('div', { className: 'px-6 py-4 border-b border-gray-200' },
+                                    e('h3', { className: 'text-xl font-semibold' },
+                                        selectedAccount === 'portfolio' 
+                                            ? 'Subaccount Rankings (' + periodLabels[selectedPeriod] + ')'
+                                            : 'Asset Performance - ' + (accounts[selectedAccount]?.displayName || '') + ' (' + periodLabels[selectedPeriod] + ')'
+                                    )
+                                ),
+                                e('div', { className: 'overflow-x-auto' },
+                                    e('table', { className: 'min-w-full divide-y divide-gray-200' },
+                                        e('thead', { className: 'bg-gray-50' },
+                                            e('tr', null,
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 'Rang'),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 
+                                                    selectedAccount === 'portfolio' ? 'Subaccount' : 'Asset'
+                                                ),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 'Trades'),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 'Netto P&L'),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 'Performance %'),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 
+                                                    selectedAccount === 'portfolio' ? 'Visualisierung' : 'Winrate'
+                                                ),
+                                                e('th', { className: 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase' }, 'Ø P&L/Trade')
+                                            )
+                                        ),
+                                        e('tbody', { className: 'bg-white divide-y divide-gray-200' },
+                                            (selectedAccount === 'portfolio' ? 
+                                                Object.values(accounts).sort((a, b) => b.analysis.totalStats[selectedPeriod].netPnl - a.analysis.totalStats[selectedPeriod].netPnl) :
+                                                chartData.sort((a, b) => b.netPnl - a.netPnl)
+                                            ).map((item, index) => {
+                                                const isAccount = selectedAccount === 'portfolio';
+                                                const stats = isAccount ? item.analysis.totalStats[selectedPeriod] : item;
+                                                const name = isAccount ? item.displayName : item.asset;
+                                                const avgPnL = stats.trades > 0 ? stats.netPnl / stats.trades : 0;
+                                                const progressWidth = Math.min(Math.abs(stats.netPnl) / (isAccount ? 1000 : 500) * 100, 100);
+                                                
+                                                let performance = 0;
+                                                if (isAccount) {
+                                                    const startBalance = accountStartBalances[item.name] || 0;
+                                                    performance = startBalance > 0 ? (stats.netPnl / startBalance) * 100 : 0;
+                                                } else {
+                                                    performance = item.performance || 0;
+                                                }
+                                                
+                                                return e('tr', { 
+                                                    key: name, 
+                                                    className: index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                                                },
+                                                    e('td', { className: 'px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900' },
+                                                        index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.'
+                                                    ),
+                                                    e('td', { 
+                                                        className: 'px-6 py-4 whitespace-nowrap text-sm font-medium ' + (isAccount ? 'text-blue-600 cursor-pointer hover:underline' : 'text-gray-900'),
+                                                        onClick: isAccount ? () => setSelectedAccount(item.name) : undefined
+                                                    }, name),
+                                                    e('td', { className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-500' }, stats.trades),
+                                                    e('td', { 
+                                                        className: 'px-6 py-4 whitespace-nowrap text-sm font-medium ' + (stats.netPnl >= 0 ? 'text-green-600' : 'text-red-600')
+                                                    }, (stats.netPnl >= 0 ? '+' : '') + stats.netPnl.toFixed(2) + ' USD'),
+                                                    e('td', { 
+                                                        className: 'px-6 py-4 whitespace-nowrap text-sm font-bold ' + (performance >= 0 ? 'text-green-600' : 'text-red-600')
+                                                    }, 
+                                                        performance !== 0 
+                                                            ? (performance >= 0 ? '+' : '') + performance.toFixed(2) + '%'
+                                                            : '-'
+                                                    ),
+                                                    e('td', { className: 'px-6 py-4 whitespace-nowrap' },
+                                                        selectedAccount === 'portfolio' ? (
+                                                            // Visualisierung für Portfolio
+                                                            e('div', { className: 'w-20' },
+                                                                e('div', { 
+                                                                    className: 'h-2 rounded-full ' + (stats.netPnl >= 0 ? 'bg-green-200' : 'bg-red-200')
+                                                                },
+                                                                    e('div', { 
+                                                                        className: 'h-2 rounded-full ' + (stats.netPnl >= 0 ? 'bg-green-500' : 'bg-red-500'),
+                                                                        style: { width: progressWidth + '%' }
+                                                                    })
+                                                                )
+                                                            )
+                                                        ) : (
+                                                            // Winrate für Asset Performance
+                                                            e('div', { 
+                                                                className: 'font-bold ' + (item.winRate >= 50 ? 'text-green-600' : 'text-red-600')
+                                                            }, item.winRate.toFixed(1) + '%')
+                                                        )
+                                                    ),
+                                                    e('td', { 
+                                                        className: 'px-6 py-4 whitespace-nowrap text-sm ' + (avgPnL >= 0 ? 'text-green-600' : 'text-red-600')
+                                                    }, (avgPnL >= 0 ? '+' : '') + avgPnL.toFixed(2) + ' USD')
+                                                );
+                                            })
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // Google Sheets Integration Info
+                            e('div', { className: 'bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-6' },
+                                e('div', { className: 'flex items-center mb-4' },
+                                    e('div', { className: 'text-2xl mr-3' }, '📊'),
+                                    e('h3', { className: 'text-lg font-semibold text-green-900' }, 'Google Sheets Integration')
+                                ),
+                                e('div', { className: 'grid grid-cols-1 md:grid-cols-2 gap-6' },
+                                    e('div', null,
+                                        e('h4', { className: 'text-sm font-semibold text-green-800 mb-2' }, '✅ Erkannte Tabellenblätter:'),
+                                        e('ul', { className: 'text-sm text-green-700 space-y-1' },
+                                            Object.values(accounts).map(account => 
+                                                e('li', { key: account.name }, 
+                                                    '• ' + account.sheetName + ' (' + account.analysis.tradeCount + ' Trades)'
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    e('div', null,
+                                        e('h4', { className: 'text-sm font-semibold text-blue-800 mb-2' }, '🔄 Automatische Synchronisation:'),
+                                        e('ul', { className: 'text-sm text-blue-700 space-y-1' },
+                                            e('li', null, '• Klicken Sie "Aktualisieren" für neue Daten'),
+                                            e('li', null, '• Alle Tabellenblätter werden automatisch erkannt'),
+                                            e('li', null, '• Unterstützt verschiedene CSV-Formate'),
+                                            e('li', null, '• Realtime-Analyse ohne Upload')
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    )
+                );
+            }
+
+            // Render with error handling
+            try {
+                ReactDOM.render(React.createElement(GoogleSheetsTradesDashboard), document.getElementById('root'));
+            } catch (error) {
+                console.error('Dashboard Error:', error);
+                document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red; background: #fee; border: 1px solid #fcc; border-radius: 8px; margin: 20px;">❌ Dashboard-Fehler: ' + error.message + '</div>';
+            }
+        });
+    </script>
+</body>
+</html>
