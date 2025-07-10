@@ -1080,6 +1080,80 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
+@app.route('/simple-debug')
+def simple_debug():
+    """Einfache Debug Route um zu sehen was genau passiert"""
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    debug_output = []
+    
+    try:
+        sheets_data = setup_google_sheets()
+        if not sheets_data:
+            return "Google Sheets nicht verfügbar"
+        
+        gc, spreadsheet = sheets_data
+        
+        # Teste nur Incubator Sheet
+        worksheet = spreadsheet.worksheet("Incubator")
+        all_records = worksheet.get_all_records()
+        
+        debug_output.append(f"=== INCUBATOR SHEET TEST ===")
+        debug_output.append(f"Total Records: {len(all_records)}")
+        
+        trades_found = 0
+        total_pnl = 0
+        
+        for i, record in enumerate(all_records[:5]):  # Nur erste 5 Trades
+            debug_output.append(f"\n--- Trade {i+1} ---")
+            debug_output.append(f"Raw Record: {record}")
+            
+            # Symbol
+            symbol = record.get('Contracts', '').replace('USDT', '')
+            debug_output.append(f"Symbol: {symbol}")
+            
+            # PnL
+            pnl_raw = record.get('Realized P&L', 0)
+            debug_output.append(f"Raw PnL: {pnl_raw} (type: {type(pnl_raw)})")
+            
+            try:
+                pnl_value = float(pnl_raw)
+                debug_output.append(f"Parsed PnL: {pnl_value}")
+                
+                if pnl_value != 0:
+                    trades_found += 1
+                    total_pnl += pnl_value
+                    debug_output.append(f"✅ Trade added! Running total: {total_pnl}")
+                else:
+                    debug_output.append(f"❌ PnL is 0, skipping")
+            except Exception as e:
+                debug_output.append(f"❌ Error parsing PnL: {e}")
+        
+        debug_output.append(f"\n=== SUMMARY ===")
+        debug_output.append(f"Trades found: {trades_found}")
+        debug_output.append(f"Total PnL: {total_pnl}")
+        
+        # Teste auch die get_trading_data_from_sheets Funktion
+        debug_output.append(f"\n=== TESTING MAIN FUNCTION ===")
+        account_details = get_trading_data_from_sheets(gc, spreadsheet)
+        
+        for acc in account_details:
+            if acc['name'] == 'Incubatorzone':
+                debug_output.append(f"Incubatorzone Result:")
+                debug_output.append(f"  Has Data: {acc['has_data']}")
+                debug_output.append(f"  Total Trades: {acc['total_trades']}")
+                debug_output.append(f"  Total PnL: {acc['total_pnl']}")
+                debug_output.append(f"  Recent Trades: {len(acc['recent_trades'])}")
+                break
+        
+    except Exception as e:
+        debug_output.append(f"ERROR: {e}")
+        import traceback
+        debug_output.append(f"Traceback: {traceback.format_exc()}")
+    
+    return f"<pre>{'<br>'.join(debug_output)}</pre>"
+
 @app.route('/debug-sheets')
 def debug_sheets():
     if 'user' not in session:
