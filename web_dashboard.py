@@ -1095,11 +1095,11 @@ def simple_debug():
         
         gc, spreadsheet = sheets_data
         
-        # Teste nur Incubator Sheet
+        # Teste nur Incubator Sheet mit EXAKT der gleichen Logik wie die Hauptfunktion
         worksheet = spreadsheet.worksheet("Incubator")
         all_records = worksheet.get_all_records()
         
-        debug_output.append(f"=== INCUBATOR SHEET TEST ===")
+        debug_output.append(f"=== INCUBATOR SHEET TEST (EXACT MAIN LOGIC) ===")
         debug_output.append(f"Total Records: {len(all_records)}")
         
         trades_found = 0
@@ -1109,26 +1109,32 @@ def simple_debug():
             debug_output.append(f"\n--- Trade {i+1} ---")
             debug_output.append(f"Raw Record: {record}")
             
-            # Symbol
-            symbol = record.get('Contracts', '').replace('USDT', '')
-            debug_output.append(f"Symbol: {symbol}")
+            # Symbol (EXAKT wie Hauptfunktion)
+            symbol = 'N/A'
+            if 'Contracts' in record and record['Contracts']:
+                symbol = str(record['Contracts']).replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
+                debug_output.append(f"Symbol: {symbol}")
             
-            # PnL
-            pnl_raw = record.get('Realized P&L', 0)
-            debug_output.append(f"Raw PnL: {pnl_raw} (type: {type(pnl_raw)})")
+            # PnL (EXAKT wie Hauptfunktion)
+            pnl_value = 0
+            if 'Realized P&L' in record and record['Realized P&L'] is not None:
+                try:
+                    pnl_raw = record['Realized P&L']
+                    pnl_value = float(pnl_raw)
+                    debug_output.append(f"PnL gefunden: {pnl_value} (Original: {pnl_raw})")
+                except (ValueError, TypeError) as e:
+                    debug_output.append(f"❌ Fehler beim Parsen von PnL: {e}")
             
-            try:
-                pnl_value = float(pnl_raw)
-                debug_output.append(f"Parsed PnL: {pnl_value}")
-                
-                if pnl_value != 0:
-                    trades_found += 1
-                    total_pnl += pnl_value
-                    debug_output.append(f"✅ Trade added! Running total: {total_pnl}")
-                else:
-                    debug_output.append(f"❌ PnL is 0, skipping")
-            except Exception as e:
-                debug_output.append(f"❌ Error parsing PnL: {e}")
+            # Trade-Bedingung (EXAKT wie Hauptfunktion)
+            should_add_trade = (symbol != 'N/A' and pnl_value != 0)
+            debug_output.append(f"Should add trade? Symbol!=N/A: {symbol != 'N/A'}, PnL!=0: {pnl_value != 0}, Result: {should_add_trade}")
+            
+            if should_add_trade:
+                trades_found += 1
+                total_pnl += pnl_value
+                debug_output.append(f"✅ Trade added! Running total: {total_pnl}")
+            else:
+                debug_output.append(f"❌ Trade skipped - Symbol: {symbol}, PnL: {pnl_value}")
         
         debug_output.append(f"\n=== SUMMARY ===")
         debug_output.append(f"Trades found: {trades_found}")
