@@ -165,8 +165,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
         "Sol": "Solstrategies",
         "Btc": "Btcstrategies",
         "Core": "Corestrategies",
-        "2k->10k": "2k->10k Projekt",   # KORRIGIERT: war "2k->10"
-        "1k->5k": "1k->5k Projekt",     # KORRIGIERT: war "1k->5"
+        "2k-10k": "2k->10k Projekt",    # KORRIGIERT: Sheet heißt "2k-10k"
+        "1k-5k": "1k->5k Projekt",      # KORRIGIERT: Sheet heißt "1k-5k"
         "Claude": "Claude Projekt",
         "Blofin-7-Tage": "7 Tage Performer"
     }
@@ -1209,8 +1209,8 @@ def debug_sheets():
             "Sol": "Solstrategies",
             "Btc": "Btcstrategies",
             "Core": "Corestrategies",
-            "2k->10k": "2k->10k Projekt",   # KORRIGIERT
-            "1k->5k": "1k->5k Projekt",     # KORRIGIERT
+            "2k-10k": "2k->10k Projekt",    # KORRIGIERT
+            "1k-5k": "1k->5k Projekt",      # KORRIGIERT
             "Claude": "Claude Projekt",
             "Blofin-7-Tage": "7 Tage Performer"
         }
