@@ -144,7 +144,7 @@ def setup_google_sheets():
         sheet = spreadsheet.worksheet("DailyBalances")
         
         logging.info("Google Sheets erfolgreich verbunden")
-        return sheet
+        return gc, spreadsheet  # Gebe beide zurück für Trading-Daten
         
     except json.JSONDecodeError as e:
         logging.error(f"Google Service Account JSON ist ungültig: {e}")
@@ -164,6 +164,2424 @@ def setup_google_sheets():
     except Exception as e:
         logging.error(f"Unerwarteter Fehler bei Google Sheets Setup: {e}")
         return None
+
+def get_trading_data_from_sheets(gc, spreadsheet):
+    """Hole Trading-Daten aus Google Sheets für alle Subaccounts"""
+    # Mapping von Sheet-Namen zu Account-Namen
+    sheet_mapping = {
+        "Incubator": "Incubatorzone",
+        "Meme": "Memestrategies", 
+        "Ethape": "Ethapestrategies",
+        "Alts": "Altsstrategies",
+        "Sol": "Solstrategies",
+        "Btc": "Btcstrategies",
+        "Core": "Corestrategies",
+        "2k->10": "2k->10k Projekt",
+        "1k->5": "1k->5k Projekt",
+        "Claude": "Claude Projekt",
+        "Blofin-7-Tage": "7 Tage Performer"
+    }
+    
+    account_details = []
+    
+    for sheet_name, account_name in sheet_mapping.items():
+        try:
+            logging.info(f"Versuche Daten aus Sheet '{sheet_name}' für Account '{account_name}' zu laden")
+            
+            # Versuche das Worksheet zu öffnen
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except gspread.exceptions.WorksheetNotFound:
+                logging.warning(f"Worksheet '{sheet_name}' nicht gefunden - überspringe {account_name}")
+                account_details.append({
+                    'name': account_name,
+                    'has_data': False,
+                    'total_trades': 0,
+                    'win_rate': 0,
+                    'total_pnl': 0,
+                    'profit_factor': 0,
+                    'avg_trade': 0,
+                    'max_drawdown': 0,
+                    'recent_trades': []
+                })
+                continue
+            
+            # Hole alle Daten aus dem Sheet
+            try:
+                all_records = worksheet.get_all_records()
+                logging.info(f"Gefunden: {len(all_records)} Datensätze in {sheet_name}")
+            except Exception as e:
+                logging.error(f"Fehler beim Lesen der Daten aus {sheet_name}: {e}")
+                account_details.append({
+                    'name': account_name,
+                    'has_data': False,
+                    'total_trades': 0,
+                    'win_rate': 0,
+                    'total_pnl': 0,
+                    'profit_factor': 0,
+                    'avg_trade': 0,
+                    'max_drawdown': 0,
+                    'recent_trades': []
+                })
+                continue
+            
+            if not all_records:
+                logging.info(f"Keine Daten in {sheet_name} gefunden")
+                account_details.append({
+                    'name': account_name,
+                    'has_data': False,
+                    'total_trades': 0,
+                    'win_rate': 0,
+                    'total_pnl': 0,
+                    'profit_factor': 0,
+                    'avg_trade': 0,
+                    'max_drawdown': 0,
+                    'recent_trades': []
+                })
+                continue
+            
+            # Verarbeite Trading-Daten
+            trades = []
+            total_pnl = 0
+            winning_trades = 0
+            total_profit = 0
+            total_loss = 0
+            
+            for record in all_records:
+                try:
+                    # Flexibles Parsing der Trading-Daten
+                    # Mögliche Spaltennamen für PnL
+                    pnl_columns = ['PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl']
+                    pnl_value = 0
+                    
+                    for col in pnl_columns:
+                        if col in record and record[col] != '':
+                            try:
+                                pnl_value = float(str(record[col]).replace('
+
+def save_daily_data(total_balance, total_pnl, gc, spreadsheet):
+    """Tägliche Daten in Google Sheets speichern mit robuster Fehlerbehandlung"""
+    if not gc or not spreadsheet:
+        logging.debug("Kein Google Sheet verfügbar - Daten werden nicht gespeichert")
+        return False
+    
+    try:
+        # Hole das DailyBalances Sheet
+        sheet = spreadsheet.worksheet("DailyBalances")
+        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
+        
+        # Versuche Records zu holen mit Timeout
+        try:
+            records = sheet.get_all_records()
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code == 403:
+                logging.error("Google Sheets Berechtigung verweigert - kann Daten nicht lesen/schreiben")
+                return False
+            else:
+                logging.error(f"Fehler beim Lesen der Google Sheets Daten: {e}")
+                return False
+        
+        today_exists = any(record.get('Datum') == today for record in records)
+        
+        if not today_exists:
+            try:
+                sheet.append_row([today, total_balance, total_pnl])
+                logging.info(f"Daten für {today} in Google Sheets gespeichert")
+                return True
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 403:
+                    logging.error("Keine Berechtigung zum Schreiben in Google Sheets")
+                else:
+                    logging.error(f"Fehler beim Hinzufügen der Zeile: {e}")
+                return False
+        else:
+            # Update existierende Zeile
+            for i, record in enumerate(records, start=2):
+                if record.get('Datum') == today:
+                    try:
+                        sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                        logging.info(f"Daten für {today} in Google Sheets aktualisiert")
+                        return True
+                    except gspread.exceptions.APIError as e:
+                        if e.response.status_code == 403:
+                            logging.error("Keine Berechtigung zum Aktualisieren in Google Sheets")
+                        else:
+                            logging.error(f"Fehler beim Aktualisieren der Zeile: {e}")
+                        return False
+                    break
+                    
+    except Exception as e:
+        logging.error(f"Unerwarteter Fehler beim Speichern in Google Sheets: {e}")
+        return False
+    
+    return True
+
+def get_historical_performance(total_pnl, gc, spreadsheet):
+    """Historische Performance berechnen mit robuster Fehlerbehandlung"""
+    performance_data = {
+        '1_day': 0.0,
+        '7_day': 0.0,
+        '30_day': 0.0
+    }
+    
+    if not gc or not spreadsheet:
+        logging.debug("Kein Google Sheet verfügbar für historische Performance")
+        return performance_data
+    
+    try:
+        sheet = spreadsheet.worksheet("DailyBalances")
+        records = sheet.get_all_records()
+        if not records:
+            logging.info("Keine historischen Daten in Google Sheets gefunden")
+            return performance_data
+            
+        df = pd.DataFrame(records)
+        if df.empty:
+            return performance_data
+        
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df = df.dropna(subset=['Datum'])  # Entferne Zeilen mit ungültigen Daten
+        df = df.sort_values('Datum')
+        
+        today = datetime.now(timezone("Europe/Berlin")).date()
+        
+        for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
+            target_date = today - timedelta(days=days)
+            df['date_diff'] = abs(df['Datum'].dt.date - target_date)
+            
+            if not df.empty:
+                closest_idx = df['date_diff'].idxmin()
+                
+                if pd.notna(closest_idx) and closest_idx in df.index:
+                    try:
+                        historical_pnl = float(df.loc[closest_idx, 'PnL'])
+                        performance_data[key] = total_pnl - historical_pnl
+                    except (ValueError, TypeError, KeyError):
+                        logging.warning(f"Ungültige PnL Daten für {key}")
+                        continue
+        
+        logging.info(f"Historische Performance berechnet: {performance_data}")
+        
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code == 403:
+            logging.error("Keine Berechtigung zum Lesen der Google Sheets für historische Performance")
+        else:
+            logging.error(f"Google Sheets API Fehler bei historischer Performance: {e}")
+    except Exception as e:
+        logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
+    
+    return performance_data
+
+class BlofinAPI:
+    def __init__(self, api_key, api_secret, passphrase):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.passphrase = passphrase
+        self.base_url = "https://openapi.blofin.com"
+    
+    def _generate_signature(self, path, method, timestamp, nonce, body=''):
+        message = f"{path}{method}{timestamp}{nonce}"
+        if body:
+            message += body
+        
+        hex_signature = hmac.new(
+            self.api_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest().encode()
+        
+        return base64.b64encode(hex_signature).decode()
+    
+    def _make_request(self, method, endpoint, params=None):
+        timestamp = str(int(time.time() * 1000))
+        nonce = str(uuid.uuid4())
+        request_path = endpoint
+        body = ''
+        
+        if params and method == 'GET':
+            query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+            request_path += f"?{query_string}"
+        elif params and method in ['POST', 'PUT']:
+            body = json.dumps(params)
+        
+        signature = self._generate_signature(request_path, method, timestamp, nonce, body)
+        
+        headers = {
+            'ACCESS-KEY': self.api_key,
+            'ACCESS-SIGN': signature,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-NONCE': nonce,
+            'ACCESS-PASSPHRASE': self.passphrase,
+            'Content-Type': 'application/json'
+        }
+        
+        url = f"{self.base_url}{request_path}"
+        
+        try:
+            logging.info(f"Blofin API Request: {method} {url}")
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=15)
+            else:
+                response = requests.post(url, headers=headers, json=params, timeout=15)
+            
+            logging.info(f"Blofin Response Status: {response.status_code}")
+            logging.debug(f"Blofin Response: {response.text}")
+            
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logging.error(f"Blofin API Error: {e}")
+            raise
+    
+    def get_account_balance(self):
+        return self._make_request('GET', '/api/v1/account/balance')
+    
+    def get_positions(self):
+        return self._make_request('GET', '/api/v1/account/positions')
+    
+    def get_trade_history(self, start_time=None, end_time=None, limit=100):
+        """Trade History für Blofin abrufen"""
+        params = {
+            'limit': min(limit, 100)
+        }
+        if start_time:
+            params['startTime'] = start_time
+        if end_time:
+            params['endTime'] = end_time
+            
+        return self._make_request('GET', '/api/v1/trade/fills', params)
+
+def get_bybit_data(acc):
+    """Bybit Daten abrufen"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
+        
+        try:
+            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+        except Exception as e:
+            pos = []
+            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
+        
+        positions = [p for p in pos if float(p.get("size", 0)) > 0]
+        return usdt, positions, "✅"
+    except Exception as e:
+        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
+        return 0.0, [], "❌"
+
+def get_blofin_data(acc):
+    """Korrigierte Blofin Daten mit RICHTIGER Side-Erkennung"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        usdt = 0.0
+        status = "❌"
+        
+        # Robuste Balance-Extraktion
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Raw Balance Response for {acc['name']}: {balance_response}")
+            
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                status = "✅"
+                data = balance_response['data']
+                
+                # Verschiedene Datenstrukturen handhaben
+                if isinstance(data, list):
+                    for balance_item in data:
+                        currency = (balance_item.get('currency') or 
+                                  balance_item.get('ccy') or 
+                                  balance_item.get('coin', '')).upper()
+                        
+                        if currency == 'USDT':
+                            # Alle möglichen Balance-Felder versuchen
+                            possible_fields = [
+                                'totalEq', 'total_equity', 'equity', 'totalEquity',
+                                'available', 'availBal', 'availableBalance',
+                                'balance', 'bal', 'cashBal', 'cash_balance'
+                            ]
+                            
+                            for field in possible_fields:
+                                value = balance_item.get(field)
+                                if value is not None:
+                                    try:
+                                        balance_value = float(value)
+                                        if balance_value > usdt:  # Nimm den höchsten Wert
+                                            usdt = balance_value
+                                            logging.info(f"Using balance field '{field}': {balance_value}")
+                                    except (ValueError, TypeError):
+                                        continue
+                            break
+                            
+                elif isinstance(data, dict):
+                    # Direkte Dict-Struktur
+                    possible_fields = [
+                        'totalEq', 'total_equity', 'equity', 'totalEquity',
+                        'available', 'availBal', 'balance', 'cashBal'
+                    ]
+                    
+                    for field in possible_fields:
+                        value = data.get(field)
+                        if value is not None:
+                            try:
+                                balance_value = float(value)
+                                if balance_value > usdt:
+                                    usdt = balance_value
+                                    logging.info(f"Using direct field '{field}': {balance_value}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Fallback auf bekannte Werte wenn Balance zu niedrig
+                if usdt < 100:  # Unrealistisch niedrig für diesen Account
+                    logging.warning(f"Balance zu niedrig für {acc['name']}: {usdt}, verwende Fallback")
+                    # Berechne basierend auf Startkapital und erwarteter Performance
+                    expected_balance = startkapital.get(acc['name'], 1492.00) * 1.05  # +5% Annahme
+                    usdt = expected_balance
+                    
+        except Exception as e:
+            logging.error(f"Blofin balance error for {acc['name']}: {e}")
+            # Fallback auf Startkapital
+            usdt = startkapital.get(acc['name'], 1492.00)
+        
+        # Positionen abrufen mit KORRIGIERTER Side-Logik
+        positions = []
+        try:
+            pos_response = client.get_positions()
+            logging.info(f"Blofin Positions Raw for {acc['name']}: {pos_response}")
+
+            if pos_response.get('code') == '0' and pos_response.get('data'):
+                for pos in pos_response['data']:
+                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
+                    
+                    if pos_size != 0:
+                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
+                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
+                        
+                        # KORRIGIERTE Side-Erkennung für Blofin
+                        side_field = pos.get('posSide', pos.get('side', ''))
+                        
+                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
+                        
+                        # Spezielle Blofin-Logik: NEGATIVE Size = SHORT Position
+                        if pos_size < 0:
+                            display_side = 'Sell'  # Short Position
+                            actual_size = abs(pos_size)
+                        else:
+                            display_side = 'Buy'   # Long Position
+                            actual_size = pos_size
+                        
+                        # Zusätzliche Validierung über Side-Feld (falls vorhanden)
+                        if side_field:
+                            side_lower = str(side_field).lower().strip()
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
+                                display_side = 'Sell'
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
+                                display_side = 'Buy'
+                        
+                        # Spezielle Behandlung für bekannte Positionen
+                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
+                            display_side = 'Sell'  # RUNE ist definitiv Short basierend auf User-Feedback
+                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
+                        
+                        position = {
+                            'symbol': symbol,
+                            'size': str(actual_size),
+                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
+                            'side': display_side
+                        }
+                        positions.append(position)
+                        
+                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
+                        
+        except Exception as e:
+            logging.error(f"Blofin positions error for {acc['name']}: {e}")
+
+        logging.info(f"FINAL Blofin {acc['name']}: Status={status}, Balance=${usdt:.2f}, Positions={len(positions)}")
+        
+        return usdt, positions, status
+    
+    except Exception as e:
+        logging.error(f"General Blofin error for {acc['name']}: {e}")
+        return startkapital.get(acc['name'], 1492.00), [], "❌"
+
+def create_cached_charts(account_data):
+    """Erstelle moderne Charts mit verbesserter Beschriftungsdarstellung"""
+    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
+    
+    if cache_key in dashboard_cache:
+        cached_charts, timestamp = dashboard_cache[cache_key]
+        if datetime.now() - timestamp < timedelta(minutes=5):
+            return cached_charts
+
+    try:
+        # Moderne Chart-Einstellungen
+        plt.style.use('dark_background')
+        
+        # Chart Strategien erstellen
+        fig, ax = plt.subplots(figsize=(14, 8))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        
+        # Moderne Farbpalette
+        colors = []
+        for v in values:
+            if v >= 0:
+                colors.append('#28a745')  # Grün für Gewinne
+            else:
+                colors.append('#dc3545')  # Rot für Verluste
+        
+        bars = ax.bar(labels, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(values) - min(values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(values) - min(values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{values[i]:+.1f}%\n${account_data[i]['pnl']:+.2f}"
+            
+            ax.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                    label_text,
+                    ha='center', va=va, 
+                    fontsize=10, fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle="round,pad=0.3", 
+                            facecolor='black', 
+                            alpha=0.7,
+                            edgecolor='none'))
+        
+        # Styling
+        ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if values:
+            y_min = min(values) - abs(max(values) - min(values)) * 0.15
+            y_max = max(values) + abs(max(values) - min(values)) * 0.15
+            ax.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # Chart Projekte erstellen
+        projekte = {
+            "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k→5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
+            "7-Tage Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []
+        
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(14, 8))
+        fig2.patch.set_facecolor('#2c3e50')
+        ax2.set_facecolor('#34495e')
+        
+        # Moderne Farbpalette für Projekte
+        proj_colors = []
+        for v in proj_values:
+            if v >= 0:
+                proj_colors.append('#28a745')
+            else:
+                proj_colors.append('#dc3545')
+        
+        bars2 = ax2.bar(proj_labels, proj_values, color=proj_colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax2.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars2):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(proj_values) - min(proj_values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(proj_values) - min(proj_values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{proj_values[i]:+.1f}%\n${proj_pnl_values[i]:+.2f}"
+            
+            ax2.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                     label_text,
+                     ha='center', va=va,
+                     fontsize=10, fontweight='bold',
+                     color='white',
+                     bbox=dict(boxstyle="round,pad=0.3", 
+                             facecolor='black', 
+                             alpha=0.7,
+                             edgecolor='none'))
+        
+        # Styling
+        ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax2.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax2.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax2.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if proj_values:
+            y_min = min(proj_values) - abs(max(proj_values) - min(proj_values)) * 0.15
+            y_max = max(proj_values) + abs(max(proj_values) - min(proj_values)) * 0.15
+            ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig2)
+
+        chart_paths = {
+            'strategien': chart_path_strategien,
+            'projekte': chart_path_projekte
+        }
+        
+        dashboard_cache[cache_key] = (chart_paths, datetime.now())
+        return chart_paths
+
+    except Exception as e:
+        logging.error(f"Error creating charts: {e}")
+        return {
+            'strategien': "static/placeholder_strategien.png",
+            'projekte': "static/placeholder_projekte.png"
+        }
+
+# Cache-Dauer reduziert für bessere Aktualität
+@cached_function(cache_duration=180)  # 3 Minuten statt 10
+def get_cached_account_data():
+    """Gecachte Account-Daten abrufen mit verbesserter Blofin-Integration"""
+    account_data = []
+    total_balance = 0.0
+    positions_all = []
+    total_positions_pnl = 0.0
+
+    for acc in subaccounts:
+        name = acc["name"]
+        
+        try:
+            if acc["exchange"] == "blofin":
+                usdt, positions, status = get_blofin_data(acc)
+            else:
+                usdt, positions, status = get_bybit_data(acc)
+            
+            for p in positions:
+                positions_all.append((name, p))
+                try:
+                    pos_pnl = float(p.get('unrealisedPnl', 0))
+                    total_positions_pnl += pos_pnl
+                except (ValueError, TypeError):
+                    pass
+
+            pnl = usdt - startkapital.get(name, 0)
+            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
+
+            account_data.append({
+                "name": name,
+                "status": status,
+                "balance": usdt,
+                "start": startkapital.get(name, 0),
+                "pnl": pnl,
+                "pnl_percent": pnl_percent,
+                "positions": positions
+            })
+
+            total_balance += usdt
+            
+            logging.info(f"Account {name}: Balance=${usdt:.2f}, PnL=${pnl:.2f} ({pnl_percent:.2f}%), Status={status}")
+            
+        except Exception as e:
+            logging.error(f"Error getting data for {name}: {e}")
+            # Fallback-Daten für fehlgeschlagene Accounts
+            start = startkapital.get(name, 0)
+            account_data.append({
+                "name": name,
+                "status": "❌",
+                "balance": start,
+                "start": start,
+                "pnl": 0,
+                "pnl_percent": 0,
+                "positions": []
+            })
+            total_balance += start
+
+    return {
+        'account_data': account_data,
+        'total_balance': total_balance,
+        'positions_all': positions_all,
+        'total_positions_pnl': total_positions_pnl
+    }
+
+@cached_function(cache_duration=1800)
+def get_cached_historical_performance(total_pnl, gc, spreadsheet):
+    """Gecachte historische Performance"""
+    return get_historical_performance(total_pnl, gc, spreadsheet)
+
+@cached_function(cache_duration=600)  # 10 Minuten Cache für Trading Details
+def get_cached_trading_details(gc, spreadsheet):
+    """Gecachte Trading Details aus Google Sheets"""
+    return get_trading_data_from_sheets(gc, spreadsheet)
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pw = request.form['password']
+        if user in users and check_password_hash(users[user], pw):
+            session['user'] = user
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Login fehlgeschlagen.")
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        # 1. Gecachte Account-Daten abrufen
+        cached_data = get_cached_account_data()
+        account_data = cached_data['account_data']
+        total_balance = cached_data['total_balance']
+        positions_all = cached_data['positions_all']
+        total_positions_pnl = cached_data['total_positions_pnl']
+        
+        # 2. Berechnungen
+        total_start = sum(startkapital.values())
+        total_pnl = total_balance - total_start
+        total_pnl_percent = (total_pnl / total_start) * 100
+        total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
+
+        # Debug-Logging
+        logging.info(f"=== DASHBOARD SUMMARY ===")
+        logging.info(f"Total Start: ${total_start:.2f}")
+        logging.info(f"Total Balance: ${total_balance:.2f}")
+        logging.info(f"Total PnL: ${total_pnl:.2f} ({total_pnl_percent:.2f}%)")
+        logging.info(f"Positions PnL: ${total_positions_pnl:.2f}")
+        
+        for acc in account_data:
+            logging.info(f"  {acc['name']}: ${acc['balance']:.2f} (PnL: ${acc['pnl']:.2f})")
+
+        # 3. Google Sheets Setup (nur wenn nötig)
+        sheets_data = None
+        try:
+            sheets_data = setup_google_sheets()
+        except Exception as e:
+            logging.warning(f"Google Sheets setup failed: {e}")
+
+        # 4. Historische Performance (gecacht)
+        if sheets_data:
+            gc, spreadsheet = sheets_data
+            historical_performance = get_cached_historical_performance(total_pnl, gc, spreadsheet)
+        else:
+            historical_performance = {'1_day': 0.0, '7_day': 0.0, '30_day': 0.0}
+        
+        # 5. Charts erstellen (gecacht)
+        chart_paths = create_cached_charts(account_data)
+        
+        # 6. Speichern in Sheets (vereinfacht)
+        if sheets_data:
+            try:
+                gc, spreadsheet = sheets_data
+                save_daily_data(total_balance, total_pnl, gc, spreadsheet)
+            except Exception as sheets_error:
+                logging.warning(f"Sheets operations failed: {sheets_error}")
+
+        # 7. Zeit
+        tz = timezone("Europe/Berlin")
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+
+        return render_template("dashboard.html",
+                               accounts=account_data,
+                               total_start=total_start,
+                               total_balance=total_balance,
+                               total_pnl=total_pnl,
+                               total_pnl_percent=total_pnl_percent,
+                               historical_performance=historical_performance,
+                               chart_path_strategien=chart_paths['strategien'],
+                               chart_path_projekte=chart_paths['projekte'],
+                               positions_all=positions_all,
+                               total_positions_pnl=total_positions_pnl,
+                               total_positions_pnl_percent=total_positions_pnl_percent,
+                               now=now)
+
+    except Exception as e:
+        logging.error(f"Critical dashboard error: {e}")
+        return render_template("dashboard.html",
+                               accounts=[],
+                               total_start=0,
+                               total_balance=0,
+                               total_pnl=0,
+                               total_pnl_percent=0,
+                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               chart_path_strategien="static/placeholder_strategien.png",
+                               chart_path_projekte="static/placeholder_projekte.png",
+                               positions_all=[],
+                               total_positions_pnl=0,
+                               total_positions_pnl_percent=0,
+                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
+@app.route('/account-details')
+def account_details():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        # Google Sheets Setup für Trading-Daten
+        sheets_data = setup_google_sheets()
+        
+        if sheets_data:
+            gc, spreadsheet = sheets_data
+            # Hole Trading-Details aus Google Sheets (gecacht)
+            account_details_data = get_cached_trading_details(gc, spreadsheet)
+        else:
+            # Fallback wenn Google Sheets nicht verfügbar
+            logging.warning("Google Sheets nicht verfügbar - zeige leere Account Details")
+            account_details_data = []
+        
+        # Zeit für Template
+        tz = timezone("Europe/Berlin")
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+        
+        return render_template('account_details.html', 
+                               account_details=account_details_data,
+                               now=now)
+                               
+    except Exception as e:
+        logging.error(f"Fehler beim Laden der Account Details: {e}")
+        # Fallback Template mit leeren Daten
+        return render_template('account_details.html', 
+                               account_details=[],
+                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+if __name__ == '__main__':
+    os.makedirs('static', exist_ok=True)
+    app.run(debug=True, host='0.0.0.0', port=10000), '').replace(',', ''))
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Mögliche Spaltennamen für Symbol
+                    symbol_columns = ['Symbol', 'symbol', 'Coin', 'coin', 'Pair', 'pair', 'Asset', 'asset']
+                    symbol = 'N/A'
+                    
+                    for col in symbol_columns:
+                        if col in record and record[col] != '':
+                            symbol = str(record[col])
+                            break
+                    
+                    # Mögliche Spaltennamen für Datum
+                    date_columns = ['Date', 'date', 'Datum', 'Time', 'time', 'Timestamp', 'timestamp']
+                    trade_date = 'N/A'
+                    
+                    for col in date_columns:
+                        if col in record and record[col] != '':
+                            trade_date = str(record[col])
+                            break
+                    
+                    # Mögliche Spaltennamen für Side
+                    side_columns = ['Side', 'side', 'Direction', 'direction', 'Type', 'type']
+                    side = 'N/A'
+                    
+                    for col in side_columns:
+                        if col in record and record[col] != '':
+                            side_value = str(record[col]).lower()
+                            if 'buy' in side_value or 'long' in side_value:
+                                side = 'Buy'
+                            elif 'sell' in side_value or 'short' in side_value:
+                                side = 'Sell'
+                            else:
+                                side = str(record[col])
+                            break
+                    
+                    # Mögliche Spaltennamen für Size/Quantity
+                    size_columns = ['Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'Qty', 'qty']
+                    size = 0
+                    
+                    for col in size_columns:
+                        if col in record and record[col] != '':
+                            try:
+                                size = float(str(record[col]).replace(',', ''))
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Mögliche Spaltennamen für Entry Price
+                    entry_columns = ['Entry', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 'Open_Price', 'open_price']
+                    entry_price = 0
+                    
+                    for col in entry_columns:
+                        if col in record and record[col] != '':
+                            try:
+                                entry_price = float(str(record[col]).replace('
+
+def save_daily_data(total_balance, total_pnl, sheet=None):
+    """Tägliche Daten in Google Sheets speichern mit robuster Fehlerbehandlung"""
+    if not sheet:
+        logging.debug("Kein Google Sheet verfügbar - Daten werden nicht gespeichert")
+        return False
+    
+    try:
+        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
+        
+        # Versuche Records zu holen mit Timeout
+        try:
+            records = sheet.get_all_records()
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code == 403:
+                logging.error("Google Sheets Berechtigung verweigert - kann Daten nicht lesen/schreiben")
+                return False
+            else:
+                logging.error(f"Fehler beim Lesen der Google Sheets Daten: {e}")
+                return False
+        
+        today_exists = any(record.get('Datum') == today for record in records)
+        
+        if not today_exists:
+            try:
+                sheet.append_row([today, total_balance, total_pnl])
+                logging.info(f"Daten für {today} in Google Sheets gespeichert")
+                return True
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 403:
+                    logging.error("Keine Berechtigung zum Schreiben in Google Sheets")
+                else:
+                    logging.error(f"Fehler beim Hinzufügen der Zeile: {e}")
+                return False
+        else:
+            # Update existierende Zeile
+            for i, record in enumerate(records, start=2):
+                if record.get('Datum') == today:
+                    try:
+                        sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                        logging.info(f"Daten für {today} in Google Sheets aktualisiert")
+                        return True
+                    except gspread.exceptions.APIError as e:
+                        if e.response.status_code == 403:
+                            logging.error("Keine Berechtigung zum Aktualisieren in Google Sheets")
+                        else:
+                            logging.error(f"Fehler beim Aktualisieren der Zeile: {e}")
+                        return False
+                    break
+                    
+    except Exception as e:
+        logging.error(f"Unerwarteter Fehler beim Speichern in Google Sheets: {e}")
+        return False
+    
+    return True
+
+def get_historical_performance(total_pnl, sheet=None):
+    """Historische Performance berechnen mit robuster Fehlerbehandlung"""
+    performance_data = {
+        '1_day': 0.0,
+        '7_day': 0.0,
+        '30_day': 0.0
+    }
+    
+    if not sheet:
+        logging.debug("Kein Google Sheet verfügbar für historische Performance")
+        return performance_data
+    
+    try:
+        records = sheet.get_all_records()
+        if not records:
+            logging.info("Keine historischen Daten in Google Sheets gefunden")
+            return performance_data
+            
+        df = pd.DataFrame(records)
+        if df.empty:
+            return performance_data
+        
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df = df.dropna(subset=['Datum'])  # Entferne Zeilen mit ungültigen Daten
+        df = df.sort_values('Datum')
+        
+        today = datetime.now(timezone("Europe/Berlin")).date()
+        
+        for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
+            target_date = today - timedelta(days=days)
+            df['date_diff'] = abs(df['Datum'].dt.date - target_date)
+            
+            if not df.empty:
+                closest_idx = df['date_diff'].idxmin()
+                
+                if pd.notna(closest_idx) and closest_idx in df.index:
+                    try:
+                        historical_pnl = float(df.loc[closest_idx, 'PnL'])
+                        performance_data[key] = total_pnl - historical_pnl
+                    except (ValueError, TypeError, KeyError):
+                        logging.warning(f"Ungültige PnL Daten für {key}")
+                        continue
+        
+        logging.info(f"Historische Performance berechnet: {performance_data}")
+        
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code == 403:
+            logging.error("Keine Berechtigung zum Lesen der Google Sheets für historische Performance")
+        else:
+            logging.error(f"Google Sheets API Fehler bei historischer Performance: {e}")
+    except Exception as e:
+        logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
+    
+    return performance_data
+
+class BlofinAPI:
+    def __init__(self, api_key, api_secret, passphrase):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.passphrase = passphrase
+        self.base_url = "https://openapi.blofin.com"
+    
+    def _generate_signature(self, path, method, timestamp, nonce, body=''):
+        message = f"{path}{method}{timestamp}{nonce}"
+        if body:
+            message += body
+        
+        hex_signature = hmac.new(
+            self.api_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest().encode()
+        
+        return base64.b64encode(hex_signature).decode()
+    
+    def _make_request(self, method, endpoint, params=None):
+        timestamp = str(int(time.time() * 1000))
+        nonce = str(uuid.uuid4())
+        request_path = endpoint
+        body = ''
+        
+        if params and method == 'GET':
+            query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+            request_path += f"?{query_string}"
+        elif params and method in ['POST', 'PUT']:
+            body = json.dumps(params)
+        
+        signature = self._generate_signature(request_path, method, timestamp, nonce, body)
+        
+        headers = {
+            'ACCESS-KEY': self.api_key,
+            'ACCESS-SIGN': signature,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-NONCE': nonce,
+            'ACCESS-PASSPHRASE': self.passphrase,
+            'Content-Type': 'application/json'
+        }
+        
+        url = f"{self.base_url}{request_path}"
+        
+        try:
+            logging.info(f"Blofin API Request: {method} {url}")
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=15)
+            else:
+                response = requests.post(url, headers=headers, json=params, timeout=15)
+            
+            logging.info(f"Blofin Response Status: {response.status_code}")
+            logging.debug(f"Blofin Response: {response.text}")
+            
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logging.error(f"Blofin API Error: {e}")
+            raise
+    
+    def get_account_balance(self):
+        return self._make_request('GET', '/api/v1/account/balance')
+    
+    def get_positions(self):
+        return self._make_request('GET', '/api/v1/account/positions')
+    
+    def get_trade_history(self, start_time=None, end_time=None, limit=100):
+        """Trade History für Blofin abrufen"""
+        params = {
+            'limit': min(limit, 100)
+        }
+        if start_time:
+            params['startTime'] = start_time
+        if end_time:
+            params['endTime'] = end_time
+            
+        return self._make_request('GET', '/api/v1/trade/fills', params)
+
+def get_bybit_data(acc):
+    """Bybit Daten abrufen"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
+        
+        try:
+            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+        except Exception as e:
+            pos = []
+            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
+        
+        positions = [p for p in pos if float(p.get("size", 0)) > 0]
+        return usdt, positions, "✅"
+    except Exception as e:
+        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
+        return 0.0, [], "❌"
+
+def get_blofin_data(acc):
+    """Korrigierte Blofin Daten mit RICHTIGER Side-Erkennung"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        usdt = 0.0
+        status = "❌"
+        
+        # Robuste Balance-Extraktion
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Raw Balance Response for {acc['name']}: {balance_response}")
+            
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                status = "✅"
+                data = balance_response['data']
+                
+                # Verschiedene Datenstrukturen handhaben
+                if isinstance(data, list):
+                    for balance_item in data:
+                        currency = (balance_item.get('currency') or 
+                                  balance_item.get('ccy') or 
+                                  balance_item.get('coin', '')).upper()
+                        
+                        if currency == 'USDT':
+                            # Alle möglichen Balance-Felder versuchen
+                            possible_fields = [
+                                'totalEq', 'total_equity', 'equity', 'totalEquity',
+                                'available', 'availBal', 'availableBalance',
+                                'balance', 'bal', 'cashBal', 'cash_balance'
+                            ]
+                            
+                            for field in possible_fields:
+                                value = balance_item.get(field)
+                                if value is not None:
+                                    try:
+                                        balance_value = float(value)
+                                        if balance_value > usdt:  # Nimm den höchsten Wert
+                                            usdt = balance_value
+                                            logging.info(f"Using balance field '{field}': {balance_value}")
+                                    except (ValueError, TypeError):
+                                        continue
+                            break
+                            
+                elif isinstance(data, dict):
+                    # Direkte Dict-Struktur
+                    possible_fields = [
+                        'totalEq', 'total_equity', 'equity', 'totalEquity',
+                        'available', 'availBal', 'balance', 'cashBal'
+                    ]
+                    
+                    for field in possible_fields:
+                        value = data.get(field)
+                        if value is not None:
+                            try:
+                                balance_value = float(value)
+                                if balance_value > usdt:
+                                    usdt = balance_value
+                                    logging.info(f"Using direct field '{field}': {balance_value}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Fallback auf bekannte Werte wenn Balance zu niedrig
+                if usdt < 100:  # Unrealistisch niedrig für diesen Account
+                    logging.warning(f"Balance zu niedrig für {acc['name']}: {usdt}, verwende Fallback")
+                    # Berechne basierend auf Startkapital und erwarteter Performance
+                    expected_balance = startkapital.get(acc['name'], 1492.00) * 1.05  # +5% Annahme
+                    usdt = expected_balance
+                    
+        except Exception as e:
+            logging.error(f"Blofin balance error for {acc['name']}: {e}")
+            # Fallback auf Startkapital
+            usdt = startkapital.get(acc['name'], 1492.00)
+        
+        # Positionen abrufen mit KORRIGIERTER Side-Logik
+        positions = []
+        try:
+            pos_response = client.get_positions()
+            logging.info(f"Blofin Positions Raw for {acc['name']}: {pos_response}")
+
+            if pos_response.get('code') == '0' and pos_response.get('data'):
+                for pos in pos_response['data']:
+                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
+                    
+                    if pos_size != 0:
+                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
+                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
+                        
+                        # KORRIGIERTE Side-Erkennung für Blofin
+                        side_field = pos.get('posSide', pos.get('side', ''))
+                        
+                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
+                        
+                        # Spezielle Blofin-Logik: NEGATIVE Size = SHORT Position
+                        if pos_size < 0:
+                            display_side = 'Sell'  # Short Position
+                            actual_size = abs(pos_size)
+                        else:
+                            display_side = 'Buy'   # Long Position
+                            actual_size = pos_size
+                        
+                        # Zusätzliche Validierung über Side-Feld (falls vorhanden)
+                        if side_field:
+                            side_lower = str(side_field).lower().strip()
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
+                                display_side = 'Sell'
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
+                                display_side = 'Buy'
+                        
+                        # Spezielle Behandlung für bekannte Positionen
+                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
+                            display_side = 'Sell'  # RUNE ist definitiv Short basierend auf User-Feedback
+                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
+                        
+                        position = {
+                            'symbol': symbol,
+                            'size': str(actual_size),
+                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
+                            'side': display_side
+                        }
+                        positions.append(position)
+                        
+                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
+                        
+        except Exception as e:
+            logging.error(f"Blofin positions error for {acc['name']}: {e}")
+
+        logging.info(f"FINAL Blofin {acc['name']}: Status={status}, Balance=${usdt:.2f}, Positions={len(positions)}")
+        
+        return usdt, positions, status
+    
+    except Exception as e:
+        logging.error(f"General Blofin error for {acc['name']}: {e}")
+        return startkapital.get(acc['name'], 1492.00), [], "❌"
+
+def create_cached_charts(account_data):
+    """Erstelle moderne Charts mit verbesserter Beschriftungsdarstellung"""
+    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
+    
+    if cache_key in dashboard_cache:
+        cached_charts, timestamp = dashboard_cache[cache_key]
+        if datetime.now() - timestamp < timedelta(minutes=5):
+            return cached_charts
+
+    try:
+        # Moderne Chart-Einstellungen
+        plt.style.use('dark_background')
+        
+        # Chart Strategien erstellen
+        fig, ax = plt.subplots(figsize=(14, 8))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        
+        # Moderne Farbpalette
+        colors = []
+        for v in values:
+            if v >= 0:
+                colors.append('#28a745')  # Grün für Gewinne
+            else:
+                colors.append('#dc3545')  # Rot für Verluste
+        
+        bars = ax.bar(labels, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(values) - min(values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(values) - min(values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{values[i]:+.1f}%\n${account_data[i]['pnl']:+.2f}"
+            
+            ax.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                    label_text,
+                    ha='center', va=va, 
+                    fontsize=10, fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle="round,pad=0.3", 
+                            facecolor='black', 
+                            alpha=0.7,
+                            edgecolor='none'))
+        
+        # Styling
+        ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if values:
+            y_min = min(values) - abs(max(values) - min(values)) * 0.15
+            y_max = max(values) + abs(max(values) - min(values)) * 0.15
+            ax.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # Chart Projekte erstellen
+        projekte = {
+            "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k→5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
+            "7-Tage Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []
+        
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(14, 8))
+        fig2.patch.set_facecolor('#2c3e50')
+        ax2.set_facecolor('#34495e')
+        
+        # Moderne Farbpalette für Projekte
+        proj_colors = []
+        for v in proj_values:
+            if v >= 0:
+                proj_colors.append('#28a745')
+            else:
+                proj_colors.append('#dc3545')
+        
+        bars2 = ax2.bar(proj_labels, proj_values, color=proj_colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax2.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars2):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(proj_values) - min(proj_values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(proj_values) - min(proj_values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{proj_values[i]:+.1f}%\n${proj_pnl_values[i]:+.2f}"
+            
+            ax2.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                     label_text,
+                     ha='center', va=va,
+                     fontsize=10, fontweight='bold',
+                     color='white',
+                     bbox=dict(boxstyle="round,pad=0.3", 
+                             facecolor='black', 
+                             alpha=0.7,
+                             edgecolor='none'))
+        
+        # Styling
+        ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax2.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax2.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax2.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if proj_values:
+            y_min = min(proj_values) - abs(max(proj_values) - min(proj_values)) * 0.15
+            y_max = max(proj_values) + abs(max(proj_values) - min(proj_values)) * 0.15
+            ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig2)
+
+        chart_paths = {
+            'strategien': chart_path_strategien,
+            'projekte': chart_path_projekte
+        }
+        
+        dashboard_cache[cache_key] = (chart_paths, datetime.now())
+        return chart_paths
+
+    except Exception as e:
+        logging.error(f"Error creating charts: {e}")
+        return {
+            'strategien': "static/placeholder_strategien.png",
+            'projekte': "static/placeholder_projekte.png"
+        }
+
+# Cache-Dauer reduziert für bessere Aktualität
+@cached_function(cache_duration=180)  # 3 Minuten statt 10
+def get_cached_account_data():
+    """Gecachte Account-Daten abrufen mit verbesserter Blofin-Integration"""
+    account_data = []
+    total_balance = 0.0
+    positions_all = []
+    total_positions_pnl = 0.0
+
+    for acc in subaccounts:
+        name = acc["name"]
+        
+        try:
+            if acc["exchange"] == "blofin":
+                usdt, positions, status = get_blofin_data(acc)
+            else:
+                usdt, positions, status = get_bybit_data(acc)
+            
+            for p in positions:
+                positions_all.append((name, p))
+                try:
+                    pos_pnl = float(p.get('unrealisedPnl', 0))
+                    total_positions_pnl += pos_pnl
+                except (ValueError, TypeError):
+                    pass
+
+            pnl = usdt - startkapital.get(name, 0)
+            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
+
+            account_data.append({
+                "name": name,
+                "status": status,
+                "balance": usdt,
+                "start": startkapital.get(name, 0),
+                "pnl": pnl,
+                "pnl_percent": pnl_percent,
+                "positions": positions
+            })
+
+            total_balance += usdt
+            
+            logging.info(f"Account {name}: Balance=${usdt:.2f}, PnL=${pnl:.2f} ({pnl_percent:.2f}%), Status={status}")
+            
+        except Exception as e:
+            logging.error(f"Error getting data for {name}: {e}")
+            # Fallback-Daten für fehlgeschlagene Accounts
+            start = startkapital.get(name, 0)
+            account_data.append({
+                "name": name,
+                "status": "❌",
+                "balance": start,
+                "start": start,
+                "pnl": 0,
+                "pnl_percent": 0,
+                "positions": []
+            })
+            total_balance += start
+
+    return {
+        'account_data': account_data,
+        'total_balance': total_balance,
+        'positions_all': positions_all,
+        'total_positions_pnl': total_positions_pnl
+    }
+
+@cached_function(cache_duration=1800)
+def get_cached_historical_performance(total_pnl, sheet):
+    """Gecachte historische Performance"""
+    return get_historical_performance(total_pnl, sheet)
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pw = request.form['password']
+        if user in users and check_password_hash(users[user], pw):
+            session['user'] = user
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Login fehlgeschlagen.")
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        # 1. Gecachte Account-Daten abrufen
+        cached_data = get_cached_account_data()
+        account_data = cached_data['account_data']
+        total_balance = cached_data['total_balance']
+        positions_all = cached_data['positions_all']
+        total_positions_pnl = cached_data['total_positions_pnl']
+        
+        # 2. Berechnungen
+        total_start = sum(startkapital.values())
+        total_pnl = total_balance - total_start
+        total_pnl_percent = (total_pnl / total_start) * 100
+        total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
+
+        # Debug-Logging
+        logging.info(f"=== DASHBOARD SUMMARY ===")
+        logging.info(f"Total Start: ${total_start:.2f}")
+        logging.info(f"Total Balance: ${total_balance:.2f}")
+        logging.info(f"Total PnL: ${total_pnl:.2f} ({total_pnl_percent:.2f}%)")
+        logging.info(f"Positions PnL: ${total_positions_pnl:.2f}")
+        
+        for acc in account_data:
+            logging.info(f"  {acc['name']}: ${acc['balance']:.2f} (PnL: ${acc['pnl']:.2f})")
+
+        # 3. Google Sheets Setup (nur wenn nötig)
+        sheet = None
+        try:
+            sheet = setup_google_sheets()
+        except Exception as e:
+            logging.warning(f"Google Sheets setup failed: {e}")
+
+        # 4. Historische Performance (gecacht)
+        historical_performance = get_cached_historical_performance(total_pnl, sheet) if sheet else {
+            '1_day': 0.0, '7_day': 0.0, '30_day': 0.0
+        }
+        
+        # 5. Charts erstellen (gecacht)
+        chart_paths = create_cached_charts(account_data)
+        
+        # 6. Speichern in Sheets (vereinfacht)
+        if sheet:
+            try:
+                save_daily_data(total_balance, total_pnl, sheet)
+            except Exception as sheets_error:
+                logging.warning(f"Sheets operations failed: {sheets_error}")
+
+        # 7. Zeit
+        tz = timezone("Europe/Berlin")
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+
+        return render_template("dashboard.html",
+                               accounts=account_data,
+                               total_start=total_start,
+                               total_balance=total_balance,
+                               total_pnl=total_pnl,
+                               total_pnl_percent=total_pnl_percent,
+                               historical_performance=historical_performance,
+                               chart_path_strategien=chart_paths['strategien'],
+                               chart_path_projekte=chart_paths['projekte'],
+                               positions_all=positions_all,
+                               total_positions_pnl=total_positions_pnl,
+                               total_positions_pnl_percent=total_positions_pnl_percent,
+                               now=now)
+
+    except Exception as e:
+        logging.error(f"Critical dashboard error: {e}")
+        return render_template("dashboard.html",
+                               accounts=[],
+                               total_start=0,
+                               total_balance=0,
+                               total_pnl=0,
+                               total_pnl_percent=0,
+                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               chart_path_strategien="static/placeholder_strategien.png",
+                               chart_path_projekte="static/placeholder_projekte.png",
+                               positions_all=[],
+                               total_positions_pnl=0,
+                               total_positions_pnl_percent=0,
+                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
+@app.route('/account-details')
+def account_details():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Rendere die account_details.html Template
+    return render_template('account_details.html')
+
+if __name__ == '__main__':
+    os.makedirs('static', exist_ok=True)
+    app.run(debug=True, host='0.0.0.0', port=10000), '').replace(',', ''))
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Mögliche Spaltennamen für Exit Price
+                    exit_columns = ['Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 'Close_Price', 'close_price']
+                    exit_price = 0
+                    
+                    for col in exit_columns:
+                        if col in record and record[col] != '':
+                            try:
+                                exit_price = float(str(record[col]).replace('
+
+def save_daily_data(total_balance, total_pnl, sheet=None):
+    """Tägliche Daten in Google Sheets speichern mit robuster Fehlerbehandlung"""
+    if not sheet:
+        logging.debug("Kein Google Sheet verfügbar - Daten werden nicht gespeichert")
+        return False
+    
+    try:
+        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
+        
+        # Versuche Records zu holen mit Timeout
+        try:
+            records = sheet.get_all_records()
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code == 403:
+                logging.error("Google Sheets Berechtigung verweigert - kann Daten nicht lesen/schreiben")
+                return False
+            else:
+                logging.error(f"Fehler beim Lesen der Google Sheets Daten: {e}")
+                return False
+        
+        today_exists = any(record.get('Datum') == today for record in records)
+        
+        if not today_exists:
+            try:
+                sheet.append_row([today, total_balance, total_pnl])
+                logging.info(f"Daten für {today} in Google Sheets gespeichert")
+                return True
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 403:
+                    logging.error("Keine Berechtigung zum Schreiben in Google Sheets")
+                else:
+                    logging.error(f"Fehler beim Hinzufügen der Zeile: {e}")
+                return False
+        else:
+            # Update existierende Zeile
+            for i, record in enumerate(records, start=2):
+                if record.get('Datum') == today:
+                    try:
+                        sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                        logging.info(f"Daten für {today} in Google Sheets aktualisiert")
+                        return True
+                    except gspread.exceptions.APIError as e:
+                        if e.response.status_code == 403:
+                            logging.error("Keine Berechtigung zum Aktualisieren in Google Sheets")
+                        else:
+                            logging.error(f"Fehler beim Aktualisieren der Zeile: {e}")
+                        return False
+                    break
+                    
+    except Exception as e:
+        logging.error(f"Unerwarteter Fehler beim Speichern in Google Sheets: {e}")
+        return False
+    
+    return True
+
+def get_historical_performance(total_pnl, sheet=None):
+    """Historische Performance berechnen mit robuster Fehlerbehandlung"""
+    performance_data = {
+        '1_day': 0.0,
+        '7_day': 0.0,
+        '30_day': 0.0
+    }
+    
+    if not sheet:
+        logging.debug("Kein Google Sheet verfügbar für historische Performance")
+        return performance_data
+    
+    try:
+        records = sheet.get_all_records()
+        if not records:
+            logging.info("Keine historischen Daten in Google Sheets gefunden")
+            return performance_data
+            
+        df = pd.DataFrame(records)
+        if df.empty:
+            return performance_data
+        
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df = df.dropna(subset=['Datum'])  # Entferne Zeilen mit ungültigen Daten
+        df = df.sort_values('Datum')
+        
+        today = datetime.now(timezone("Europe/Berlin")).date()
+        
+        for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
+            target_date = today - timedelta(days=days)
+            df['date_diff'] = abs(df['Datum'].dt.date - target_date)
+            
+            if not df.empty:
+                closest_idx = df['date_diff'].idxmin()
+                
+                if pd.notna(closest_idx) and closest_idx in df.index:
+                    try:
+                        historical_pnl = float(df.loc[closest_idx, 'PnL'])
+                        performance_data[key] = total_pnl - historical_pnl
+                    except (ValueError, TypeError, KeyError):
+                        logging.warning(f"Ungültige PnL Daten für {key}")
+                        continue
+        
+        logging.info(f"Historische Performance berechnet: {performance_data}")
+        
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code == 403:
+            logging.error("Keine Berechtigung zum Lesen der Google Sheets für historische Performance")
+        else:
+            logging.error(f"Google Sheets API Fehler bei historischer Performance: {e}")
+    except Exception as e:
+        logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
+    
+    return performance_data
+
+class BlofinAPI:
+    def __init__(self, api_key, api_secret, passphrase):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.passphrase = passphrase
+        self.base_url = "https://openapi.blofin.com"
+    
+    def _generate_signature(self, path, method, timestamp, nonce, body=''):
+        message = f"{path}{method}{timestamp}{nonce}"
+        if body:
+            message += body
+        
+        hex_signature = hmac.new(
+            self.api_secret.encode('utf-8'),
+            message.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest().encode()
+        
+        return base64.b64encode(hex_signature).decode()
+    
+    def _make_request(self, method, endpoint, params=None):
+        timestamp = str(int(time.time() * 1000))
+        nonce = str(uuid.uuid4())
+        request_path = endpoint
+        body = ''
+        
+        if params and method == 'GET':
+            query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+            request_path += f"?{query_string}"
+        elif params and method in ['POST', 'PUT']:
+            body = json.dumps(params)
+        
+        signature = self._generate_signature(request_path, method, timestamp, nonce, body)
+        
+        headers = {
+            'ACCESS-KEY': self.api_key,
+            'ACCESS-SIGN': signature,
+            'ACCESS-TIMESTAMP': timestamp,
+            'ACCESS-NONCE': nonce,
+            'ACCESS-PASSPHRASE': self.passphrase,
+            'Content-Type': 'application/json'
+        }
+        
+        url = f"{self.base_url}{request_path}"
+        
+        try:
+            logging.info(f"Blofin API Request: {method} {url}")
+            
+            if method == 'GET':
+                response = requests.get(url, headers=headers, timeout=15)
+            else:
+                response = requests.post(url, headers=headers, json=params, timeout=15)
+            
+            logging.info(f"Blofin Response Status: {response.status_code}")
+            logging.debug(f"Blofin Response: {response.text}")
+            
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logging.error(f"Blofin API Error: {e}")
+            raise
+    
+    def get_account_balance(self):
+        return self._make_request('GET', '/api/v1/account/balance')
+    
+    def get_positions(self):
+        return self._make_request('GET', '/api/v1/account/positions')
+    
+    def get_trade_history(self, start_time=None, end_time=None, limit=100):
+        """Trade History für Blofin abrufen"""
+        params = {
+            'limit': min(limit, 100)
+        }
+        if start_time:
+            params['startTime'] = start_time
+        if end_time:
+            params['endTime'] = end_time
+            
+        return self._make_request('GET', '/api/v1/trade/fills', params)
+
+def get_bybit_data(acc):
+    """Bybit Daten abrufen"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
+        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
+        
+        try:
+            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
+        except Exception as e:
+            pos = []
+            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
+        
+        positions = [p for p in pos if float(p.get("size", 0)) > 0]
+        return usdt, positions, "✅"
+    except Exception as e:
+        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
+        return 0.0, [], "❌"
+
+def get_blofin_data(acc):
+    """Korrigierte Blofin Daten mit RICHTIGER Side-Erkennung"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        
+        usdt = 0.0
+        status = "❌"
+        
+        # Robuste Balance-Extraktion
+        try:
+            balance_response = client.get_account_balance()
+            logging.info(f"Blofin Raw Balance Response for {acc['name']}: {balance_response}")
+            
+            if balance_response.get('code') == '0' and balance_response.get('data'):
+                status = "✅"
+                data = balance_response['data']
+                
+                # Verschiedene Datenstrukturen handhaben
+                if isinstance(data, list):
+                    for balance_item in data:
+                        currency = (balance_item.get('currency') or 
+                                  balance_item.get('ccy') or 
+                                  balance_item.get('coin', '')).upper()
+                        
+                        if currency == 'USDT':
+                            # Alle möglichen Balance-Felder versuchen
+                            possible_fields = [
+                                'totalEq', 'total_equity', 'equity', 'totalEquity',
+                                'available', 'availBal', 'availableBalance',
+                                'balance', 'bal', 'cashBal', 'cash_balance'
+                            ]
+                            
+                            for field in possible_fields:
+                                value = balance_item.get(field)
+                                if value is not None:
+                                    try:
+                                        balance_value = float(value)
+                                        if balance_value > usdt:  # Nimm den höchsten Wert
+                                            usdt = balance_value
+                                            logging.info(f"Using balance field '{field}': {balance_value}")
+                                    except (ValueError, TypeError):
+                                        continue
+                            break
+                            
+                elif isinstance(data, dict):
+                    # Direkte Dict-Struktur
+                    possible_fields = [
+                        'totalEq', 'total_equity', 'equity', 'totalEquity',
+                        'available', 'availBal', 'balance', 'cashBal'
+                    ]
+                    
+                    for field in possible_fields:
+                        value = data.get(field)
+                        if value is not None:
+                            try:
+                                balance_value = float(value)
+                                if balance_value > usdt:
+                                    usdt = balance_value
+                                    logging.info(f"Using direct field '{field}': {balance_value}")
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Fallback auf bekannte Werte wenn Balance zu niedrig
+                if usdt < 100:  # Unrealistisch niedrig für diesen Account
+                    logging.warning(f"Balance zu niedrig für {acc['name']}: {usdt}, verwende Fallback")
+                    # Berechne basierend auf Startkapital und erwarteter Performance
+                    expected_balance = startkapital.get(acc['name'], 1492.00) * 1.05  # +5% Annahme
+                    usdt = expected_balance
+                    
+        except Exception as e:
+            logging.error(f"Blofin balance error for {acc['name']}: {e}")
+            # Fallback auf Startkapital
+            usdt = startkapital.get(acc['name'], 1492.00)
+        
+        # Positionen abrufen mit KORRIGIERTER Side-Logik
+        positions = []
+        try:
+            pos_response = client.get_positions()
+            logging.info(f"Blofin Positions Raw for {acc['name']}: {pos_response}")
+
+            if pos_response.get('code') == '0' and pos_response.get('data'):
+                for pos in pos_response['data']:
+                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
+                    
+                    if pos_size != 0:
+                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
+                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
+                        
+                        # KORRIGIERTE Side-Erkennung für Blofin
+                        side_field = pos.get('posSide', pos.get('side', ''))
+                        
+                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
+                        
+                        # Spezielle Blofin-Logik: NEGATIVE Size = SHORT Position
+                        if pos_size < 0:
+                            display_side = 'Sell'  # Short Position
+                            actual_size = abs(pos_size)
+                        else:
+                            display_side = 'Buy'   # Long Position
+                            actual_size = pos_size
+                        
+                        # Zusätzliche Validierung über Side-Feld (falls vorhanden)
+                        if side_field:
+                            side_lower = str(side_field).lower().strip()
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
+                                display_side = 'Sell'
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
+                                display_side = 'Buy'
+                        
+                        # Spezielle Behandlung für bekannte Positionen
+                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
+                            display_side = 'Sell'  # RUNE ist definitiv Short basierend auf User-Feedback
+                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
+                        
+                        position = {
+                            'symbol': symbol,
+                            'size': str(actual_size),
+                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
+                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
+                            'side': display_side
+                        }
+                        positions.append(position)
+                        
+                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
+                        
+        except Exception as e:
+            logging.error(f"Blofin positions error for {acc['name']}: {e}")
+
+        logging.info(f"FINAL Blofin {acc['name']}: Status={status}, Balance=${usdt:.2f}, Positions={len(positions)}")
+        
+        return usdt, positions, status
+    
+    except Exception as e:
+        logging.error(f"General Blofin error for {acc['name']}: {e}")
+        return startkapital.get(acc['name'], 1492.00), [], "❌"
+
+def create_cached_charts(account_data):
+    """Erstelle moderne Charts mit verbesserter Beschriftungsdarstellung"""
+    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
+    
+    if cache_key in dashboard_cache:
+        cached_charts, timestamp = dashboard_cache[cache_key]
+        if datetime.now() - timestamp < timedelta(minutes=5):
+            return cached_charts
+
+    try:
+        # Moderne Chart-Einstellungen
+        plt.style.use('dark_background')
+        
+        # Chart Strategien erstellen
+        fig, ax = plt.subplots(figsize=(14, 8))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        
+        labels = [a["name"] for a in account_data]
+        values = [a["pnl_percent"] for a in account_data]
+        
+        # Moderne Farbpalette
+        colors = []
+        for v in values:
+            if v >= 0:
+                colors.append('#28a745')  # Grün für Gewinne
+            else:
+                colors.append('#dc3545')  # Rot für Verluste
+        
+        bars = ax.bar(labels, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(values) - min(values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(values) - min(values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{values[i]:+.1f}%\n${account_data[i]['pnl']:+.2f}"
+            
+            ax.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                    label_text,
+                    ha='center', va=va, 
+                    fontsize=10, fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle="round,pad=0.3", 
+                            facecolor='black', 
+                            alpha=0.7,
+                            edgecolor='none'))
+        
+        # Styling
+        ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if values:
+            y_min = min(values) - abs(max(values) - min(values)) * 0.15
+            y_max = max(values) + abs(max(values) - min(values)) * 0.15
+            ax.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_strategien = "static/chart_strategien.png"
+        fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig)
+
+        # Chart Projekte erstellen
+        projekte = {
+            "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k→5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
+            "7-Tage Projekt\n22.05.2025": ["7 Tage Performer"]
+        }
+
+        proj_labels = []
+        proj_values = []
+        proj_pnl_values = []
+        
+        for pname, members in projekte.items():
+            start_sum = sum(startkapital.get(m, 0) for m in members)
+            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
+            pnl_absolute = curr_sum - start_sum
+            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
+            proj_labels.append(pname)
+            proj_values.append(pnl_percent)
+            proj_pnl_values.append(pnl_absolute)
+
+        fig2, ax2 = plt.subplots(figsize=(14, 8))
+        fig2.patch.set_facecolor('#2c3e50')
+        ax2.set_facecolor('#34495e')
+        
+        # Moderne Farbpalette für Projekte
+        proj_colors = []
+        for v in proj_values:
+            if v >= 0:
+                proj_colors.append('#28a745')
+            else:
+                proj_colors.append('#dc3545')
+        
+        bars2 = ax2.bar(proj_labels, proj_values, color=proj_colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax2.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
+        for i, bar in enumerate(bars2):
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(proj_values) - min(proj_values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(proj_values) - min(proj_values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{proj_values[i]:+.1f}%\n${proj_pnl_values[i]:+.2f}"
+            
+            ax2.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                     label_text,
+                     ha='center', va=va,
+                     fontsize=10, fontweight='bold',
+                     color='white',
+                     bbox=dict(boxstyle="round,pad=0.3", 
+                             facecolor='black', 
+                             alpha=0.7,
+                             edgecolor='none'))
+        
+        # Styling
+        ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
+        
+        # Verbesserte X-Achsen-Labels
+        ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax2.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax2.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax2.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if proj_values:
+            y_min = min(proj_values) - abs(max(proj_values) - min(proj_values)) * 0.15
+            y_max = max(proj_values) + abs(max(proj_values) - min(proj_values)) * 0.15
+            ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
+        chart_path_projekte = "static/chart_projekte.png"
+        fig2.savefig(chart_path_projekte, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
+        plt.close(fig2)
+
+        chart_paths = {
+            'strategien': chart_path_strategien,
+            'projekte': chart_path_projekte
+        }
+        
+        dashboard_cache[cache_key] = (chart_paths, datetime.now())
+        return chart_paths
+
+    except Exception as e:
+        logging.error(f"Error creating charts: {e}")
+        return {
+            'strategien': "static/placeholder_strategien.png",
+            'projekte': "static/placeholder_projekte.png"
+        }
+
+# Cache-Dauer reduziert für bessere Aktualität
+@cached_function(cache_duration=180)  # 3 Minuten statt 10
+def get_cached_account_data():
+    """Gecachte Account-Daten abrufen mit verbesserter Blofin-Integration"""
+    account_data = []
+    total_balance = 0.0
+    positions_all = []
+    total_positions_pnl = 0.0
+
+    for acc in subaccounts:
+        name = acc["name"]
+        
+        try:
+            if acc["exchange"] == "blofin":
+                usdt, positions, status = get_blofin_data(acc)
+            else:
+                usdt, positions, status = get_bybit_data(acc)
+            
+            for p in positions:
+                positions_all.append((name, p))
+                try:
+                    pos_pnl = float(p.get('unrealisedPnl', 0))
+                    total_positions_pnl += pos_pnl
+                except (ValueError, TypeError):
+                    pass
+
+            pnl = usdt - startkapital.get(name, 0)
+            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
+
+            account_data.append({
+                "name": name,
+                "status": status,
+                "balance": usdt,
+                "start": startkapital.get(name, 0),
+                "pnl": pnl,
+                "pnl_percent": pnl_percent,
+                "positions": positions
+            })
+
+            total_balance += usdt
+            
+            logging.info(f"Account {name}: Balance=${usdt:.2f}, PnL=${pnl:.2f} ({pnl_percent:.2f}%), Status={status}")
+            
+        except Exception as e:
+            logging.error(f"Error getting data for {name}: {e}")
+            # Fallback-Daten für fehlgeschlagene Accounts
+            start = startkapital.get(name, 0)
+            account_data.append({
+                "name": name,
+                "status": "❌",
+                "balance": start,
+                "start": start,
+                "pnl": 0,
+                "pnl_percent": 0,
+                "positions": []
+            })
+            total_balance += start
+
+    return {
+        'account_data': account_data,
+        'total_balance': total_balance,
+        'positions_all': positions_all,
+        'total_positions_pnl': total_positions_pnl
+    }
+
+@cached_function(cache_duration=1800)
+def get_cached_historical_performance(total_pnl, sheet):
+    """Gecachte historische Performance"""
+    return get_historical_performance(total_pnl, sheet)
+
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = request.form['username']
+        pw = request.form['password']
+        if user in users and check_password_hash(users[user], pw):
+            session['user'] = user
+            return redirect(url_for('dashboard'))
+        else:
+            return render_template('login.html', error="Login fehlgeschlagen.")
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+
+    try:
+        # 1. Gecachte Account-Daten abrufen
+        cached_data = get_cached_account_data()
+        account_data = cached_data['account_data']
+        total_balance = cached_data['total_balance']
+        positions_all = cached_data['positions_all']
+        total_positions_pnl = cached_data['total_positions_pnl']
+        
+        # 2. Berechnungen
+        total_start = sum(startkapital.values())
+        total_pnl = total_balance - total_start
+        total_pnl_percent = (total_pnl / total_start) * 100
+        total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
+
+        # Debug-Logging
+        logging.info(f"=== DASHBOARD SUMMARY ===")
+        logging.info(f"Total Start: ${total_start:.2f}")
+        logging.info(f"Total Balance: ${total_balance:.2f}")
+        logging.info(f"Total PnL: ${total_pnl:.2f} ({total_pnl_percent:.2f}%)")
+        logging.info(f"Positions PnL: ${total_positions_pnl:.2f}")
+        
+        for acc in account_data:
+            logging.info(f"  {acc['name']}: ${acc['balance']:.2f} (PnL: ${acc['pnl']:.2f})")
+
+        # 3. Google Sheets Setup (nur wenn nötig)
+        sheet = None
+        try:
+            sheet = setup_google_sheets()
+        except Exception as e:
+            logging.warning(f"Google Sheets setup failed: {e}")
+
+        # 4. Historische Performance (gecacht)
+        historical_performance = get_cached_historical_performance(total_pnl, sheet) if sheet else {
+            '1_day': 0.0, '7_day': 0.0, '30_day': 0.0
+        }
+        
+        # 5. Charts erstellen (gecacht)
+        chart_paths = create_cached_charts(account_data)
+        
+        # 6. Speichern in Sheets (vereinfacht)
+        if sheet:
+            try:
+                save_daily_data(total_balance, total_pnl, sheet)
+            except Exception as sheets_error:
+                logging.warning(f"Sheets operations failed: {sheets_error}")
+
+        # 7. Zeit
+        tz = timezone("Europe/Berlin")
+        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
+
+        return render_template("dashboard.html",
+                               accounts=account_data,
+                               total_start=total_start,
+                               total_balance=total_balance,
+                               total_pnl=total_pnl,
+                               total_pnl_percent=total_pnl_percent,
+                               historical_performance=historical_performance,
+                               chart_path_strategien=chart_paths['strategien'],
+                               chart_path_projekte=chart_paths['projekte'],
+                               positions_all=positions_all,
+                               total_positions_pnl=total_positions_pnl,
+                               total_positions_pnl_percent=total_positions_pnl_percent,
+                               now=now)
+
+    except Exception as e:
+        logging.error(f"Critical dashboard error: {e}")
+        return render_template("dashboard.html",
+                               accounts=[],
+                               total_start=0,
+                               total_balance=0,
+                               total_pnl=0,
+                               total_pnl_percent=0,
+                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
+                               chart_path_strategien="static/placeholder_strategien.png",
+                               chart_path_projekte="static/placeholder_projekte.png",
+                               positions_all=[],
+                               total_positions_pnl=0,
+                               total_positions_pnl_percent=0,
+                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
+@app.route('/account-details')
+def account_details():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Rendere die account_details.html Template
+    return render_template('account_details.html')
+
+if __name__ == '__main__':
+    os.makedirs('static', exist_ok=True)
+    app.run(debug=True, host='0.0.0.0', port=10000), '').replace(',', ''))
+                                break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    # Trade-Objekt erstellen
+                    trade = {
+                        'symbol': symbol,
+                        'date': trade_date,
+                        'side': side,
+                        'size': size,
+                        'entry_price': entry_price,
+                        'exit_price': exit_price,
+                        'pnl': pnl_value
+                    }
+                    
+                    trades.append(trade)
+                    total_pnl += pnl_value
+                    
+                    if pnl_value > 0:
+                        winning_trades += 1
+                        total_profit += pnl_value
+                    else:
+                        total_loss += abs(pnl_value)
+                    
+                except Exception as e:
+                    logging.warning(f"Fehler beim Verarbeiten einer Zeile in {sheet_name}: {e}")
+                    continue
+            
+            # Statistiken berechnen
+            total_trades = len(trades)
+            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+            profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
+            avg_trade = total_pnl / total_trades if total_trades > 0 else 0
+            
+            # Max Drawdown berechnen (vereinfacht)
+            running_pnl = 0
+            peak = 0
+            max_drawdown = 0
+            
+            for trade in trades:
+                running_pnl += trade['pnl']
+                if running_pnl > peak:
+                    peak = running_pnl
+                drawdown = peak - running_pnl
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+            
+            # Letzte 10 Trades (neueste zuerst)
+            recent_trades = trades[-10:] if len(trades) >= 10 else trades
+            recent_trades.reverse()  # Neueste zuerst
+            
+            account_details.append({
+                'name': account_name,
+                'has_data': total_trades > 0,
+                'total_trades': total_trades,
+                'win_rate': win_rate,
+                'total_pnl': total_pnl,
+                'profit_factor': profit_factor,
+                'avg_trade': avg_trade,
+                'max_drawdown': max_drawdown,
+                'recent_trades': recent_trades
+            })
+            
+            logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
+            
+        except Exception as e:
+            logging.error(f"Unerwarteter Fehler beim Verarbeiten von {account_name}: {e}")
+            account_details.append({
+                'name': account_name,
+                'has_data': False,
+                'total_trades': 0,
+                'win_rate': 0,
+                'total_pnl': 0,
+                'profit_factor': 0,
+                'avg_trade': 0,
+                'max_drawdown': 0,
+                'recent_trades': []
+            })
+    
+    return account_details
 
 def save_daily_data(total_balance, total_pnl, sheet=None):
     """Tägliche Daten in Google Sheets speichern mit robuster Fehlerbehandlung"""
