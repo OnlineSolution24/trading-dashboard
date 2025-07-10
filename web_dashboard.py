@@ -571,7 +571,7 @@ def create_cached_charts(account_data):
         
         # Styling
         ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
-        ax.set_title('Subaccount Performance', fontsize=16, color='white', fontweight='bold', pad=20)
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
         
         # Verbesserte X-Achsen-Labels
         ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
@@ -658,7 +658,7 @@ def create_cached_charts(account_data):
         
         # Styling
         ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
-        ax2.set_title('Projekt Performance', fontsize=16, color='white', fontweight='bold', pad=20)
+        # Titel entfernt - wird bereits als chart-title im HTML angezeigt
         
         # Verbesserte X-Achsen-Labels
         ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
@@ -871,8 +871,8 @@ def account_details():
     if 'user' not in session:
         return redirect(url_for('login'))
     
-    # Placeholder für Account Details Seite
-    return "<h1>Account Details</h1><p>Diese Seite wird später implementiert.</p><a href='/dashboard'>Zurück zum Dashboard</a>"
+    # Rendere die account_details.html Template
+    return render_template('account_details.html')
 
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
