@@ -301,53 +301,6 @@
             display: block;
         }
 
-        .grade-badge {
-            padding: 4px 8px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .grade-a { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
-        .grade-b { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
-        .grade-c { background-color: rgba(255, 152, 0, 0.2); color: #ff9800; border: 1px solid #ff9800; }
-        .grade-d { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
-
-        .coin-performance-section {
-            margin-top: 30px;
-        }
-
-        .coin-table {
-            font-size: 0.9rem;
-        }
-
-        .coin-table th {
-            font-size: 0.8rem;
-            padding: 10px 8px;
-        }
-
-        .coin-table td {
-            padding: 10px 8px;
-        }
-
-        .strategy-name {
-            font-size: 0.85rem;
-            color: var(--gray-light);
-            font-style: italic;
-        }
-
-        .performance-badge {
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .perf-excellent { background-color: rgba(40, 167, 69, 0.2); color: var(--profit-color); border: 1px solid var(--profit-color); }
-        .perf-good { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107; }
-        .perf-poor { background-color: rgba(220, 53, 69, 0.2); color: var(--loss-color); border: 1px solid var(--loss-color); }
-        .perf-inactive { background-color: rgba(108, 117, 125, 0.2); color: var(--neutral-color); border: 1px solid var(--neutral-color); }
-
         /* Responsive Design */
         @media (max-width: 768px) {
             .dashboard-container {
@@ -361,15 +314,6 @@
             
             .header-title {
                 font-size: 2rem;
-            }
-
-            .coin-table {
-                font-size: 0.8rem;
-            }
-
-            .coin-table th,
-            .coin-table td {
-                padding: 6px 4px;
             }
 
             .table-container {
@@ -398,8 +342,8 @@
                 <a href="/dashboard" class="btn btn-outline-light active">
                     <i class="fas fa-home me-2"></i>Dashboard
                 </a>
-                <a href="/logout" class="btn btn-outline-danger">
-                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                <a href="/account-details" class="btn btn-outline-light">
+                    <i class="fas fa-info-circle me-2"></i>Account Details
                 </a>
             </div>
         </div>
@@ -598,111 +542,6 @@
                         </table>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Coin Performance Section -->
-        <div class="coin-performance-section">
-            <div class="data-table">
-                <h5 class="table-title">
-                    <i class="fas fa-coins icon-blue"></i>
-                    Coin Performance Übersicht (30 Tage)
-                    <span class="ms-auto">
-                        <small class="neutral">Nach Subaccount sortiert</small>
-                    </span>
-                </h5>
-                
-                {% if all_coin_performance %}
-                <div class="table-container">
-                    <table class="table custom-table coin-table">
-                        <thead>
-                            <tr>
-                                <th>Symbol</th>
-                                <th>Account</th>
-                                <th>Strategie</th>
-                                <th>30T Trades</th>
-                                <th>30T Win Rate</th>
-                                <th>30T PnL</th>
-                                <th>7T PnL</th>
-                                <th>Total PnL</th>
-                                <th>30T Profit Factor</th>
-                                <th>Performance</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set account_order = ['Incubatorzone', 'Memestrategies', 'Ethapestrategies', 'Altsstrategies', 'Solstrategies', 'Btcstrategies', 'Corestrategies', '2k->10k Projekt', '1k->5k Projekt', 'Claude Projekt', '7 Tage Performer'] %}
-                            
-                            {% for account_name in account_order %}
-                                {% set account_coins = all_coin_performance | selectattr('account', 'equalto', account_name) | list %}
-                                {% if account_coins %}
-                                    <!-- Account Header Row -->
-                                    <tr style="background: rgba(52, 152, 219, 0.2); border-top: 2px solid var(--blue-primary);">
-                                        <td colspan="11" style="padding: 15px; font-weight: bold; font-size: 1.1rem;">
-                                            <i class="fas fa-folder-open me-2 icon-blue"></i>{{ account_name }}
-                                            <span style="float: right; font-size: 0.9rem; color: var(--gray-light);">
-                                                {{ account_coins | length }} Strategien
-                                            </span>
-                                        </td>
-                                    </tr>
-                                    
-                                    {% for coin in account_coins %}
-                                    <tr>
-                                        <td>
-                                            <span class="symbol-badge">{{ coin.symbol }}</span>
-                                        </td>
-                                        <td class="account-name" style="font-size: 0.85rem;">{{ coin.account }}</td>
-                                        <td>
-                                            <div style="font-size: 0.85rem; font-weight: 600;">{{ coin.strategy[:25] }}{% if coin.strategy|length > 25 %}...{% endif %}</div>
-                                        </td>
-                                        <td class="neutral">{{ coin.month_trades | default(0) }}</td>
-                                        <td class="{% if coin.month_win_rate >= 60 %}profit{% elif coin.month_win_rate >= 40 %}neutral{% else %}loss{% endif %}">
-                                            {{ "%.1f"|format(coin.month_win_rate | default(0)) }}%
-                                        </td>
-                                        <td class="pnl-value {% if coin.month_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.month_pnl | default(0)) }}
-                                        </td>
-                                        <td class="pnl-value {% if coin.week_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.week_pnl | default(0)) }}
-                                        </td>
-                                        <td class="pnl-value {% if coin.total_pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                            ${{ "%.2f"|format(coin.total_pnl) }}
-                                        </td>
-                                        <td class="{% if coin.month_profit_factor >= 1.5 %}profit{% elif coin.month_profit_factor >= 1.0 %}neutral{% else %}loss{% endif %}">
-                                            {{ "%.2f"|format(coin.month_profit_factor | default(0)) if coin.month_profit_factor < 999 else '∞' }}
-                                        </td>
-                                        <td>
-                                            {% set month_performance_score = coin.month_performance_score | default(0) %}
-                                            {% if month_performance_score >= 70 %}
-                                                <span class="performance-badge perf-excellent">Ausgezeichnet</span>
-                                            {% elif month_performance_score >= 40 %}
-                                                <span class="performance-badge perf-good">Gut</span>
-                                            {% elif coin.month_trades > 0 %}
-                                                <span class="performance-badge perf-poor">Schwach</span>
-                                            {% else %}
-                                                <span class="performance-badge perf-inactive">Inaktiv</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if coin.status == "Active" and coin.month_trades > 0 %}
-                                                <span class="status-badge status-online">Aktiv</span>
-                                            {% else %}
-                                                <span class="status-badge status-offline">Inaktiv</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                {% endif %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="alert alert-info" style="background: rgba(52, 152, 219, 0.1); border: 1px solid var(--blue-primary); color: var(--text-light);">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Keine Coin-Performance-Daten verfügbar. Trade-History wird geladen...
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
