@@ -156,6 +156,7 @@ def clean_numeric_value(value_str):
     return clean_val if clean_val else "0"
 
 def get_trading_data_from_sheets(gc, spreadsheet):
+    # KORRIGIERTES SHEET MAPPING - Exakte Namen aus Debug-Info
     sheet_mapping = {
         "Incubator": "Incubatorzone",
         "Meme": "Memestrategies", 
@@ -164,8 +165,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
         "Sol": "Solstrategies",
         "Btc": "Btcstrategies",
         "Core": "Corestrategies",
-        "2k->10": "2k->10k Projekt",
-        "1k->5": "1k->5k Projekt",
+        "2k->10k": "2k->10k Projekt",   # KORRIGIERT: war "2k->10"
+        "1k->5k": "1k->5k Projekt",     # KORRIGIERT: war "1k->5"
         "Claude": "Claude Projekt",
         "Blofin-7-Tage": "7 Tage Performer"
     }
@@ -242,45 +243,67 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 try:
                     logging.debug(f"Verarbeite Zeile: {record}")
                     
-                    # PnL-Wert extrahieren
-                    pnl_columns = [
-                        'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
-                        'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
-                        'Ergebnis', 'ergebnis', 'Result', 'result'
-                    ]
+                    # PnL-Wert extrahieren - KORRIGIERT FÜR BYBIT SHEETS
                     pnl_value = 0
                     
-                    for col in pnl_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
+                    # Spezifische Logik für Bybit-Sheets (alle außer Blofin)
+                    if sheet_name != "Blofin-7-Tage":
+                        if 'Realized P&L' in record and record['Realized P&L'] is not None:
                             try:
-                                clean_value = clean_numeric_value(record[col])
+                                clean_value = clean_numeric_value(record['Realized P&L'])
                                 if clean_value and clean_value != '0':
                                     pnl_value = float(clean_value)
-                                    logging.debug(f"PnL gefunden in Spalte '{col}': {pnl_value}")
-                                    break
+                                    logging.debug(f"PnL gefunden in 'Realized P&L': {pnl_value}")
                             except (ValueError, TypeError) as e:
-                                logging.debug(f"Fehler beim Parsen von PnL in Spalte '{col}': {e}")
-                                continue
+                                logging.debug(f"Fehler beim Parsen von PnL: {e}")
+                    else:
+                        # Logik für Blofin-Sheet bleibt gleich
+                        pnl_columns = [
+                            'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
+                            'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
+                            'Ergebnis', 'ergebnis', 'Result', 'result'
+                        ]
+                        
+                        for col in pnl_columns:
+                            if col in record and record[col] != '' and record[col] is not None:
+                                try:
+                                    clean_value = clean_numeric_value(record[col])
+                                    if clean_value and clean_value != '0':
+                                        pnl_value = float(clean_value)
+                                        logging.debug(f"PnL gefunden in Spalte '{col}': {pnl_value}")
+                                        break
+                                except (ValueError, TypeError) as e:
+                                    logging.debug(f"Fehler beim Parsen von PnL in Spalte '{col}': {e}")
+                                    continue
                     
-                    # Symbol extrahieren
-                    symbol_columns = [
-                        'Symbol', 'symbol', 'Coin', 'coin', 'Pair', 'pair', 'Asset', 'asset',
-                        'Currency', 'currency', 'Token', 'token', 'Instrument', 'instrument'
-                    ]
+                    # Symbol extrahieren - KORRIGIERT FÜR BYBIT SHEETS
                     symbol = 'N/A'
                     
-                    for col in symbol_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            symbol = str(record[col]).strip()
-                            logging.debug(f"Symbol gefunden in Spalte '{col}': {symbol}")
-                            break
+                    if sheet_name != "Blofin-7-Tage":
+                        # Für Bybit-Sheets: Verwende "Contracts" Spalte
+                        if 'Contracts' in record and record['Contracts'] is not None:
+                            contracts_value = str(record['Contracts']).strip()
+                            if contracts_value:
+                                # Entferne USDT und andere Suffixe
+                                symbol = contracts_value.replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
+                                if symbol:
+                                    logging.debug(f"Symbol aus 'Contracts' extrahiert: {symbol}")
+                    else:
+                        # Für Blofin-Sheet: Verwende "Underlying Asset"
+                        if 'Underlying Asset' in record and record['Underlying Asset'] is not None:
+                            asset_value = str(record['Underlying Asset']).strip()
+                            if asset_value:
+                                symbol = asset_value.replace('USDT', '').strip()
+                                if symbol:
+                                    logging.debug(f"Symbol aus 'Underlying Asset' extrahiert: {symbol}")
                     
                     # Datum extrahieren
+                    trade_date = 'N/A'
                     date_columns = [
+                        'Filled/Settlement Time(UTC+0)', 'Create Time', 'Order Time',
                         'Date', 'date', 'Datum', 'datum', 'Time', 'time', 'Timestamp', 'timestamp',
                         'Created', 'created', 'Executed', 'executed', 'Open Time', 'Close Time'
                     ]
-                    trade_date = 'N/A'
                     
                     for col in date_columns:
                         if col in record and record[col] != '' and record[col] is not None:
@@ -289,11 +312,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             break
                     
                     # Side extrahieren
+                    side = 'N/A'
                     side_columns = [
-                        'Side', 'side', 'Direction', 'direction', 'Type', 'type',
+                        'Trade Type', 'Side', 'side', 'Direction', 'direction', 'Type', 'type',
                         'Action', 'action', 'Order Type', 'order_type', 'Position', 'position'
                     ]
-                    side = 'N/A'
                     
                     for col in side_columns:
                         if col in record and record[col] != '' and record[col] is not None:
@@ -308,11 +331,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             break
                     
                     # Size extrahieren
-                    size_columns = [
-                        'Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'Qty', 'qty',
-                        'Volume', 'volume', 'Menge', 'menge', 'Contracts', 'contracts'
-                    ]
                     size = 0
+                    size_columns = [
+                        'Qty', 'Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'qty',
+                        'Volume', 'volume', 'Menge', 'menge', 'Contracts', 'contracts', 'Filled', 'Total'
+                    ]
                     
                     for col in size_columns:
                         if col in record and record[col] != '' and record[col] is not None:
@@ -327,12 +350,12 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 continue
                     
                     # Entry Price extrahieren
-                    entry_columns = [
-                        'Entry', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 
-                        'Open_Price', 'open_price', 'Einstieg', 'einstieg', 'Open', 'open',
-                        'Entry Price', 'Einstiegspreis', 'Opening Price'
-                    ]
                     entry_price = 0
+                    entry_columns = [
+                        'Entry Price', 'Avg Fill', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 
+                        'Open_Price', 'open_price', 'Einstieg', 'einstieg', 'Open', 'open',
+                        'Einstiegspreis', 'Opening Price'
+                    ]
                     
                     for col in entry_columns:
                         if col in record and record[col] != '' and record[col] is not None:
@@ -347,12 +370,12 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 continue
                     
                     # Exit Price extrahieren
+                    exit_price = 0
                     exit_columns = [
-                        'Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 
+                        'Filled Price', 'Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 
                         'Close_Price', 'close_price', 'Ausstieg', 'ausstieg', 'Close', 'close',
                         'Exit Price', 'Ausstiegspreis', 'Closing Price'
                     ]
-                    exit_price = 0
                     
                     for col in exit_columns:
                         if col in record and record[col] != '' and record[col] is not None:
@@ -366,8 +389,9 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Exit Price in Spalte '{col}': {e}")
                                 continue
                     
-                    # Trade-Objekt erstellen nur wenn mindestens Symbol und PnL vorhanden
-                    if symbol != 'N/A' or pnl_value != 0:
+                    # Trade-Objekt erstellen - KORRIGIERTE BEDINGUNG
+                    # Nur hinzufügen wenn Symbol gefunden wurde UND PnL != 0
+                    if symbol != 'N/A' and pnl_value != 0:
                         trade = {
                             'symbol': symbol,
                             'date': trade_date,
@@ -389,7 +413,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                         
                         logging.debug(f"Trade hinzugefügt: {trade}")
                     else:
-                        logging.debug(f"Zeile übersprungen - kein Symbol oder PnL: {record}")
+                        logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}")
                     
                 except Exception as e:
                     logging.warning(f"Fehler beim Verarbeiten einer Zeile in {sheet_name}: {e}")
@@ -1185,8 +1209,8 @@ def debug_sheets():
             "Sol": "Solstrategies",
             "Btc": "Btcstrategies",
             "Core": "Corestrategies",
-            "2k->10": "2k->10k Projekt",
-            "1k->5": "1k->5k Projekt",
+            "2k->10k": "2k->10k Projekt",   # KORRIGIERT
+            "1k->5k": "1k->5k Projekt",     # KORRIGIERT
             "Claude": "Claude Projekt",
             "Blofin-7-Tage": "7 Tage Performer"
         }
