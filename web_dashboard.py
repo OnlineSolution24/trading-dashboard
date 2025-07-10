@@ -1097,7 +1097,9 @@ if __name__ == '__main__':
                     for col in size_columns:
                         if col in record and record[col] != '' and record[col] is not None:
                             try:
-                                clean_value = str(record[col]).replace(',', '').strip()
+                                clean_value = str(record[col])
+                                clean_value = clean_value.replace(',', '')
+                                clean_value = clean_value.strip()
                                 if clean_value:
                                     size = float(clean_value)
                                     logging.debug(f"Size gefunden in Spalte '{col}': {size}")
