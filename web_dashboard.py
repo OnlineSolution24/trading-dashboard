@@ -510,196 +510,8 @@ def get_blofin_data(acc):
         logging.error(f"General Blofin error for {acc['name']}: {e}")
         return startkapital.get(acc['name'], 1492.00), [], "❌"
 
-def get_all_coin_performance(account_data):
-    """Korrigierte Coin Performance mit echten Account-Daten"""
-    
-    # Echte Account PnL aus den aktuellen Daten extrahieren
-    real_account_performance = {}
-    for acc in account_data:
-        real_account_performance[acc['name']] = {
-            'pnl': acc['pnl'],
-            'pnl_percent': acc['pnl_percent'],
-            'balance': acc['balance'],
-            'status': acc['status']
-        }
-    
-    logging.info(f"Real account performance: {real_account_performance}")
-    
-    # Strategien-Definition basierend auf echten Accounts
-    ALL_STRATEGIES = [
-        # Claude Projekt - echte Daten aus CSV
-        {"symbol": "RUNE", "account": "Claude Projekt", "strategy": "AI vs. Ninja Turtle"},
-        {"symbol": "CVX", "account": "Claude Projekt", "strategy": "Stiff Zone"},
-        {"symbol": "BTC", "account": "Claude Projekt", "strategy": "XMA"},
-        {"symbol": "SOL", "account": "Claude Projekt", "strategy": "Super FVMA + Zero Lag"},
-        {"symbol": "ETH", "account": "Claude Projekt", "strategy": "Vector Candles V5"},
-        
-        # 7 Tage Performer - echte API-Daten
-        {"symbol": "ALGO", "account": "7 Tage Performer", "strategy": "PRECISIONTRENDMASTERY ALGO"},
-        {"symbol": "INJ", "account": "7 Tage Performer", "strategy": "TRIGGERHAPPY2 INJ"},
-        {"symbol": "ARB", "account": "7 Tage Performer", "strategy": "STIFFSURGE ARB"},
-        {"symbol": "RUNE", "account": "7 Tage Performer", "strategy": "MACD LIQUIDITY SPECTRUM RUNE"},
-        {"symbol": "ETH", "account": "7 Tage Performer", "strategy": "STIFFZONE ETH"},
-        {"symbol": "WIF", "account": "7 Tage Performer", "strategy": "T3 Nexus + Stiff WIF"},
-        
-        # Weitere Accounts - basierend auf realer Performance
-        {"symbol": "BTC", "account": "Incubatorzone", "strategy": "AI (Neutral network) X"},
-        {"symbol": "SOL", "account": "Incubatorzone", "strategy": "VOLATILITYVANGUARD"},
-        {"symbol": "DOGE", "account": "Incubatorzone", "strategy": "MACDLIQUIDITYSPECTRUM"},
-        
-        {"symbol": "SOL", "account": "Memestrategies", "strategy": "StiffZone SOL"},
-        {"symbol": "APE", "account": "Memestrategies", "strategy": "PTM APE"},
-        {"symbol": "ETH", "account": "Memestrategies", "strategy": "SUPERSTRIKEMAVERICK"},
-        
-        {"symbol": "ETH", "account": "Ethapestrategies", "strategy": "PTM ETH"},
-        {"symbol": "MNT", "account": "Ethapestrategies", "strategy": "T3 Nexus"},
-        {"symbol": "BTC", "account": "Ethapestrategies", "strategy": "STIFFZONE BTC"},
-        
-        {"symbol": "SOL", "account": "Altsstrategies", "strategy": "Dead Zone SOL"},
-        {"symbol": "ETH", "account": "Altsstrategies", "strategy": "Trendhoo ETH"},
-        {"symbol": "PEPE", "account": "Altsstrategies", "strategy": "T3 Nexus PEPE"},
-        {"symbol": "GALA", "account": "Altsstrategies", "strategy": "VeCtor GALA"},
-        {"symbol": "ADA", "account": "Altsstrategies", "strategy": "PTM ADA"},
-        
-        {"symbol": "SOL", "account": "Solstrategies", "strategy": "BOTIFYX SOL"},
-        {"symbol": "AVAX", "account": "Solstrategies", "strategy": "StiffSurge AVAX"},
-        {"symbol": "ID", "account": "Solstrategies", "strategy": "PTM ID"},
-        {"symbol": "TAO", "account": "Solstrategies", "strategy": "WolfBear TAO"},
-        
-        {"symbol": "BTC", "account": "Btcstrategies", "strategy": "Squeeze Momentum BTC"},
-        {"symbol": "ARB", "account": "Btcstrategies", "strategy": "StiffSurge ARB"},
-        {"symbol": "NEAR", "account": "Btcstrategies", "strategy": "Trendhoo NEAR"},
-        {"symbol": "XRP", "account": "Btcstrategies", "strategy": "SuperFVMA XRP"},
-        
-        {"symbol": "ETH", "account": "Corestrategies", "strategy": "Stiff Surge ETH"},
-        {"symbol": "CAKE", "account": "Corestrategies", "strategy": "HACELSMA CAKE"},
-        {"symbol": "DOT", "account": "Corestrategies", "strategy": "Super FVMA + Zero Lag DOT"},
-        {"symbol": "BTC", "account": "Corestrategies", "strategy": "AI Chi Master BTC"},
-        
-        {"symbol": "BTC", "account": "2k->10k Projekt", "strategy": "TRENDHOO BTC 2H"},
-        {"symbol": "ETH", "account": "2k->10k Projekt", "strategy": "DynamicPrecision ETH 30M"},
-        {"symbol": "SOL", "account": "2k->10k Projekt", "strategy": "SQUEEZEIT SOL 1H"},
-        {"symbol": "LINK", "account": "2k->10k Projekt", "strategy": "McGinley LINK 45M"},
-        {"symbol": "AVAX", "account": "2k->10k Projekt", "strategy": "TrendHoov5 AVAX 90M"},
-        {"symbol": "GALA", "account": "2k->10k Projekt", "strategy": "VectorCandles GALA 30M"},
-        
-        {"symbol": "AVAX", "account": "1k->5k Projekt", "strategy": "MATT_DOC T3NEXUS AVAX"},
-        {"symbol": "MNT", "account": "1k->5k Projekt", "strategy": "CREEDOMRINGS TRENDHOO MNT"},
-        {"symbol": "RUNE", "account": "1k->5k Projekt", "strategy": "DEAD ZONE RUNE"},
-        {"symbol": "ID", "account": "1k->5k Projekt", "strategy": "GENTLESIR STIFFSURGE ID"},
-        {"symbol": "SOL", "account": "1k->5k Projekt", "strategy": "BORAWX BOTIFYX SOL"},
-    ]
-    
-    # Bekannte echte Trade-Daten
-    known_trades = {
-        'RUNE_Claude Projekt': [{'pnl': -14.70, 'timestamp': int(time.time() * 1000) - (5 * 24 * 60 * 60 * 1000)}],
-        'CVX_Claude Projekt': [{'pnl': -20.79, 'timestamp': int(time.time() * 1000) - (3 * 24 * 60 * 60 * 1000)}]
-    }
-    
-    # Zeitstempel
-    now = int(time.time() * 1000)
-    thirty_days_ago = now - (30 * 24 * 60 * 60 * 1000)
-    seven_days_ago = now - (7 * 24 * 60 * 60 * 1000)
-    
-    coin_performance = []
-    
-    for strategy in ALL_STRATEGIES:
-        account_name = strategy['account']
-        symbol = strategy['symbol']
-        coin_key = f"{symbol}_{account_name}"
-        
-        # Hole echte Account-Performance
-        real_acc_data = real_account_performance.get(account_name, {'pnl': 0, 'pnl_percent': 0, 'status': '❌'})
-        account_pnl = real_acc_data['pnl']
-        account_status = real_acc_data['status']
-        
-        # Berechne realistische Coin-Performance basierend auf Account-Performance
-        if coin_key in known_trades:
-            # Echte Daten verwenden
-            trades = known_trades[coin_key]
-            total_pnl = sum(t['pnl'] for t in trades)
-            month_pnl = total_pnl  # Alle Trades sind neulich
-            week_pnl = total_pnl
-            month_trades = len(trades)
-            month_win_rate = 0  # Alle sind Verluste
-            month_profit_factor = 0
-            month_performance_score = 10  # Sehr schlecht
-            
-        else:
-            # Basiere auf Account-Performance mit realistischer Verteilung
-            strategies_per_account = len([s for s in ALL_STRATEGIES if s['account'] == account_name])
-            
-            if strategies_per_account > 0 and account_status == "✅":
-                # Verteile Account-PnL auf Strategien (nicht gleichmäßig)
-                base_pnl_per_strategy = account_pnl / strategies_per_account
-                
-                # Füge Varianz hinzu basierend auf Account-Performance
-                if account_pnl > 0:
-                    # Gewinn-Account: Mische gute und schlechte Strategien
-                    strategy_multiplier = random.uniform(0.3, 2.5)
-                else:
-                    # Verlust-Account: Meist Verluste
-                    strategy_multiplier = random.uniform(0.5, 1.8)
-                
-                month_pnl = base_pnl_per_strategy * strategy_multiplier
-                total_pnl = month_pnl * random.uniform(1.2, 2.5)  # Gesamtperformance
-                week_pnl = month_pnl * random.uniform(0.1, 0.4)
-                
-                # Trades basierend auf Performance
-                if account_status == "✅":
-                    month_trades = random.randint(2, 15)
-                    if month_pnl > 0:
-                        month_win_rate = random.uniform(45, 75)
-                        month_profit_factor = random.uniform(1.1, 2.8)
-                        month_performance_score = random.randint(40, 85)
-                    else:
-                        month_win_rate = random.uniform(25, 50)
-                        month_profit_factor = random.uniform(0.6, 1.2)
-                        month_performance_score = random.randint(15, 45)
-                else:
-                    month_trades = 0
-                    month_win_rate = 0
-                    month_profit_factor = 0
-                    month_performance_score = 0
-            else:
-                # Inaktiv oder keine Daten
-                total_pnl = 0
-                month_pnl = 0
-                week_pnl = 0
-                month_trades = 0
-                month_win_rate = 0
-                month_profit_factor = 0
-                month_performance_score = 0
-        
-        status = "Active" if month_trades > 0 and account_status == "✅" else "Inactive"
-        
-        coin_performance.append({
-            'symbol': symbol,
-            'account': account_name,
-            'strategy': strategy['strategy'],
-            'total_trades': month_trades * 3,  # Hochrechnung für Total
-            'total_pnl': round(total_pnl, 2),
-            'month_trades': month_trades,
-            'month_pnl': round(month_pnl, 2),
-            'month_win_rate': round(month_win_rate, 1),
-            'month_profit_factor': round(month_profit_factor, 2) if month_profit_factor < 999 else 999,
-            'month_performance_score': month_performance_score,
-            'week_pnl': round(week_pnl, 2),
-            'status': status,
-            'daily_volume': 0
-        })
-    
-    # Debug-Logging
-    for account_name in set(s['account'] for s in ALL_STRATEGIES):
-        account_strategies = [cp for cp in coin_performance if cp['account'] == account_name]
-        total_month_pnl = sum(cp['month_pnl'] for cp in account_strategies)
-        real_pnl = real_account_performance.get(account_name, {}).get('pnl', 0)
-        logging.info(f"Account {account_name}: Real PnL=${real_pnl:.2f}, Calculated=${total_month_pnl:.2f}")
-    
-    return coin_performance
-
 def create_cached_charts(account_data):
-    """Erstelle Charts mit Caching und korrigierten Matplotlib Warnings"""
+    """Erstelle moderne Charts mit verbesserter Beschriftungsdarstellung"""
     cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
     
     if cache_key in dashboard_cache:
@@ -708,38 +520,91 @@ def create_cached_charts(account_data):
             return cached_charts
 
     try:
+        # Moderne Chart-Einstellungen
+        plt.style.use('dark_background')
+        
         # Chart Strategien erstellen
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(14, 8))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        
         labels = [a["name"] for a in account_data]
         values = [a["pnl_percent"] for a in account_data]
-        bars = ax.bar(labels, values, color=["green" if v >= 0 else "red" for v in values])
-        ax.axhline(0, color='black')
         
-        # FIX: Korrekte Verwendung von set_xticks und set_xticklabels
-        ax.set_xticks(range(len(labels)))
-        ax.set_xticklabels(labels, rotation=45, ha="right")
+        # Moderne Farbpalette
+        colors = []
+        for v in values:
+            if v >= 0:
+                colors.append('#28a745')  # Grün für Gewinne
+            else:
+                colors.append('#dc3545')  # Rot für Verluste
         
+        bars = ax.bar(labels, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
         for i, bar in enumerate(bars):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                    f"{values[i]:+.1f}%\n(${account_data[i]['pnl']:+.2f})",
-                    ha='center', va='bottom' if values[i] >= 0 else 'top', fontsize=8)
-        fig.tight_layout()
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(values) - min(values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(values) - min(values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{values[i]:+.1f}%\n${account_data[i]['pnl']:+.2f}"
+            
+            ax.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                    label_text,
+                    ha='center', va=va, 
+                    fontsize=10, fontweight='bold',
+                    color='white',
+                    bbox=dict(boxstyle="round,pad=0.3", 
+                            facecolor='black', 
+                            alpha=0.7,
+                            edgecolor='none'))
+        
+        # Styling
+        ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        ax.set_title('Subaccount Performance', fontsize=16, color='white', fontweight='bold', pad=20)
+        
+        # Verbesserte X-Achsen-Labels
+        ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if values:
+            y_min = min(values) - abs(max(values) - min(values)) * 0.15
+            y_max = max(values) + abs(max(values) - min(values)) * 0.15
+            ax.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
         chart_path_strategien = "static/chart_strategien.png"
-        fig.savefig(chart_path_strategien)
+        fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
         plt.close(fig)
 
         # Chart Projekte erstellen
         projekte = {
-            "10k->1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
-            "2k->10k Projekt\n13.05.2025": ["2k->10k Projekt"],
-            "1k->5k Projekt\n16.05.2025": ["1k->5k Projekt"],
+            "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
+            "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
+            "1k→5k Projekt\n16.05.2025": ["1k->5k Projekt"],
             "Claude Projekt\n25.06.2025": ["Claude Projekt"],
-            "Top - 7 Tage-Projekt\n22.05.2025": ["7 Tage Performer"]
+            "7-Tage Projekt\n22.05.2025": ["7 Tage Performer"]
         }
 
         proj_labels = []
         proj_values = []
         proj_pnl_values = []
+        
         for pname, members in projekte.items():
             start_sum = sum(startkapital.get(m, 0) for m in members)
             curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
@@ -749,21 +614,69 @@ def create_cached_charts(account_data):
             proj_values.append(pnl_percent)
             proj_pnl_values.append(pnl_absolute)
 
-        fig2, ax2 = plt.subplots(figsize=(12, 6))
-        bars2 = ax2.bar(proj_labels, proj_values, color=["green" if v >= 0 else "red" for v in proj_values])
-        ax2.axhline(0, color='black')
+        fig2, ax2 = plt.subplots(figsize=(14, 8))
+        fig2.patch.set_facecolor('#2c3e50')
+        ax2.set_facecolor('#34495e')
         
-        # FIX: Korrekte Verwendung von set_xticks und set_xticklabels
-        ax2.set_xticks(range(len(proj_labels)))
-        ax2.set_xticklabels(proj_labels, rotation=45, ha="right")
+        # Moderne Farbpalette für Projekte
+        proj_colors = []
+        for v in proj_values:
+            if v >= 0:
+                proj_colors.append('#28a745')
+            else:
+                proj_colors.append('#dc3545')
         
+        bars2 = ax2.bar(proj_labels, proj_values, color=proj_colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Nulllinie
+        ax2.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
+        
+        # Verbesserte Beschriftung der Balken
         for i, bar in enumerate(bars2):
-            ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                     f"{proj_values[i]:+.1f}%\n(${proj_pnl_values[i]:+.2f})",
-                     ha='center', va='bottom' if proj_values[i] >= 0 else 'top', fontsize=8)
-        fig2.tight_layout()
+            height = bar.get_height()
+            
+            # Dynamische Positionierung der Labels
+            if height >= 0:
+                va = 'bottom'
+                y_offset = height + (max(proj_values) - min(proj_values)) * 0.02
+            else:
+                va = 'top'
+                y_offset = height - (max(proj_values) - min(proj_values)) * 0.02
+            
+            # Mehrzeiliger Text mit besserer Formatierung
+            label_text = f"{proj_values[i]:+.1f}%\n${proj_pnl_values[i]:+.2f}"
+            
+            ax2.text(bar.get_x() + bar.get_width() / 2, y_offset,
+                     label_text,
+                     ha='center', va=va,
+                     fontsize=10, fontweight='bold',
+                     color='white',
+                     bbox=dict(boxstyle="round,pad=0.3", 
+                             facecolor='black', 
+                             alpha=0.7,
+                             edgecolor='none'))
+        
+        # Styling
+        ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
+        ax2.set_title('Projekt Performance', fontsize=16, color='white', fontweight='bold', pad=20)
+        
+        # Verbesserte X-Achsen-Labels
+        ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
+        ax2.tick_params(axis='y', colors='white', labelsize=10)
+        
+        # Grid für bessere Lesbarkeit
+        ax2.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
+        ax2.set_axisbelow(True)
+        
+        # Automatische Anpassung der Y-Achse mit Puffer
+        if proj_values:
+            y_min = min(proj_values) - abs(max(proj_values) - min(proj_values)) * 0.15
+            y_max = max(proj_values) + abs(max(proj_values) - min(proj_values)) * 0.15
+            ax2.set_ylim(y_min, y_max)
+        
+        plt.tight_layout()
         chart_path_projekte = "static/chart_projekte.png"
-        fig2.savefig(chart_path_projekte)
+        fig2.savefig(chart_path_projekte, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
         plt.close(fig2)
 
         chart_paths = {
@@ -846,11 +759,6 @@ def get_cached_account_data():
         'total_positions_pnl': total_positions_pnl
     }
 
-@cached_function(cache_duration=600)  # 10 Minuten Cache für Coin Performance
-def get_cached_coin_performance(account_data):
-    """Gecachte Coin Performance abrufen"""
-    return get_all_coin_performance(account_data)
-
 @cached_function(cache_duration=1800)
 def get_cached_historical_performance(total_pnl, sheet):
     """Gecachte historische Performance"""
@@ -909,20 +817,17 @@ def dashboard():
             '1_day': 0.0, '7_day': 0.0, '30_day': 0.0
         }
         
-        # 5. Coin Performance (gecacht) - mit echten Account-Daten
-        all_coin_performance = get_cached_coin_performance(account_data)
-        
-        # 6. Charts erstellen (gecacht)
+        # 5. Charts erstellen (gecacht)
         chart_paths = create_cached_charts(account_data)
         
-        # 7. Speichern in Sheets (vereinfacht)
+        # 6. Speichern in Sheets (vereinfacht)
         if sheet:
             try:
                 save_daily_data(total_balance, total_pnl, sheet)
             except Exception as sheets_error:
                 logging.warning(f"Sheets operations failed: {sheets_error}")
 
-        # 8. Zeit
+        # 7. Zeit
         tz = timezone("Europe/Berlin")
         now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
@@ -938,7 +843,6 @@ def dashboard():
                                positions_all=positions_all,
                                total_positions_pnl=total_positions_pnl,
                                total_positions_pnl_percent=total_positions_pnl_percent,
-                               all_coin_performance=all_coin_performance,
                                now=now)
 
     except Exception as e:
@@ -955,13 +859,20 @@ def dashboard():
                                positions_all=[],
                                total_positions_pnl=0,
                                total_positions_pnl_percent=0,
-                               all_coin_performance=[],
                                now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
+
+@app.route('/account-details')
+def account_details():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Placeholder für Account Details Seite
+    return "<h1>Account Details</h1><p>Diese Seite wird später implementiert.</p><a href='/dashboard'>Zurück zum Dashboard</a>"
 
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
