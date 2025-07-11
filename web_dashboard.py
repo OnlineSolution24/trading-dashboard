@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from pybit.unified_trading import HTTP
 from pytz import timezone
@@ -190,13 +190,18 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'profit_factor': 0,
                     'avg_trade': 0,
                     'max_drawdown': 0,
-                    'recent_trades': []
+                    'recent_trades': [],
+                    'all_trades': []  # Hinzugefügt für alle Trades
                 })
                 continue
             
             try:
                 all_records = worksheet.get_all_records()
                 logging.info(f"Gefunden: {len(all_records)} Datensätze in {sheet_name}")
+                
+                # Rate Limiting - kleine Pause zwischen API-Calls
+                time.sleep(0.5)
+                
             except Exception as e:
                 logging.error(f"Fehler beim Lesen der Daten: {e}")
                 account_details.append({
@@ -208,7 +213,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'profit_factor': 0,
                     'avg_trade': 0,
                     'max_drawdown': 0,
-                    'recent_trades': []
+                    'recent_trades': [],
+                    'all_trades': []  # Hinzugefügt für alle Trades
                 })
                 continue
             
@@ -223,7 +229,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'profit_factor': 0,
                     'avg_trade': 0,
                     'max_drawdown': 0,
-                    'recent_trades': []
+                    'recent_trades': [],
+                    'all_trades': []  # Hinzugefügt für alle Trades
                 })
                 continue
             
@@ -439,7 +446,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 if drawdown > max_drawdown:
                     max_drawdown = drawdown
             
-            # Letzte 10 Trades
+            # Letzte 10 Trades für Display
             recent_trades = trades[-10:] if len(trades) >= 10 else trades
             recent_trades.reverse()
             
@@ -452,7 +459,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 'profit_factor': profit_factor,
                 'avg_trade': avg_trade,
                 'max_drawdown': max_drawdown,
-                'recent_trades': recent_trades
+                'recent_trades': recent_trades,
+                'all_trades': trades  # HINZUGEFÜGT: Alle Trades für Charts und Analyse
             })
             
             logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
@@ -468,7 +476,40 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 'profit_factor': 0,
                 'avg_trade': 0,
                 'max_drawdown': 0,
-                'recent_trades': []
+                'recent_trades': [],
+                'all_trades': []  # Hinzugefügt für alle Trades
+            })
+    
+    return account_details
+            
+            account_details.append({
+                'name': account_name,
+                'has_data': total_trades > 0,
+                'total_trades': total_trades,
+                'win_rate': win_rate,
+                'total_pnl': total_pnl,
+                'profit_factor': profit_factor,
+                'avg_trade': avg_trade,
+                'max_drawdown': max_drawdown,
+                'recent_trades': recent_trades,
+                'all_trades': trades  # HINZUGEFÜGT: Alle Trades für Charts und Analyse
+            })
+            
+            logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
+            
+        except Exception as e:
+            logging.error(f"Fehler beim Verarbeiten von {account_name}: {e}")
+            account_details.append({
+                'name': account_name,
+                'has_data': False,
+                'total_trades': 0,
+                'win_rate': 0,
+                'total_pnl': 0,
+                'profit_factor': 0,
+                'avg_trade': 0,
+                'max_drawdown': 0,
+                'recent_trades': [],
+                'all_trades': []  # Hinzugefügt für alle Trades
             })
     
     return account_details
@@ -1003,7 +1044,7 @@ def get_cached_account_data():
 def get_cached_historical_performance(total_pnl, gc, spreadsheet):
     return get_historical_performance(total_pnl, gc, spreadsheet)
 
-@cached_function(cache_duration=600)
+@cached_function(cache_duration=1800)  # Erhöht von 600 auf 1800 (30 Minuten)
 def get_cached_trading_details(gc, spreadsheet):
     return get_trading_data_from_sheets(gc, spreadsheet)
 
@@ -1277,14 +1318,38 @@ def account_details():
         
         return render_template('account_details.html', 
                                account_details=account_details_data,
-                               startkapital=startkapital,
+                               startkapital=startkapital,  # HINZUGEFÜGT für JavaScript
                                now=now)
                                
     except Exception as e:
         logging.error(f"Fehler beim Laden der Account Details: {e}")
         return render_template('account_details.html', 
                                account_details=[],
+                               startkapital=startkapital,  # HINZUGEFÜGT für JavaScript
                                now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+
+@app.route('/account-details-data')
+def account_details_data():
+    """API-Endpoint für das Aktualisieren der Account-Details ohne Cache"""
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    try:
+        sheets_data = setup_google_sheets()
+        
+        if sheets_data:
+            gc, spreadsheet = sheets_data
+            # Erzwinge eine neue Abfrage ohne Cache
+            account_details_data = get_trading_data_from_sheets(gc, spreadsheet)
+        else:
+            logging.warning("Google Sheets nicht verfügbar")
+            account_details_data = []
+        
+        return jsonify(account_details_data)
+        
+    except Exception as e:
+        logging.error(f"Fehler beim Laden der Account Details Data: {e}")
+        return jsonify([]), 500
 
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
