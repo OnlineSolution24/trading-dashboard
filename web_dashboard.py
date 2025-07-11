@@ -1,1303 +1,1910 @@
-import os
-import logging
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
-from pybit.unified_trading import HTTP
-from pytz import timezone
-import pandas as pd
-import requests
-import hmac
-import hashlib
-import time
-import json
-import base64
-import uuid
-import gspread
-import random
-from google.oauth2.service_account import Credentials
-from functools import wraps
-from threading import Lock
-
-# Globale Cache-Variablen
-cache_lock = Lock()
-dashboard_cache = {}
-CACHE_DURATION = 300
-
-app = Flask(__name__)
-app.secret_key = 'supergeheim'
-
-logging.basicConfig(level=logging.INFO)
-
-# Benutzerverwaltung
-users = {
-    "admin": generate_password_hash("deinpasswort123")
-}
-
-# API-Zugangsdaten
-subaccounts = [
-    {"name": "Incubatorzone", "key": os.environ.get("BYBIT_INCUBATORZONE_API_KEY"), "secret": os.environ.get("BYBIT_INCUBATORZONE_API_SECRET"), "exchange": "bybit"},
-    {"name": "Memestrategies", "key": os.environ.get("BYBIT_MEMESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_MEMESTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "Ethapestrategies", "key": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ETHAPESTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "Altsstrategies", "key": os.environ.get("BYBIT_ALTSSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_ALTSSTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "Solstrategies", "key": os.environ.get("BYBIT_SOLSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_SOLSTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "Btcstrategies", "key": os.environ.get("BYBIT_BTCSTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_BTCSTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "Corestrategies", "key": os.environ.get("BYBIT_CORESTRATEGIES_API_KEY"), "secret": os.environ.get("BYBIT_CORESTRATEGIES_API_SECRET"), "exchange": "bybit"},
-    {"name": "2k->10k Projekt", "key": os.environ.get("BYBIT_2K_API_KEY"), "secret": os.environ.get("BYBIT_2K_API_SECRET"), "exchange": "bybit"},
-    {"name": "1k->5k Projekt", "key": os.environ.get("BYBIT_1K_API_KEY"), "secret": os.environ.get("BYBIT_1K_API_SECRET"), "exchange": "bybit"},
-    {"name": "Claude Projekt", "key": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_KEY"), "secret": os.environ.get("BYBIT_CLAUDE_PROJEKT_API_SECRET"), "exchange": "bybit"},
-    {"name": "7 Tage Performer", "key": os.environ.get("BLOFIN_API_KEY"), "secret": os.environ.get("BLOFIN_API_SECRET"), "passphrase": os.environ.get("BLOFIN_API_PASSPHRASE"), "exchange": "blofin"}
-]
-
-# Startkapital
-startkapital = {
-    "Incubatorzone": 400.00,
-    "Memestrategies": 800.00,
-    "Ethapestrategies": 1200.00,
-    "Altsstrategies": 1200.00,
-    "Solstrategies": 1713.81,
-    "Btcstrategies": 1923.00,
-    "Corestrategies": 2000.56,
-    "2k->10k Projekt": 2000.00,
-    "1k->5k Projekt": 1000.00,
-    "Claude Projekt": 1000.00,
-    "7 Tage Performer": 1492.00
-}
-
-def cache_key_generator(*args, **kwargs):
-    key_data = str(args) + str(sorted(kwargs.items()))
-    return hashlib.md5(key_data.encode()).hexdigest()
-
-def cached_function(cache_duration=300):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            cache_key = f"{func.__name__}_{cache_key_generator(*args, **kwargs)}"
-            
-            with cache_lock:
-                if cache_key in dashboard_cache:
-                    cached_data, timestamp = dashboard_cache[cache_key]
-                    if datetime.now() - timestamp < timedelta(seconds=cache_duration):
-                        logging.info(f"Cache hit for {func.__name__}")
-                        return cached_data
-                
-                logging.info(f"Cache miss for {func.__name__} - executing")
-                result = func(*args, **kwargs)
-                dashboard_cache[cache_key] = (result, datetime.now())
-                return result
-        return wrapper
-    return decorator
-
-def safe_timestamp_convert(timestamp):
-    try:
-        if isinstance(timestamp, str):
-            timestamp = int(timestamp)
-        elif isinstance(timestamp, datetime):
-            return int(timestamp.timestamp() * 1000)
-        
-        if timestamp > 1e12:
-            return timestamp
-        else:
-            return int(timestamp * 1000)
-            
-    except (ValueError, TypeError, OSError):
-        return int(time.time() * 1000)
-
-def setup_google_sheets():
-    try:
-        service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        spreadsheet_id = os.environ.get("GOOGLE_SHEET_ID")
-        
-        if not service_account_json or not spreadsheet_id:
-            logging.warning("Google Sheets Credentials fehlen")
-            return None
-            
-        service_account_info = json.loads(service_account_json)
-        
-        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
-        missing_fields = [field for field in required_fields if field not in service_account_info]
-        
-        if missing_fields:
-            logging.warning(f"Service Account Info unvollständig: {missing_fields}")
-            return None
-        
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        
-        credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
-        gc = gspread.authorize(credentials)
-        
-        spreadsheet = gc.open_by_key(spreadsheet_id)
-        sheet = spreadsheet.worksheet("DailyBalances")
-        
-        logging.info("Google Sheets erfolgreich verbunden")
-        return gc, spreadsheet
-        
-    except Exception as e:
-        logging.error(f"Google Sheets Setup Fehler: {e}")
-        return None
-
-def clean_numeric_value(value_str):
-    """Bereinige numerische Werte von Währungssymbolen und Formatierung"""
-    if not value_str:
-        return "0"
-    
-    clean_val = str(value_str)
-    clean_val = clean_val.replace('$', '')
-    clean_val = clean_val.replace('€', '')
-    clean_val = clean_val.replace(',', '')
-    clean_val = clean_val.strip()
-    
-    return clean_val if clean_val else "0"
-
-def get_trading_data_from_sheets(gc, spreadsheet):
-    sheet_mapping = {
-        "Incubator": "Incubatorzone",
-        "Meme": "Memestrategies", 
-        "Ethape": "Ethapestrategies",
-        "Alts": "Altsstrategies",
-        "Sol": "Solstrategies",
-        "Btc": "Btcstrategies",
-        "Core": "Corestrategies",
-        "2k-10k": "2k->10k Projekt",
-        "1k-5k": "1k->5k Projekt",
-        "Claude": "Claude Projekt",
-        "Blofin-7-Tage": "7 Tage Performer"
-    }
-    
-    account_details = []
-    
-    for sheet_name, account_name in sheet_mapping.items():
-        try:
-            logging.info(f"Lade Daten aus Sheet: {sheet_name} für Account: {account_name}")
-            
-            try:
-                worksheet = spreadsheet.worksheet(sheet_name)
-            except gspread.exceptions.WorksheetNotFound:
-                logging.warning(f"Worksheet '{sheet_name}' nicht gefunden")
-                account_details.append({
-                    'name': account_name,
-                    'has_data': False,
-                    'total_trades': 0,
-                    'win_rate': 0,
-                    'total_pnl': 0,
-                    'profit_factor': 0,
-                    'avg_trade': 0,
-                    'max_drawdown': 0,
-                    'recent_trades': [],
-                    'all_trades': []
-                })
-                continue
-            
-            try:
-                all_records = worksheet.get_all_records()
-                logging.info(f"Gefunden: {len(all_records)} Datensätze in {sheet_name}")
-                time.sleep(0.5)
-            except Exception as e:
-                logging.error(f"Fehler beim Lesen der Daten: {e}")
-                account_details.append({
-                    'name': account_name,
-                    'has_data': False,
-                    'total_trades': 0,
-                    'win_rate': 0,
-                    'total_pnl': 0,
-                    'profit_factor': 0,
-                    'avg_trade': 0,
-                    'max_drawdown': 0,
-                    'recent_trades': [],
-                    'all_trades': []
-                })
-                continue
-            
-            if not all_records:
-                logging.info(f"Keine Daten in {sheet_name}")
-                account_details.append({
-                    'name': account_name,
-                    'has_data': False,
-                    'total_trades': 0,
-                    'win_rate': 0,
-                    'total_pnl': 0,
-                    'profit_factor': 0,
-                    'avg_trade': 0,
-                    'max_drawdown': 0,
-                    'recent_trades': [],
-                    'all_trades': []
-                })
-                continue
-            
-            if all_records:
-                available_columns = list(all_records[0].keys())
-                logging.info(f"Verfügbare Spalten in {sheet_name}: {available_columns}")
-            
-            trades = []
-            total_pnl = 0
-            winning_trades = 0
-            total_profit = 0
-            total_loss = 0
-            
-            for record in all_records:
-                try:
-                    logging.debug(f"Verarbeite Zeile: {record}")
-                    
-                    pnl_value = 0
-                    
-                    if sheet_name != "Blofin-7-Tage":
-                        if 'Realized P&L' in record and record['Realized P&L'] is not None:
-                            try:
-                                clean_value = clean_numeric_value(record['Realized P&L'])
-                                if clean_value and clean_value != '0':
-                                    pnl_value = float(clean_value)
-                                    logging.debug(f"PnL gefunden in 'Realized P&L': {pnl_value}")
-                            except (ValueError, TypeError) as e:
-                                logging.debug(f"Fehler beim Parsen von PnL: {e}")
-                    else:
-                        pnl_columns = [
-                            'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
-                            'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
-                            'Ergebnis', 'ergebnis', 'Result', 'result', 'Realized P&L', 'realized_pnl'
-                        ]
-                        
-                        for col in pnl_columns:
-                            if col in record and record[col] != '' and record[col] is not None and record[col] != '--':
-                                try:
-                                    clean_value = clean_numeric_value(record[col])
-                                    if clean_value and clean_value != '0':
-                                        pnl_value = float(clean_value)
-                                        logging.debug(f"Blofin PnL gefunden in Spalte '{col}': {pnl_value}")
-                                        break
-                                except (ValueError, TypeError) as e:
-                                    logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
-                                    continue
-                    
-                    symbol = 'N/A'
-                    
-                    if sheet_name != "Blofin-7-Tage":
-                        if 'Contracts' in record and record['Contracts'] is not None:
-                            contracts_value = str(record['Contracts']).strip()
-                            if contracts_value:
-                                symbol = contracts_value.replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
-                                if symbol:
-                                    logging.debug(f"Symbol aus 'Contracts' extrahiert: {symbol}")
-                    else:
-                        symbol_columns = [
-                            'Underlying Asset', 'Symbol', 'symbol', 'Asset', 'asset', 'Coin', 'coin',
-                            'Instrument', 'instrument', 'Pair', 'pair', 'Currency', 'currency'
-                        ]
-                        
-                        for col in symbol_columns:
-                            if col in record and record[col] is not None and record[col] != '':
-                                asset_value = str(record[col]).strip()
-                                if asset_value:
-                                    symbol = asset_value.replace('USDT', '').replace('-USDT', '').replace('PERP', '').strip()
-                                    if symbol:
-                                        logging.debug(f"Blofin Symbol aus '{col}' extrahiert: {symbol}")
-                                        break
-                    
-                    trade_date = 'N/A'
-                    date_columns = [
-                        'Filled/Settlement Time(UTC+0)', 'Create Time', 'Order Time',
-                        'Date', 'date', 'Datum', 'datum', 'Time', 'time', 'Timestamp', 'timestamp',
-                        'Created', 'created', 'Executed', 'executed', 'Open Time', 'Close Time'
-                    ]
-                    
-                    for col in date_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            trade_date = str(record[col]).strip()
-                            logging.debug(f"Datum gefunden in Spalte '{col}': {trade_date}")
-                            break
-                    
-                    side = 'N/A'
-                    side_columns = [
-                        'Trade Type', 'Side', 'side', 'Direction', 'direction', 'Type', 'type',
-                        'Action', 'action', 'Order Type', 'order_type', 'Position', 'position'
-                    ]
-                    
-                    for col in side_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            side_value = str(record[col]).lower().strip()
-                            if any(keyword in side_value for keyword in ['buy', 'long', 'kaufen', 'call']):
-                                side = 'Buy'
-                            elif any(keyword in side_value for keyword in ['sell', 'short', 'verkaufen', 'put']):
-                                side = 'Sell'
-                            else:
-                                side = str(record[col]).strip()
-                            logging.debug(f"Side gefunden in Spalte '{col}': {side}")
-                            break
-                    
-                    size = 0
-                    size_columns = [
-                        'Qty', 'Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'qty',
-                        'Volume', 'volume', 'Menge', 'menge', 'Contracts', 'contracts', 'Filled', 'Total'
-                    ]
-                    
-                    for col in size_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            try:
-                                clean_value = clean_numeric_value(record[col])
-                                if clean_value:
-                                    size = float(clean_value)
-                                    logging.debug(f"Size gefunden in Spalte '{col}': {size}")
-                                    break
-                            except (ValueError, TypeError) as e:
-                                logging.debug(f"Fehler beim Parsen von Size in Spalte '{col}': {e}")
-                                continue
-                    
-                    entry_price = 0
-                    entry_columns = [
-                        'Entry Price', 'Avg Fill', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 
-                        'Open_Price', 'open_price', 'Einstieg', 'einstieg', 'Open', 'open',
-                        'Einstiegspreis', 'Opening Price'
-                    ]
-                    
-                    for col in entry_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            try:
-                                clean_value = clean_numeric_value(record[col])
-                                if clean_value:
-                                    entry_price = float(clean_value)
-                                    logging.debug(f"Entry Price gefunden in Spalte '{col}': {entry_price}")
-                                    break
-                            except (ValueError, TypeError) as e:
-                                logging.debug(f"Fehler beim Parsen von Entry Price in Spalte '{col}': {e}")
-                                continue
-                    
-                    exit_price = 0
-                    exit_columns = [
-                        'Filled Price', 'Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 
-                        'Close_Price', 'close_price', 'Ausstieg', 'ausstieg', 'Close', 'close',
-                        'Exit Price', 'Ausstiegspreis', 'Closing Price'
-                    ]
-                    
-                    for col in exit_columns:
-                        if col in record and record[col] != '' and record[col] is not None:
-                            try:
-                                clean_value = clean_numeric_value(record[col])
-                                if clean_value:
-                                    exit_price = float(clean_value)
-                                    logging.debug(f"Exit Price gefunden in Spalte '{col}': {exit_price}")
-                                    break
-                            except (ValueError, TypeError) as e:
-                                logging.debug(f"Fehler beim Parsen von Exit Price in Spalte '{col}': {e}")
-                                continue
-                    
-                    if sheet_name == "Blofin-7-Tage":
-                        should_add = symbol != 'N/A'
-                    else:
-                        should_add = (symbol != 'N/A' and pnl_value != 0)
-                    
-                    if should_add:
-                        trade = {
-                            'symbol': symbol,
-                            'date': trade_date,
-                            'side': side,
-                            'size': size,
-                            'entry_price': entry_price,
-                            'exit_price': exit_price,
-                            'pnl': pnl_value
-                        }
-                        
-                        trades.append(trade)
-                        total_pnl += pnl_value
-                        
-                        if pnl_value > 0:
-                            winning_trades += 1
-                            total_profit += pnl_value
-                        elif pnl_value < 0:
-                            total_loss += abs(pnl_value)
-                        
-                        logging.debug(f"Trade hinzugefügt: {trade}")
-                    else:
-                        logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}, Sheet: {sheet_name}")
-                    
-                except Exception as e:
-                    logging.warning(f"Fehler beim Verarbeiten einer Zeile in {sheet_name}: {e}")
-                    logging.debug(f"Problematische Zeile: {record}")
-                    continue
-            
-            total_trades = len(trades)
-            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-            profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
-            avg_trade = total_pnl / total_trades if total_trades > 0 else 0
-            
-            running_pnl = 0
-            peak = 0
-            max_drawdown = 0
-            
-            for trade in trades:
-                running_pnl += trade['pnl']
-                if running_pnl > peak:
-                    peak = running_pnl
-                drawdown = peak - running_pnl
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
-            
-            recent_trades = trades[-10:] if len(trades) >= 10 else trades
-            recent_trades.reverse()
-            
-            account_details.append({
-                'name': account_name,
-                'has_data': total_trades > 0,
-                'total_trades': total_trades,
-                'win_rate': win_rate,
-                'total_pnl': total_pnl,
-                'profit_factor': profit_factor,
-                'avg_trade': avg_trade,
-                'max_drawdown': max_drawdown,
-                'recent_trades': recent_trades,
-                'all_trades': trades
-            })
-            
-            logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
-            
-        except Exception as e:
-            logging.error(f"Fehler beim Verarbeiten von {account_name}: {e}")
-            account_details.append({
-                'name': account_name,
-                'has_data': False,
-                'total_trades': 0,
-                'win_rate': 0,
-                'total_pnl': 0,
-                'profit_factor': 0,
-                'avg_trade': 0,
-                'max_drawdown': 0,
-                'recent_trades': [],
-                'all_trades': []
-            })
-    
-    return account_details
-
-def save_daily_data(total_balance, total_pnl, gc, spreadsheet):
-    if not gc or not spreadsheet:
-        logging.debug("Kein Google Sheet verfügbar")
-        return False
-    
-    try:
-        sheet = spreadsheet.worksheet("DailyBalances")
-        today = datetime.now(timezone("Europe/Berlin")).strftime("%d.%m.%Y")
-        
-        try:
-            records = sheet.get_all_records()
-        except gspread.exceptions.APIError as e:
-            logging.error(f"Fehler beim Lesen der Google Sheets Daten: {e}")
-            return False
-        
-        today_exists = any(record.get('Datum') == today for record in records)
-        
-        if not today_exists:
-            try:
-                sheet.append_row([today, total_balance, total_pnl])
-                logging.info(f"Daten für {today} gespeichert")
-                return True
-            except gspread.exceptions.APIError as e:
-                logging.error(f"Fehler beim Hinzufügen der Zeile: {e}")
-                return False
-        else:
-            for i, record in enumerate(records, start=2):
-                if record.get('Datum') == today:
-                    try:
-                        sheet.update(values=[[total_balance, total_pnl]], range_name=f'B{i}:C{i}')
-                        logging.info(f"Daten für {today} aktualisiert")
-                        return True
-                    except gspread.exceptions.APIError as e:
-                        logging.error(f"Fehler beim Aktualisieren: {e}")
-                        return False
-                    break
-                    
-    except Exception as e:
-        logging.error(f"Unerwarteter Fehler beim Speichern: {e}")
-        return False
-    
-    return True
-
-def get_historical_performance(total_pnl, gc, spreadsheet):
-    performance_data = {
-        '1_day': 0.0,
-        '7_day': 0.0,
-        '30_day': 0.0
-    }
-    
-    if not gc or not spreadsheet:
-        logging.debug("Kein Google Sheet verfügbar für historische Performance")
-        return performance_data
-    
-    try:
-        sheet = spreadsheet.worksheet("DailyBalances")
-        records = sheet.get_all_records()
-        if not records:
-            logging.info("Keine historischen Daten gefunden")
-            return performance_data
-            
-        df = pd.DataFrame(records)
-        if df.empty:
-            return performance_data
-        
-        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
-        df = df.dropna(subset=['Datum'])
-        df = df.sort_values('Datum')
-        
-        today = datetime.now(timezone("Europe/Berlin")).date()
-        
-        for days, key in [(1, '1_day'), (7, '7_day'), (30, '30_day')]:
-            target_date = today - timedelta(days=days)
-            df['date_diff'] = abs(df['Datum'].dt.date - target_date)
-            
-            if not df.empty:
-                closest_idx = df['date_diff'].idxmin()
-                
-                if pd.notna(closest_idx) and closest_idx in df.index:
-                    try:
-                        historical_pnl = float(df.loc[closest_idx, 'PnL'])
-                        performance_data[key] = total_pnl - historical_pnl
-                    except (ValueError, TypeError, KeyError):
-                        logging.warning(f"Ungültige PnL Daten für {key}")
-                        continue
-        
-        logging.info(f"Historische Performance berechnet: {performance_data}")
-        
-    except Exception as e:
-        logging.error(f"Fehler bei historischer Performance-Berechnung: {e}")
-    
-    return performance_data
-
-class BlofinAPI:
-    def __init__(self, api_key, api_secret, passphrase):
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.passphrase = passphrase
-        self.base_url = "https://openapi.blofin.com"
-    
-    def _generate_signature(self, path, method, timestamp, nonce, body=''):
-        message = f"{path}{method}{timestamp}{nonce}"
-        if body:
-            message += body
-        
-        hex_signature = hmac.new(
-            self.api_secret.encode('utf-8'),
-            message.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest().encode()
-        
-        return base64.b64encode(hex_signature).decode()
-    
-    def _make_request(self, method, endpoint, params=None):
-        timestamp = str(int(time.time() * 1000))
-        nonce = str(uuid.uuid4())
-        request_path = endpoint
-        body = ''
-        
-        if params and method == 'GET':
-            query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-            request_path += f"?{query_string}"
-        elif params and method in ['POST', 'PUT']:
-            body = json.dumps(params)
-        
-        signature = self._generate_signature(request_path, method, timestamp, nonce, body)
-        
-        headers = {
-            'ACCESS-KEY': self.api_key,
-            'ACCESS-SIGN': signature,
-            'ACCESS-TIMESTAMP': timestamp,
-            'ACCESS-NONCE': nonce,
-            'ACCESS-PASSPHRASE': self.passphrase,
-            'Content-Type': 'application/json'
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subaccount Details - Trading Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <style>
+        :root {
+            --profit-color: #28a745;
+            --loss-color: #dc3545;
+            --neutral-color: #6c757d;
+            --bg-dark: #2c3e50;
+            --bg-card: #34495e;
+            --text-light: #ffffff;
+            --border-color: #7f8c8d;
+            --blue-primary: #3498db;
+            --blue-secondary: #2980b9;
+            --gray-light: #bdc3c7;
         }
         
-        url = f"{self.base_url}{request_path}"
-        
-        try:
-            logging.info(f"Blofin API Request: {method} {url}")
-            
-            if method == 'GET':
-                response = requests.get(url, headers=headers, timeout=15)
-            else:
-                response = requests.post(url, headers=headers, json=params, timeout=15)
-            
-            logging.info(f"Blofin Response Status: {response.status_code}")
-            logging.debug(f"Blofin Response: {response.text}")
-            
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            logging.error(f"Blofin API Error: {e}")
-            raise
-    
-    def get_account_balance(self):
-        return self._make_request('GET', '/api/v1/account/balance')
-    
-    def get_positions(self):
-        return self._make_request('GET', '/api/v1/account/positions')
+        body {
+            background: #2c3e50;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-light);
+        }
 
-def get_bybit_data(acc):
-    try:
-        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
-        usdt = sum(float(c["walletBalance"]) for x in wallet for c in x["coin"] if c["coin"] == "USDT")
-        
-        try:
-            pos = client.get_positions(category="linear", settleCoin="USDT")["result"]["list"]
-        except Exception as e:
-            pos = []
-            logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
-        
-        positions = [p for p in pos if float(p.get("size", 0)) > 0]
-        return usdt, positions, "✅"
-    except Exception as e:
-        logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
-        return 0.0, [], "❌"
+        .dashboard-container {
+            background: rgba(44, 62, 80, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+        }
 
-def get_blofin_data(acc):
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        
-        usdt = 0.0
-        status = "❌"
-        
-        try:
-            balance_response = client.get_account_balance()
-            logging.info(f"Blofin Raw Balance Response for {acc['name']}: {balance_response}")
+        .header-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--blue-primary), var(--gray-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header-subtitle {
+            color: var(--gray-light);
+            font-size: 1.1rem;
+        }
+
+        .btn-outline-light {
+            border-color: var(--gray-light);
+            color: var(--gray-light);
+        }
+
+        .btn-outline-light:hover {
+            background-color: var(--blue-primary);
+            border-color: var(--blue-primary);
+            color: white;
+        }
+
+        .btn-outline-light.active {
+            background-color: var(--blue-primary);
+            border-color: var(--blue-primary);
+            color: white;
+        }
+
+        .account-card {
+            background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+        }
+
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--blue-primary);
+        }
+
+        .account-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+
+        .time-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--blue-primary);
+            background: transparent;
+            color: var(--blue-primary);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .filter-btn.active {
+            background: var(--blue-primary);
+            color: white;
+        }
+
+        .filter-btn:hover {
+            background: var(--blue-primary);
+            color: white;
+        }
+
+        .chart-container {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            height: 400px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 10px;
+            border: 1px solid var(--blue-primary);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--gray-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .stat-secondary {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .profit { color: var(--profit-color) !important; }
+        .loss { color: var(--loss-color) !important; }
+        .neutral { color: var(--gray-light) !important; }
+
+        .coin-performance {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            color: var(--text-light);
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .coin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .coin-item {
+            background: rgba(52, 152, 219, 0.05);
+            border: 1px solid var(--blue-primary);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .coin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .coin-symbol {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--blue-primary);
+        }
+
+        .coin-trades {
+            font-size: 0.9rem;
+            color: var(--gray-light);
+        }
+
+        .coin-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .coin-stat {
+            text-align: center;
+        }
+
+        .coin-stat-label {
+            font-size: 0.7rem;
+            color: var(--gray-light);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .coin-stat-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .alert-info {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid var(--blue-primary);
+            color: var(--text-light);
+            border-radius: 10px;
+        }
+
+        .footer-timestamp {
+            position: fixed;
+            bottom: 20px;
+            right: 30px;
+            background: rgba(44, 62, 80, 0.9);
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            color: var(--gray-light);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+        }
+
+        .icon-blue { color: var(--blue-primary); }
+        .icon-gray { color: var(--gray-light); }
+
+        .btn-success {
+            background-color: var(--profit-color);
+            border-color: var(--profit-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #218838;
+            border-color: #218838;
+        }
+
+        .btn-success:disabled {
+            background-color: var(--neutral-color);
+            border-color: var(--neutral-color);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .dashboard-container {
+                margin: 10px;
+                padding: 20px;
+            }
             
-            if balance_response.get('code') == '0' and balance_response.get('data'):
-                status = "✅"
-                data = balance_response['data']
+            .header-title {
+                font-size: 2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 10px;
+            }
+
+            .account-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .coin-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .time-filter {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <!-- Header -->
+        <div class="header-section">
+            <h1 class="header-title">
+                <i class="fas fa-users me-3"></i>Subaccount Details
+            </h1>
+            <p class="header-subtitle">Detaillierte Trading-Statistiken und Performance-Analyse</p>
+            
+            <!-- Navigation Buttons -->
+            <div class="btn-group mt-4" role="group">
+                <a href="/dashboard" class="btn btn-outline-light">
+                    <i class="fas fa-home me-2"></i>Dashboard
+                </a>
+                <a href="/account-details" class="btn btn-outline-light active">
+                    <i class="fas fa-info-circle me-2"></i>Subaccount Details
+                </a>
+            </div>
+            
+            <!-- Data Refresh Button -->
+            <div class="mt-3">
+                <button class="btn btn-success" onclick="refreshAccountData()" id="refreshBtn">
+                    <i class="fas fa-sync-alt me-2"></i>Daten aktualisieren
+                </button>
+                <small class="d-block mt-2 text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Klicken Sie hier, um die neuesten Daten aus Google Sheets zu laden
+                </small>
+            </div>
+        </div>
+
+        {% if account_details %}
+            {% for account in account_details %}
+            <!-- Account Card -->
+            <div class="account-card" id="account-{{ loop.index }}">
+                <div class="account-header">
+                    <h3 class="account-name">
+                        <i class="fas fa-chart-line me-2 icon-blue"></i>{{ account.name }}
+                    </h3>
+                </div>
+
+                {% if account.has_data %}
+                <!-- Time Filter -->
+                <div class="time-filter">
+                    <button class="filter-btn active" onclick="filterTimeframe({{ loop.index }}, 'all')">
+                        <i class="fas fa-infinity me-1"></i>Gesamt
+                    </button>
+                    <button class="filter-btn" onclick="filterTimeframe({{ loop.index }}, '30')">
+                        <i class="fas fa-calendar-alt me-1"></i>30 Tage
+                    </button>
+                    <button class="filter-btn" onclick="filterTimeframe({{ loop.index }}, '7')">
+                        <i class="fas fa-calendar-week me-1"></i>7 Tage
+                    </button>
+                </div>
+
+                <!-- Equity Curve Chart -->
+                <div class="chart-container">
+                    <canvas id="equityChart-{{ loop.index }}"></canvas>
+                </div>
+
+                <!-- Statistics Grid -->
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Gesamte Trades</div>
+                        <div class="stat-value neutral" id="totalTrades-{{ loop.index }}">{{ account.total_trades }}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value {% if account.win_rate >= 50 %}profit{% else %}loss{% endif %}" id="winRate-{{ loop.index }}">
+                            {{ "%.1f"|format(account.win_rate) }}%
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Gesamter PnL</div>
+                        <div class="stat-value {% if account.total_pnl >= 0 %}profit{% else %}loss{% endif %}" id="totalPnl-{{ loop.index }}">
+                            ${{ "%.2f"|format(account.total_pnl) }}
+                        </div>
+                        <div class="stat-secondary" id="totalPnlPercent-{{ loop.index }}">
+                            {% set start_capital = startkapital.get(account.name, 1000) %}
+                            {% set pnl_percent = (account.total_pnl / start_capital * 100) if start_capital > 0 else 0 %}
+                            {{ "%.2f"|format(pnl_percent) }}%
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Profit Factor</div>
+                        <div class="stat-value {% if account.profit_factor >= 1.0 %}profit{% else %}loss{% endif %}" id="profitFactor-{{ loop.index }}">
+                            {{ "%.2f"|format(account.profit_factor) if account.profit_factor < 999 else '∞' }}
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Durchschn. Trade</div>
+                        <div class="stat-value {% if account.avg_trade >= 0 %}profit{% else %}loss{% endif %}" id="avgTrade-{{ loop.index }}">
+                            ${{ "%.2f"|format(account.avg_trade) }}
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Max Drawdown</div>
+                        <div class="stat-value loss" id="maxDrawdown-{{ loop.index }}">
+                            ${{ "%.2f"|format(account.max_drawdown) }}
+                        </div>
+                        <div class="stat-secondary" id="maxDrawdownPercent-{{ loop.index }}">
+                            {% set dd_percent = (account.max_drawdown / start_capital * 100) if start_capital > 0 else 0 %}
+                            {{ "%.2f"|format(dd_percent) }}%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coin Performance Section -->
+                <div class="coin-performance">
+                    <h5 class="section-title">
+                        <i class="fas fa-coins icon-blue"></i>
+                        Performance nach Coins
+                    </h5>
+                    <div class="coin-grid" id="coinGrid-{{ loop.index }}">
+                        <!-- Coin performance will be generated by JavaScript -->
+                    </div>
+                </div>
+
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Keine Trading-Daten für dieses Subaccount verfügbar. 
+                    Prüfen Sie die Google Sheets Verbindung oder ob Trades vorhanden sind.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Store account data for JavaScript -->
+            <script type="application/json" id="accountData-{{ loop.index }}">
+                {{ account | tojson }}
+            </script>
+            {% endfor %}
+
+            <!-- Store startkapital data for JavaScript -->
+            <script type="application/json" id="startkapitalData">
+                {{ startkapital | tojson }}
+            </script>
+
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+            <p>Lade Subaccount-Daten...</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer Timestamp -->
+    <div class="footer-timestamp">
+        <i class="fas fa-clock me-2"></i>
+        Letztes Update: {{ now }}
+    </div>
+
+    <script>
+        // Global variables
+        let accountCharts = {};
+        let accountData = {};
+        let startkapitalData = {};
+
+        // Load data on page load - ONLY load startkapital, NOT account data
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded - NO automatic data loading');
+            
+            // Load startkapital data only
+            const startkapitalElement = document.getElementById('startkapitalData');
+            if (startkapitalElement) {
+                try {
+                    startkapitalData = JSON.parse(startkapitalElement.textContent);
+                    console.log('Startkapital data loaded:', startkapitalData);
+                } catch (e) {
+                    console.error('Error parsing startkapital data:', e);
+                    startkapitalData = {};
+                }
+            } else {
+                console.warn('No startkapital data found');
+                startkapitalData = {};
+            }
+
+            // NO automatic account data loading!
+            console.log('Ready for manual data refresh via button');
+        });
+
+        function loadAccountData(accountIndex) {
+            console.log(`Loading data for account ${accountIndex}`);
+            const dataElement = document.getElementById(`accountData-${accountIndex}`);
+            if (!dataElement) {
+                console.error(`No data element found for account ${accountIndex}`);
+                return;
+            }
+
+            try {
+                const data = JSON.parse(dataElement.textContent);
+                console.log(`Account ${accountIndex} data:`, data);
+                accountData[accountIndex] = data;
+
+                // Ensure we have trades data
+                if (!data.all_trades && !data.recent_trades) {
+                    console.warn(`No trades data for account ${accountIndex}`);
+                    return;
+                }
+
+                // Create equity curve chart
+                createEquityChart(accountIndex, data);
                 
-                if isinstance(data, list):
-                    for balance_item in data:
-                        currency = (balance_item.get('currency') or 
-                                  balance_item.get('ccy') or 
-                                  balance_item.get('coin', '')).upper()
+                // Generate coin performance
+                generateCoinPerformance(accountIndex, data);
+                
+                console.log(`Successfully loaded account ${accountIndex}`);
+            } catch (e) {
+                console.error(`Error loading account ${accountIndex}:`, e);
+            }
+        }
+
+        function createEquityChart(accountIndex, data) {
+            console.log(`Creating equity chart for account ${accountIndex}`);
+            const ctx = document.getElementById(`equityChart-${accountIndex}`);
+            if (!ctx) {
+                console.error(`No chart canvas found for account ${accountIndex}`);
+                return;
+            }
+
+            // Generate equity curve data from trades
+            const trades = data.all_trades || data.recent_trades || [];
+            console.log(`Account ${accountIndex} has ${trades.length} trades`);
+            
+            if (trades.length === 0) {
+                console.warn(`No trades to chart for account ${accountIndex}`);
+                // Create empty chart
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['No Data'],
+                        datasets: [{
+                            label: 'Equity Curve',
+                            data: [0],
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Keine Daten verfügbar',
+                                color: '#ffffff',
+                                font: { size: 16 }
+                            },
+                            legend: {
+                                labels: { color: '#ffffff' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#bdc3c7' },
+                                grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                            },
+                            y: {
+                                ticks: { 
+                                    color: '#bdc3c7',
+                                    callback: function(value) {
+                                        return '
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (convert date strings to comparable format)
+            const sortedTrades = [...trades].sort((a, b) => {
+                // Parse dates - adjust format based on your date format
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                // Use actual date or trade number for label
+                const label = trade.date && trade.date !== 'N/A' ? 
+                    formatDateForChart(trade.date) : `Trade ${index + 1}`;
+                
+                labels.push(label);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function parseDateString(dateStr) {
+            if (!dateStr || dateStr === 'N/A') {
+                return new Date(0); // Fallback date
+            }
+            
+            // Handle different date formats
+            // Format: "20:40 2025-07-09" or similar
+            if (dateStr.includes(' ')) {
+                const parts = dateStr.split(' ');
+                if (parts.length >= 2) {
+                    const datePart = parts[1]; // "2025-07-09"
+                    return new Date(datePart);
+                }
+            }
+            
+            // Try direct parsing
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function formatDateForChart(dateStr) {
+            const date = parseDateString(dateStr);
+            if (date.getTime() === 0) return dateStr;
+            
+            return date.toLocaleDateString('de-DE', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container) return;
+
+            // Use all trades or filtered trades
+            const trades = data.all_trades || data.recent_trades || [];
+            if (trades.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">Keine Trades im gewählten Zeitraum</div>';
+                return;
+            }
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            // Sort coins by total PnL (descending)
+            const sortedCoins = Object.entries(coinStats).sort((a, b) => b[1].totalPnL - a[1].totalPnL);
+            
+            sortedCoins.forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                // Sort trades by date for proper drawdown calculation
+                const sortedTrades = [...stats.trades].sort((a, b) => {
+                    const dateA = parseDateString(a.date);
+                    const dateB = parseDateString(b.date);
+                    return dateA - dateB;
+                });
+                
+                sortedTrades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Get ALL trades for this account (not just recent_trades limited to 10)
+            let allTrades = data.all_trades || data.recent_trades; // Use all_trades if available
+            let filteredTrades = allTrades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = allTrades.filter(trade => {
+                    const tradeDate = parseDateString(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades,
+                all_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.all_trades || data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown with proper date sorting
+            const sortedTrades = [...trades].sort((a, b) => {
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            sortedTrades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+
+        // New function for refreshing data
+        async function refreshAccountData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            const initialState = document.getElementById('initialState');
+            const accountsContainer = document.getElementById('accountsContainer');
+            
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aktualisiere...';
+            
+            try {
+                // Force refresh by adding timestamp parameter
+                console.log('Fetching fresh data from API...');
+                const response = await fetch(`/account-details-data?t=${Date.now()}`);
+                
+                if (response.ok) {
+                    const accountData = await response.json();
+                    console.log('Fresh data received:', accountData);
+                    
+                    // Hide initial state, show accounts container
+                    if (initialState) initialState.style.display = 'none';
+                    if (accountsContainer) accountsContainer.style.display = 'block';
+                    
+                    // Clear existing content
+                    accountsContainer.innerHTML = '';
+                    
+                    // Generate HTML for each account
+                    accountData.forEach((account, index) => {
+                        const accountIndex = index + 1;
                         
-                        if currency == 'USDT':
-                            possible_fields = [
-                                'totalEq', 'total_equity', 'equity', 'totalEquity',
-                                'available', 'availBal', 'availableBalance',
-                                'balance', 'bal', 'cashBal', 'cash_balance'
-                            ]
+                        if (account.has_data) {
+                            // Create account card HTML
+                            const accountHTML = createAccountHTML(account, accountIndex);
+                            accountsContainer.insertAdjacentHTML('beforeend', accountHTML);
                             
-                            for field in possible_fields:
-                                value = balance_item.get(field)
-                                if value is not None:
-                                    try:
-                                        balance_value = float(value)
-                                        if balance_value > usdt:
-                                            usdt = balance_value
-                                            logging.info(f"Using balance field '{field}': {balance_value}")
-                                    except (ValueError, TypeError):
-                                        continue
-                            break
+                            // Store data for JavaScript
+                            const dataScript = document.createElement('script');
+                            dataScript.type = 'application/json';
+                            dataScript.id = `accountData-${accountIndex}`;
+                            dataScript.textContent = JSON.stringify({
+                                name: account.name,
+                                has_data: account.has_data,
+                                total_trades: account.total_trades,
+                                win_rate: account.win_rate,
+                                total_pnl: account.total_pnl,
+                                profit_factor: account.profit_factor,
+                                avg_trade: account.avg_trade,
+                                max_drawdown: account.max_drawdown,
+                                recent_trades: account.recent_trades,
+                                all_trades: account.all_trades || account.recent_trades
+                            });
+                            document.head.appendChild(dataScript);
                             
-                elif isinstance(data, dict):
-                    possible_fields = [
-                        'totalEq', 'total_equity', 'equity', 'totalEquity',
-                        'available', 'availBal', 'balance', 'cashBal'
-                    ]
-                    
-                    for field in possible_fields:
-                        value = data.get(field)
-                        if value is not None:
-                            try:
-                                balance_value = float(value)
-                                if balance_value > usdt:
-                                    usdt = balance_value
-                                    logging.info(f"Using direct field '{field}': {balance_value}")
-                            except (ValueError, TypeError):
-                                continue
-                
-                if usdt < 100:
-                    logging.warning(f"Balance zu niedrig für {acc['name']}: {usdt}, verwende Fallback")
-                    expected_balance = startkapital.get(acc['name'], 1492.00) * 1.05
-                    usdt = expected_balance
-                    
-        except Exception as e:
-            logging.error(f"Blofin balance error for {acc['name']}: {e}")
-            usdt = startkapital.get(acc['name'], 1492.00)
-        
-        positions = []
-        try:
-            pos_response = client.get_positions()
-            logging.info(f"Blofin Positions Raw for {acc['name']}: {pos_response}")
-
-            if pos_response.get('code') == '0' and pos_response.get('data'):
-                for pos in pos_response['data']:
-                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
-                    
-                    if pos_size != 0:
-                        symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
-                        symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
-                        
-                        side_field = pos.get('posSide', pos.get('side', ''))
-                        
-                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
-                        
-                        if pos_size < 0:
-                            display_side = 'Sell'
-                            actual_size = abs(pos_size)
-                        else:
-                            display_side = 'Buy'
-                            actual_size = pos_size
-                        
-                        if side_field:
-                            side_lower = str(side_field).lower().strip()
-                            if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
-                                display_side = 'Sell'
-                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
-                                display_side = 'Buy'
-                        
-                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
-                            display_side = 'Sell'
-                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
-                        
-                        position = {
-                            'symbol': symbol,
-                            'size': str(actual_size),
-                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
-                            'side': display_side
+                            // Load account data and create charts
+                            setTimeout(() => {
+                                loadAccountData(accountIndex);
+                            }, 100 * index); // Stagger loading to avoid overwhelming
                         }
-                        positions.append(position)
-                        
-                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
-                        
-        except Exception as e:
-            logging.error(f"Blofin positions error for {acc['name']}: {e}")
-
-        logging.info(f"FINAL Blofin {acc['name']}: Status={status}, Balance=${usdt:.2f}, Positions={len(positions)}")
-        
-        return usdt, positions, status
-    
-    except Exception as e:
-        logging.error(f"General Blofin error for {acc['name']}: {e}")
-        return startkapital.get(acc['name'], 1492.00), [], "❌"
-
-def create_cached_charts(account_data):
-    cache_key = "charts_" + str(hash(str([(a['name'], a['pnl_percent']) for a in account_data])))
-    
-    if cache_key in dashboard_cache:
-        cached_charts, timestamp = dashboard_cache[cache_key]
-        if datetime.now() - timestamp < timedelta(minutes=5):
-            return cached_charts
-
-    try:
-        plt.style.use('dark_background')
-        
-        fig, ax = plt.subplots(figsize=(14, 8))
-        fig.patch.set_facecolor('#2c3e50')
-        ax.set_facecolor('#34495e')
-        
-        labels = [a["name"] for a in account_data]
-        values = [a["pnl_percent"] for a in account_data]
-        
-        colors = []
-        for v in values:
-            if v >= 0:
-                colors.append('#28a745')
-            else:
-                colors.append('#dc3545')
-        
-        bars = ax.bar(labels, values, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
-        
-        ax.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
-        
-        for i, bar in enumerate(bars):
-            height = bar.get_height()
-            
-            if height >= 0:
-                va = 'bottom'
-                y_offset = height + (max(values) - min(values)) * 0.02
-            else:
-                va = 'top'
-                y_offset = height - (max(values) - min(values)) * 0.02
-            
-            label_text = f"{values[i]:+.1f}%\n${account_data[i]['pnl']:+.2f}"
-            
-            ax.text(bar.get_x() + bar.get_width() / 2, y_offset,
-                    label_text,
-                    ha='center', va=va, 
-                    fontsize=10, fontweight='bold',
-                    color='white',
-                    bbox=dict(boxstyle="round,pad=0.3", 
-                            facecolor='black', 
-                            alpha=0.7,
-                            edgecolor='none'))
-        
-        ax.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
-        
-        ax.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
-        ax.tick_params(axis='y', colors='white', labelsize=10)
-        
-        ax.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
-        ax.set_axisbelow(True)
-        
-        if values:
-            y_min = min(values) - abs(max(values) - min(values)) * 0.15
-            y_max = max(values) + abs(max(values) - min(values)) * 0.15
-            ax.set_ylim(y_min, y_max)
-        
-        plt.tight_layout()
-        chart_path_strategien = "static/chart_strategien.png"
-        fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
-        plt.close(fig)
-
-        projekte = {
-            "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
-            "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
-            "1k→5k Projekt\n16.05.2025": ["1k->5k Projekt"],
-            "Claude Projekt\n25.06.2025": ["Claude Projekt"],
-            "7-Tage Projekt\n22.05.2025": ["7 Tage Performer"]
-        }
-
-        proj_labels = []
-        proj_values = []
-        proj_pnl_values = []
-        
-        for pname, members in projekte.items():
-            start_sum = sum(startkapital.get(m, 0) for m in members)
-            curr_sum = sum(a["balance"] for a in account_data if a["name"] in members)
-            pnl_absolute = curr_sum - start_sum
-            pnl_percent = (pnl_absolute / start_sum) * 100 if start_sum > 0 else 0
-            proj_labels.append(pname)
-            proj_values.append(pnl_percent)
-            proj_pnl_values.append(pnl_absolute)
-
-        fig2, ax2 = plt.subplots(figsize=(14, 8))
-        fig2.patch.set_facecolor('#2c3e50')
-        ax2.set_facecolor('#34495e')
-        
-        proj_colors = []
-        for v in proj_values:
-            if v >= 0:
-                proj_colors.append('#28a745')
-            else:
-                proj_colors.append('#dc3545')
-        
-        bars2 = ax2.bar(proj_labels, proj_values, color=proj_colors, alpha=0.8, edgecolor='white', linewidth=1.5)
-        
-        ax2.axhline(0, color='white', linestyle='--', alpha=0.7, linewidth=1)
-        
-        for i, bar in enumerate(bars2):
-            height = bar.get_height()
-            
-            if height >= 0:
-                va = 'bottom'
-                y_offset = height + (max(proj_values) - min(proj_values)) * 0.02
-            else:
-                va = 'top'
-                y_offset = height - (max(proj_values) - min(proj_values)) * 0.02
-            
-            label_text = f"{proj_values[i]:+.1f}%\n${proj_pnl_values[i]:+.2f}"
-            
-            ax2.text(bar.get_x() + bar.get_width() / 2, y_offset,
-                     label_text,
-                     ha='center', va=va,
-                     fontsize=10, fontweight='bold',
-                     color='white',
-                     bbox=dict(boxstyle="round,pad=0.3", 
-                             facecolor='black', 
-                             alpha=0.7,
-                             edgecolor='none'))
-        
-        ax2.set_ylabel('Performance (%)', fontsize=12, color='white', fontweight='bold')
-        
-        ax2.tick_params(axis='x', rotation=45, colors='white', labelsize=10)
-        ax2.tick_params(axis='y', colors='white', labelsize=10)
-        
-        ax2.grid(True, alpha=0.3, color='white', linestyle='-', linewidth=0.5)
-        ax2.set_axisbelow(True)
-        
-        if proj_values:
-            y_min = min(proj_values) - abs(max(proj_values) - min(proj_values)) * 0.15
-            y_max = max(proj_values) + abs(max(proj_values) - min(proj_values)) * 0.15
-            ax2.set_ylim(y_min, y_max)
-        
-        plt.tight_layout()
-        chart_path_projekte = "static/chart_projekte.png"
-        fig2.savefig(chart_path_projekte, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
-        plt.close(fig2)
-
-        chart_paths = {
-            'strategien': chart_path_strategien,
-            'projekte': chart_path_projekte
-        }
-        
-        dashboard_cache[cache_key] = (chart_paths, datetime.now())
-        return chart_paths
-
-    except Exception as e:
-        logging.error(f"Error creating charts: {e}")
-        return {
-            'strategien': "static/placeholder_strategien.png",
-            'projekte': "static/placeholder_projekte.png"
-        }
-
-@cached_function(cache_duration=180)
-def get_cached_account_data():
-    account_data = []
-    total_balance = 0.0
-    positions_all = []
-    total_positions_pnl = 0.0
-
-    for acc in subaccounts:
-        name = acc["name"]
-        
-        try:
-            if acc["exchange"] == "blofin":
-                usdt, positions, status = get_blofin_data(acc)
-            else:
-                usdt, positions, status = get_bybit_data(acc)
-            
-            for p in positions:
-                positions_all.append((name, p))
-                try:
-                    pos_pnl = float(p.get('unrealisedPnl', 0))
-                    total_positions_pnl += pos_pnl
-                except (ValueError, TypeError):
-                    pass
-
-            pnl = usdt - startkapital.get(name, 0)
-            pnl_percent = (pnl / startkapital.get(name, 1)) * 100
-
-            account_data.append({
-                "name": name,
-                "status": status,
-                "balance": usdt,
-                "start": startkapital.get(name, 0),
-                "pnl": pnl,
-                "pnl_percent": pnl_percent,
-                "positions": positions
-            })
-
-            total_balance += usdt
-            
-            logging.info(f"Account {name}: Balance=${usdt:.2f}, PnL=${pnl:.2f} ({pnl_percent:.2f}%), Status={status}")
-            
-        except Exception as e:
-            logging.error(f"Error getting data for {name}: {e}")
-            start = startkapital.get(name, 0)
-            account_data.append({
-                "name": name,
-                "status": "❌",
-                "balance": start,
-                "start": start,
-                "pnl": 0,
-                "pnl_percent": 0,
-                "positions": []
-            })
-            total_balance += start
-
-    return {
-        'account_data': account_data,
-        'total_balance': total_balance,
-        'positions_all': positions_all,
-        'total_positions_pnl': total_positions_pnl
-    }
-
-@cached_function(cache_duration=1800)
-def get_cached_historical_performance(total_pnl, gc, spreadsheet):
-    return get_historical_performance(total_pnl, gc, spreadsheet)
-
-@cached_function(cache_duration=1800)
-def get_cached_trading_details(gc, spreadsheet):
-    return get_trading_data_from_sheets(gc, spreadsheet)
-
-@app.route('/', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        user = request.form['username']
-        pw = request.form['password']
-        if user in users and check_password_hash(users[user], pw):
-            session['user'] = user
-            return redirect(url_for('dashboard'))
-        else:
-            return render_template('login.html', error="Login fehlgeschlagen.")
-    return render_template('login.html')
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-
-    try:
-        cached_data = get_cached_account_data()
-        account_data = cached_data['account_data']
-        total_balance = cached_data['total_balance']
-        positions_all = cached_data['positions_all']
-        total_positions_pnl = cached_data['total_positions_pnl']
-        
-        total_start = sum(startkapital.values())
-        total_pnl = total_balance - total_start
-        total_pnl_percent = (total_pnl / total_start) * 100
-        total_positions_pnl_percent = (total_positions_pnl / total_start) * 100 if total_start > 0 else 0
-
-        logging.info(f"=== DASHBOARD SUMMARY ===")
-        logging.info(f"Total Start: ${total_start:.2f}")
-        logging.info(f"Total Balance: ${total_balance:.2f}")
-        logging.info(f"Total PnL: ${total_pnl:.2f} ({total_pnl_percent:.2f}%)")
-        logging.info(f"Positions PnL: ${total_positions_pnl:.2f}")
-        
-        for acc in account_data:
-            logging.info(f"  {acc['name']}: ${acc['balance']:.2f} (PnL: ${acc['pnl']:.2f})")
-
-        sheets_data = None
-        try:
-            sheets_data = setup_google_sheets()
-        except Exception as e:
-            logging.warning(f"Google Sheets setup failed: {e}")
-
-        if sheets_data:
-            gc, spreadsheet = sheets_data
-            historical_performance = get_cached_historical_performance(total_pnl, gc, spreadsheet)
-        else:
-            historical_performance = {'1_day': 0.0, '7_day': 0.0, '30_day': 0.0}
-        
-        chart_paths = create_cached_charts(account_data)
-        
-        if sheets_data:
-            try:
-                gc, spreadsheet = sheets_data
-                save_daily_data(total_balance, total_pnl, gc, spreadsheet)
-            except Exception as sheets_error:
-                logging.warning(f"Sheets operations failed: {sheets_error}")
-
-        tz = timezone("Europe/Berlin")
-        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-
-        return render_template("dashboard.html",
-                               accounts=account_data,
-                               total_start=total_start,
-                               total_balance=total_balance,
-                               total_pnl=total_pnl,
-                               total_pnl_percent=total_pnl_percent,
-                               historical_performance=historical_performance,
-                               chart_path_strategien=chart_paths['strategien'],
-                               chart_path_projekte=chart_paths['projekte'],
-                               positions_all=positions_all,
-                               total_positions_pnl=total_positions_pnl,
-                               total_positions_pnl_percent=total_positions_pnl_percent,
-                               now=now)
-
-    except Exception as e:
-        logging.error(f"Critical dashboard error: {e}")
-        return render_template("dashboard.html",
-                               accounts=[],
-                               total_start=0,
-                               total_balance=0,
-                               total_pnl=0,
-                               total_pnl_percent=0,
-                               historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
-                               chart_path_strategien="static/placeholder_strategien.png",
-                               chart_path_projekte="static/placeholder_projekte.png",
-                               positions_all=[],
-                               total_positions_pnl=0,
-                               total_positions_pnl_percent=0,
-                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
-
-@app.route('/logout')
-def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
-
-@app.route('/simple-debug')
-def simple_debug():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    debug_output = []
-    
-    try:
-        sheets_data = setup_google_sheets()
-        if not sheets_data:
-            return "Google Sheets nicht verfügbar"
-        
-        gc, spreadsheet = sheets_data
-        
-        worksheet = spreadsheet.worksheet("Incubator")
-        all_records = worksheet.get_all_records()
-        
-        debug_output.append(f"=== INCUBATOR SHEET TEST (EXACT MAIN LOGIC) ===")
-        debug_output.append(f"Total Records: {len(all_records)}")
-        
-        trades_found = 0
-        total_pnl = 0
-        
-        for i, record in enumerate(all_records[:5]):
-            debug_output.append(f"\n--- Trade {i+1} ---")
-            debug_output.append(f"Raw Record: {record}")
-            
-            symbol = 'N/A'
-            if 'Contracts' in record and record['Contracts']:
-                symbol = str(record['Contracts']).replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
-                debug_output.append(f"Symbol: {symbol}")
-            
-            pnl_value = 0
-            if 'Realized P&L' in record and record['Realized P&L'] is not None:
-                try:
-                    pnl_raw = record['Realized P&L']
-                    pnl_value = float(pnl_raw)
-                    debug_output.append(f"PnL gefunden: {pnl_value} (Original: {pnl_raw})")
-                except (ValueError, TypeError) as e:
-                    debug_output.append(f"❌ Fehler beim Parsen von PnL: {e}")
-            
-            should_add_trade = (symbol != 'N/A' and pnl_value != 0)
-            debug_output.append(f"Should add trade? Symbol!=N/A: {symbol != 'N/A'}, PnL!=0: {pnl_value != 0}, Result: {should_add_trade}")
-            
-            if should_add_trade:
-                trades_found += 1
-                total_pnl += pnl_value
-                debug_output.append(f"✅ Trade added! Running total: {total_pnl}")
-            else:
-                debug_output.append(f"❌ Trade skipped - Symbol: {symbol}, PnL: {pnl_value}")
-        
-        debug_output.append(f"\n=== SUMMARY ===")
-        debug_output.append(f"Trades found: {trades_found}")
-        debug_output.append(f"Total PnL: {total_pnl}")
-        
-        debug_output.append(f"\n=== TESTING MAIN FUNCTION ===")
-        account_details = get_trading_data_from_sheets(gc, spreadsheet)
-        
-        for acc in account_details:
-            if acc['name'] == 'Incubatorzone':
-                debug_output.append(f"Incubatorzone Result:")
-                debug_output.append(f"  Has Data: {acc['has_data']}")
-                debug_output.append(f"  Total Trades: {acc['total_trades']}")
-                debug_output.append(f"  Total PnL: {acc['total_pnl']}")
-                debug_output.append(f"  Recent Trades: {len(acc['recent_trades'])}")
-                break
-        
-    except Exception as e:
-        debug_output.append(f"ERROR: {e}")
-        import traceback
-        debug_output.append(f"Traceback: {traceback.format_exc()}")
-    
-    return f"<pre>{'<br>'.join(debug_output)}</pre>"
-
-@app.route('/debug-sheets')
-def debug_sheets():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    debug_info = []
-    
-    try:
-        sheets_data = setup_google_sheets()
-        
-        if not sheets_data:
-            debug_info.append("❌ Google Sheets Verbindung fehlgeschlagen")
-            return f"<h1>Debug Info</h1><pre>{'<br>'.join(debug_info)}</pre>"
-        
-        gc, spreadsheet = sheets_data
-        debug_info.append("✅ Google Sheets Verbindung erfolgreich")
-        
-        sheet_mapping = {
-            "Incubator": "Incubatorzone",
-            "Meme": "Memestrategies", 
-            "Ethape": "Ethapestrategies",
-            "Alts": "Altsstrategies",
-            "Sol": "Solstrategies",
-            "Btc": "Btcstrategies",
-            "Core": "Corestrategies",
-            "2k-10k": "2k->10k Projekt",
-            "1k-5k": "1k->5k Projekt",
-            "Claude": "Claude Projekt",
-            "Blofin-7-Tage": "7 Tage Performer"
-        }
-        
-        for sheet_name, account_name in sheet_mapping.items():
-            try:
-                worksheet = spreadsheet.worksheet(sheet_name)
-                debug_info.append(f"✅ Worksheet '{sheet_name}' gefunden")
-                
-                all_records = worksheet.get_all_records()
-                debug_info.append(f"   📊 {len(all_records)} Datensätze gefunden")
-                
-                if all_records:
-                    columns = list(all_records[0].keys())
-                    debug_info.append(f"   📋 Spalten: {', '.join(columns)}")
+                    });
                     
-                    for i, record in enumerate(all_records[:3]):
-                        debug_info.append(f"   📄 Zeile {i+1}: {record}")
-                        
-                        pnl_found = False
-                        for col, value in record.items():
-                            if value and str(value).strip() != '':
-                                try:
-                                    clean_val = clean_numeric_value(value)
-                                    pnl_val = float(clean_val)
-                                    if pnl_val != 0:
-                                        debug_info.append(f"      💰 Möglicher PnL in '{col}': {pnl_val}")
-                                        pnl_found = True
-                                except:
-                                    pass
-                        
-                        if not pnl_found:
-                            debug_info.append(f"      ⚠️ Kein PnL-Wert in dieser Zeile gefunden")
-                else:
-                    debug_info.append(f"   ❌ Keine Daten in '{sheet_name}'")
+                    // Show success message
+                    refreshBtn.innerHTML = '<i class="fas fa-check me-2"></i>Aktualisiert!';
+                    refreshBtn.className = 'btn btn-success';
                     
-            except gspread.exceptions.WorksheetNotFound:
-                debug_info.append(f"❌ Worksheet '{sheet_name}' nicht gefunden")
-            except Exception as e:
-                debug_info.append(f"❌ Fehler bei '{sheet_name}': {e}")
-        
-    except Exception as e:
-        debug_info.append(f"❌ Allgemeiner Fehler: {e}")
-    
-    return f"<h1>Google Sheets Debug Info</h1><pre>{'<br>'.join(debug_info)}</pre><br><a href='/dashboard'>Zurück zum Dashboard</a>"
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalText;
+                        refreshBtn.className = 'btn btn-success';
+                        refreshBtn.disabled = false;
+                    }, 2000);
+                    
+                } else {
+                    throw new Error('Failed to fetch data');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                
+                // Show error state
+                refreshBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Fehler';
+                refreshBtn.className = 'btn btn-danger';
+                
+                setTimeout(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.className = 'btn btn-success';
+                    refreshBtn.disabled = false;
+                }, 3000);
+            }
+        }
 
-@app.route('/account-details')
-def account_details():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    try:
-        sheets_data = setup_google_sheets()
-        
-        if sheets_data:
-            gc, spreadsheet = sheets_data
-            account_details_data = get_cached_trading_details(gc, spreadsheet)
-        else:
-            logging.warning("Google Sheets nicht verfügbar")
-            account_details_data = []
-        
-        tz = timezone("Europe/Berlin")
-        now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
-        
-        return render_template('account_details.html', 
-                               account_details=account_details_data,
-                               startkapital=startkapital,
-                               now=now)
-                               
-    except Exception as e:
-        logging.error(f"Fehler beim Laden der Account Details: {e}")
-        return render_template('account_details.html', 
-                               account_details=[],
-                               startkapital=startkapital,
-                               now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
+        function createAccountHTML(account, accountIndex) {
+            const startCapital = startkapitalData[account.name] || 1000;
+            const pnlPercent = (account.total_pnl / startCapital * 100);
+            const ddPercent = (account.max_drawdown / startCapital * 100);
+            
+            return `
+                <div class="account-card" id="account-${accountIndex}">
+                    <div class="account-header">
+                        <h3 class="account-name">
+                            <i class="fas fa-chart-line me-2 icon-blue"></i>${account.name}
+                        </h3>
+                    </div>
 
-@app.route('/account-details-data')
-def account_details_data():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    
-    try:
-        sheets_data = setup_google_sheets()
-        
-        if sheets_data:
-            gc, spreadsheet = sheets_data
-            account_details_data = get_trading_data_from_sheets(gc, spreadsheet)
-        else:
-            logging.warning("Google Sheets nicht verfügbar")
-            account_details_data = []
-        
-        return jsonify(account_details_data)
-        
-    except Exception as e:
-        logging.error(f"Fehler beim Laden der Account Details Data: {e}")
-        return jsonify([]), 500
+                    <div class="time-filter">
+                        <button class="filter-btn active" onclick="filterTimeframe(${accountIndex}, 'all')">
+                            <i class="fas fa-infinity me-1"></i>Gesamt
+                        </button>
+                        <button class="filter-btn" onclick="filterTimeframe(${accountIndex}, '30')">
+                            <i class="fas fa-calendar-alt me-1"></i>30 Tage
+                        </button>
+                        <button class="filter-btn" onclick="filterTimeframe(${accountIndex}, '7')">
+                            <i class="fas fa-calendar-week me-1"></i>7 Tage
+                        </button>
+                    </div>
 
-if __name__ == '__main__':
-    os.makedirs('static', exist_ok=True)
-    app.run(debug=True, host='0.0.0.0', port=10000)
+                    <div class="chart-container">
+                        <canvas id="equityChart-${accountIndex}"></canvas>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Gesamte Trades</div>
+                            <div class="stat-value neutral" id="totalTrades-${accountIndex}">${account.total_trades}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Win Rate</div>
+                            <div class="stat-value ${account.win_rate >= 50 ? 'profit' : 'loss'}" id="winRate-${accountIndex}">
+                                ${account.win_rate.toFixed(1)}%
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Gesamter PnL</div>
+                            <div class="stat-value ${account.total_pnl >= 0 ? 'profit' : 'loss'}" id="totalPnl-${accountIndex}">
+                                ${account.total_pnl.toFixed(2)}
+                            </div>
+                            <div class="stat-secondary" id="totalPnlPercent-${accountIndex}">
+                                ${pnlPercent.toFixed(2)}%
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Profit Factor</div>
+                            <div class="stat-value ${account.profit_factor >= 1.0 ? 'profit' : 'loss'}" id="profitFactor-${accountIndex}">
+                                ${account.profit_factor < 999 ? account.profit_factor.toFixed(2) : '∞'}
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Durchschn. Trade</div>
+                            <div class="stat-value ${account.avg_trade >= 0 ? 'profit' : 'loss'}" id="avgTrade-${accountIndex}">
+                                ${account.avg_trade.toFixed(2)}
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Max Drawdown</div>
+                            <div class="stat-value loss" id="maxDrawdown-${accountIndex}">
+                                ${account.max_drawdown.toFixed(2)}
+                            </div>
+                            <div class="stat-secondary" id="maxDrawdownPercent-${accountIndex}">
+                                ${ddPercent.toFixed(2)}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="coin-performance">
+                        <h5 class="section-title">
+                            <i class="fas fa-coins icon-blue"></i>
+                            Performance nach Coins
+                        </h5>
+                        <div class="coin-grid" id="coinGrid-${accountIndex}">
+                            <!-- Coin performance will be generated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + value.toFixed(2);
+                                    }
+                                },
+                                grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                            }
+                        }
+                    }
+                });
+                accountCharts[accountIndex] = chart;
+                return;
+            }
+            
+            const equityData = generateEquityData(trades);
+            console.log(`Generated equity data for account ${accountIndex}:`, equityData);
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: equityData.labels,
+                    datasets: [{
+                        label: 'Equity Curve',
+                        data: equityData.values,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    }, {
+                        label: 'Peak',
+                        data: equityData.peaks,
+                        borderColor: '#28a745',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Equity Curve & Drawdown',
+                            color: '#ffffff',
+                            font: { size: 16 }
+                        },
+                        legend: {
+                            labels: { color: '#ffffff' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#bdc3c7' },
+                            grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                        },
+                        y: {
+                            ticks: { 
+                                color: '#bdc3c7',
+                                callback: function(value) {
+                                    return '
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (convert date strings to comparable format)
+            const sortedTrades = [...trades].sort((a, b) => {
+                // Parse dates - adjust format based on your date format
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                // Use actual date or trade number for label
+                const label = trade.date && trade.date !== 'N/A' ? 
+                    formatDateForChart(trade.date) : `Trade ${index + 1}`;
+                
+                labels.push(label);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function parseDateString(dateStr) {
+            if (!dateStr || dateStr === 'N/A') {
+                return new Date(0); // Fallback date
+            }
+            
+            // Handle different date formats
+            // Format: "20:40 2025-07-09" or similar
+            if (dateStr.includes(' ')) {
+                const parts = dateStr.split(' ');
+                if (parts.length >= 2) {
+                    const datePart = parts[1]; // "2025-07-09"
+                    return new Date(datePart);
+                }
+            }
+            
+            // Try direct parsing
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function formatDateForChart(dateStr) {
+            const date = parseDateString(dateStr);
+            if (date.getTime() === 0) return dateStr;
+            
+            return date.toLocaleDateString('de-DE', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container) return;
+
+            // Use all trades or filtered trades
+            const trades = data.all_trades || data.recent_trades || [];
+            if (trades.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">Keine Trades im gewählten Zeitraum</div>';
+                return;
+            }
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            // Sort coins by total PnL (descending)
+            const sortedCoins = Object.entries(coinStats).sort((a, b) => b[1].totalPnL - a[1].totalPnL);
+            
+            sortedCoins.forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                // Sort trades by date for proper drawdown calculation
+                const sortedTrades = [...stats.trades].sort((a, b) => {
+                    const dateA = parseDateString(a.date);
+                    const dateB = parseDateString(b.date);
+                    return dateA - dateB;
+                });
+                
+                sortedTrades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Get ALL trades for this account (not just recent_trades limited to 10)
+            let allTrades = data.all_trades || data.recent_trades; // Use all_trades if available
+            let filteredTrades = allTrades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = allTrades.filter(trade => {
+                    const tradeDate = parseDateString(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades,
+                all_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.all_trades || data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown with proper date sorting
+            const sortedTrades = [...trades].sort((a, b) => {
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            sortedTrades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+
+        // New function for refreshing data
+        async function refreshAccountData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aktualisiere...';
+            
+            try {
+                // Force refresh by adding timestamp parameter
+                const response = await fetch(`/account-details-data?t=${Date.now()}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update account data
+                    data.forEach((account, index) => {
+                        const accountIndex = index + 1;
+                        accountData[accountIndex] = account;
+                        
+                        if (account.has_data) {
+                            // Update charts and statistics
+                            if (accountCharts[accountIndex]) {
+                                const equityData = generateEquityData(account.all_trades || account.recent_trades);
+                                accountCharts[accountIndex].data.labels = equityData.labels;
+                                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                                accountCharts[accountIndex].update();
+                            }
+                            
+                            // Update statistics
+                            updateAccountStats(accountIndex, account);
+                            
+                            // Update coin performance
+                            generateCoinPerformance(accountIndex, account);
+                        }
+                    });
+                    
+                    // Show success message
+                    refreshBtn.innerHTML = '<i class="fas fa-check me-2"></i>Aktualisiert!';
+                    refreshBtn.className = 'btn btn-success';
+                    
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalText;
+                        refreshBtn.disabled = false;
+                    }, 2000);
+                    
+                } else {
+                    throw new Error('Failed to fetch data');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                
+                // Show error state
+                refreshBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Fehler';
+                refreshBtn.className = 'btn btn-danger';
+                
+                setTimeout(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.className = 'btn btn-success';
+                    refreshBtn.disabled = false;
+                }, 3000);
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + value.toFixed(2);
+                                }
+                            },
+                            grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                        }
+                    }
+                }
+            });
+
+            accountCharts[accountIndex] = chart;
+            console.log(`Chart created successfully for account ${accountIndex}`);
+        }
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (convert date strings to comparable format)
+            const sortedTrades = [...trades].sort((a, b) => {
+                // Parse dates - adjust format based on your date format
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                // Use actual date or trade number for label
+                const label = trade.date && trade.date !== 'N/A' ? 
+                    formatDateForChart(trade.date) : `Trade ${index + 1}`;
+                
+                labels.push(label);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function parseDateString(dateStr) {
+            if (!dateStr || dateStr === 'N/A') {
+                return new Date(0); // Fallback date
+            }
+            
+            // Handle different date formats
+            // Format: "20:40 2025-07-09" or similar
+            if (dateStr.includes(' ')) {
+                const parts = dateStr.split(' ');
+                if (parts.length >= 2) {
+                    const datePart = parts[1]; // "2025-07-09"
+                    return new Date(datePart);
+                }
+            }
+            
+            // Try direct parsing
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function formatDateForChart(dateStr) {
+            const date = parseDateString(dateStr);
+            if (date.getTime() === 0) return dateStr;
+            
+            return date.toLocaleDateString('de-DE', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container) return;
+
+            // Use all trades or filtered trades
+            const trades = data.all_trades || data.recent_trades || [];
+            if (trades.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">Keine Trades im gewählten Zeitraum</div>';
+                return;
+            }
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            // Sort coins by total PnL (descending)
+            const sortedCoins = Object.entries(coinStats).sort((a, b) => b[1].totalPnL - a[1].totalPnL);
+            
+            sortedCoins.forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                // Sort trades by date for proper drawdown calculation
+                const sortedTrades = [...stats.trades].sort((a, b) => {
+                    const dateA = parseDateString(a.date);
+                    const dateB = parseDateString(b.date);
+                    return dateA - dateB;
+                });
+                
+                sortedTrades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Get ALL trades for this account (not just recent_trades limited to 10)
+            let allTrades = data.all_trades || data.recent_trades; // Use all_trades if available
+            let filteredTrades = allTrades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = allTrades.filter(trade => {
+                    const tradeDate = parseDateString(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades,
+                all_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.all_trades || data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown with proper date sorting
+            const sortedTrades = [...trades].sort((a, b) => {
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            sortedTrades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+
+        // New function for refreshing data
+        async function refreshAccountData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aktualisiere...';
+            
+            try {
+                // Force refresh by adding timestamp parameter
+                const response = await fetch(`/account-details-data?t=${Date.now()}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update account data
+                    data.forEach((account, index) => {
+                        const accountIndex = index + 1;
+                        accountData[accountIndex] = account;
+                        
+                        if (account.has_data) {
+                            // Update charts and statistics
+                            if (accountCharts[accountIndex]) {
+                                const equityData = generateEquityData(account.all_trades || account.recent_trades);
+                                accountCharts[accountIndex].data.labels = equityData.labels;
+                                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                                accountCharts[accountIndex].update();
+                            }
+                            
+                            // Update statistics
+                            updateAccountStats(accountIndex, account);
+                            
+                            // Update coin performance
+                            generateCoinPerformance(accountIndex, account);
+                        }
+                    });
+                    
+                    // Show success message
+                    refreshBtn.innerHTML = '<i class="fas fa-check me-2"></i>Aktualisiert!';
+                    refreshBtn.className = 'btn btn-success';
+                    
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalText;
+                        refreshBtn.disabled = false;
+                    }, 2000);
+                    
+                } else {
+                    throw new Error('Failed to fetch data');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                
+                // Show error state
+                refreshBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Fehler';
+                refreshBtn.className = 'btn btn-danger';
+                
+                setTimeout(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.className = 'btn btn-success';
+                    refreshBtn.disabled = false;
+                }, 3000);
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
