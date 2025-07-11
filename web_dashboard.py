@@ -448,6 +448,12 @@ def get_trading_data_from_sheets(gc, spreadsheet):
             profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
             avg_trade = total_pnl / total_trades if total_trades > 0 else 0
             
+            # Statistiken berechnen
+            total_trades = len(trades)
+            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+            profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
+            avg_trade = total_pnl / total_trades if total_trades > 0 else 0
+            
             # Max Drawdown berechnen
             running_pnl = 0
             peak = 0
@@ -475,7 +481,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 'avg_trade': avg_trade,
                 'max_drawdown': max_drawdown,
                 'recent_trades': recent_trades,
-                'all_trades': trades  # HINZUGEFÜGT: Alle Trades für Charts und Analyse
+                'all_trades': trades
             })
             
             logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
@@ -492,7 +498,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 'avg_trade': 0,
                 'max_drawdown': 0,
                 'recent_trades': [],
-                'all_trades': []  # Hinzugefügt für alle Trades
+                'all_trades': []
             })
     
     return account_details
