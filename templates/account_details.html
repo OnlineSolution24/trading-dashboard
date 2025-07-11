@@ -6,6 +6,8 @@
     <title>Subaccount Details - Trading Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
     <style>
         :root {
             --profit-color: #28a745;
@@ -80,12 +82,6 @@
             margin-bottom: 30px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .account-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.3);
         }
 
         .account-header {
@@ -103,29 +99,46 @@
             color: var(--text-light);
         }
 
-        .account-status {
+        .time-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filter-btn {
             padding: 8px 16px;
-            border-radius: 25px;
+            border: 1px solid var(--blue-primary);
+            background: transparent;
+            color: var(--blue-primary);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
             font-size: 0.9rem;
-            font-weight: 600;
         }
 
-        .status-active {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: var(--profit-color);
-            border: 2px solid var(--profit-color);
+        .filter-btn.active {
+            background: var(--blue-primary);
+            color: white;
         }
 
-        .status-inactive {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: var(--loss-color);
-            border: 2px solid var(--loss-color);
+        .filter-btn:hover {
+            background: var(--blue-primary);
+            color: white;
+        }
+
+        .chart-container {
+            background: var(--bg-card);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            height: 400px;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
             margin-bottom: 20px;
         }
 
@@ -138,7 +151,7 @@
         }
 
         .stat-label {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: var(--gray-light);
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -147,24 +160,29 @@
         }
 
         .stat-value {
-            font-size: 1.3rem;
+            font-size: 1.1rem;
             font-weight: 700;
+        }
+
+        .stat-secondary {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 4px;
         }
 
         .profit { color: var(--profit-color) !important; }
         .loss { color: var(--loss-color) !important; }
         .neutral { color: var(--gray-light) !important; }
 
-        .table-container {
+        .coin-performance {
             background: var(--bg-card);
             border-radius: 15px;
             padding: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border: 1px solid var(--border-color);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
-        .table-title {
+        .section-title {
             color: var(--text-light);
             font-size: 1.3rem;
             font-weight: 600;
@@ -174,47 +192,66 @@
             gap: 10px;
         }
 
-        .custom-table {
-            background: transparent;
+        .coin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .coin-item {
+            background: rgba(52, 152, 219, 0.05);
+            border: 1px solid var(--blue-primary);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .coin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .coin-symbol {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--blue-primary);
+        }
+
+        .coin-trades {
+            font-size: 0.9rem;
+            color: var(--gray-light);
+        }
+
+        .coin-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .coin-stat {
+            text-align: center;
+        }
+
+        .coin-stat-label {
+            font-size: 0.7rem;
+            color: var(--gray-light);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .coin-stat-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .alert-info {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid var(--blue-primary);
             color: var(--text-light);
             border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin-bottom: 0;
-        }
-
-        .custom-table thead {
-            background: #3498db !important;
-        }
-
-        .custom-table th {
-            border: none !important;
-            padding: 15px 12px !important;
-            font-weight: 600 !important;
-            text-transform: uppercase !important;
-            font-size: 0.85rem !important;
-            letter-spacing: 0.5px !important;
-            color: var(--text-light) !important;
-            background: #3498db !important;
-        }
-
-        .custom-table td {
-            border: none;
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-        }
-
-        .custom-table tbody tr {
-            transition: background-color 0.2s ease;
-        }
-
-        .custom-table tbody tr:hover {
-            background-color: rgba(52, 152, 219, 0.1);
-        }
-
-        .custom-table tbody tr:last-child td {
-            border-bottom: none;
         }
 
         .footer-timestamp {
@@ -233,38 +270,6 @@
         .icon-blue { color: var(--blue-primary); }
         .icon-gray { color: var(--gray-light); }
 
-        .loading-spinner {
-            text-align: center;
-            padding: 40px;
-            color: var(--gray-light);
-        }
-
-        .alert-info {
-            background: rgba(52, 152, 219, 0.1);
-            border: 1px solid var(--blue-primary);
-            color: var(--text-light);
-            border-radius: 10px;
-        }
-
-        .trade-badge {
-            padding: 4px 8px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .trade-win {
-            background-color: rgba(40, 167, 69, 0.2);
-            color: var(--profit-color);
-            border: 1px solid var(--profit-color);
-        }
-
-        .trade-loss {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: var(--loss-color);
-            border: 1px solid var(--loss-color);
-        }
-
         /* Responsive Design */
         @media (max-width: 768px) {
             .dashboard-container {
@@ -277,8 +282,8 @@
             }
 
             .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                gap: 15px;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 10px;
             }
 
             .account-header {
@@ -287,13 +292,13 @@
                 text-align: center;
             }
 
-            .table-responsive {
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
+            .coin-grid {
+                grid-template-columns: 1fr;
             }
 
-            .custom-table {
-                min-width: 600px;
+            .time-filter {
+                flex-wrap: wrap;
+                justify-content: center;
             }
         }
     </style>
@@ -306,7 +311,7 @@
             <h1 class="header-title">
                 <i class="fas fa-users me-3"></i>Subaccount Details
             </h1>
-            <p class="header-subtitle">Detaillierte Trading-Statistiken Ihrer Subaccounts</p>
+            <p class="header-subtitle">Detaillierte Trading-Statistiken und Performance-Analyse</p>
             
             <!-- Navigation Buttons -->
             <div class="btn-group mt-4" role="group">
@@ -322,110 +327,90 @@
         {% if account_details %}
             {% for account in account_details %}
             <!-- Account Card -->
-            <div class="account-card">
+            <div class="account-card" id="account-{{ loop.index }}">
                 <div class="account-header">
                     <h3 class="account-name">
                         <i class="fas fa-chart-line me-2 icon-blue"></i>{{ account.name }}
                     </h3>
-                    <div class="account-status {% if account.has_data %}status-active{% else %}status-inactive{% endif %}">
-                        {% if account.has_data %}
-                            <i class="fas fa-check-circle me-1"></i>Aktiv
-                        {% else %}
-                            <i class="fas fa-times-circle me-1"></i>Keine Daten
-                        {% endif %}
-                    </div>
                 </div>
 
                 {% if account.has_data %}
+                <!-- Time Filter -->
+                <div class="time-filter">
+                    <button class="filter-btn active" onclick="filterTimeframe({{ loop.index }}, 'all')">
+                        <i class="fas fa-infinity me-1"></i>Gesamt
+                    </button>
+                    <button class="filter-btn" onclick="filterTimeframe({{ loop.index }}, '30')">
+                        <i class="fas fa-calendar-alt me-1"></i>30 Tage
+                    </button>
+                    <button class="filter-btn" onclick="filterTimeframe({{ loop.index }}, '7')">
+                        <i class="fas fa-calendar-week me-1"></i>7 Tage
+                    </button>
+                </div>
+
+                <!-- Equity Curve Chart -->
+                <div class="chart-container">
+                    <canvas id="equityChart-{{ loop.index }}"></canvas>
+                </div>
+
                 <!-- Statistics Grid -->
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-label">Gesamte Trades</div>
-                        <div class="stat-value neutral">{{ account.total_trades }}</div>
+                        <div class="stat-value neutral" id="totalTrades-{{ loop.index }}">{{ account.total_trades }}</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Win Rate</div>
-                        <div class="stat-value {% if account.win_rate >= 50 %}profit{% else %}loss{% endif %}">
+                        <div class="stat-value {% if account.win_rate >= 50 %}profit{% else %}loss{% endif %}" id="winRate-{{ loop.index }}">
                             {{ "%.1f"|format(account.win_rate) }}%
                         </div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Gesamter PnL</div>
-                        <div class="stat-value {% if account.total_pnl >= 0 %}profit{% else %}loss{% endif %}">
+                        <div class="stat-value {% if account.total_pnl >= 0 %}profit{% else %}loss{% endif %}" id="totalPnl-{{ loop.index }}">
                             ${{ "%.2f"|format(account.total_pnl) }}
+                        </div>
+                        <div class="stat-secondary" id="totalPnlPercent-{{ loop.index }}">
+                            {% set start_capital = startkapital.get(account.name, 1000) %}
+                            {% set pnl_percent = (account.total_pnl / start_capital * 100) if start_capital > 0 else 0 %}
+                            {{ "%.2f"|format(pnl_percent) }}%
                         </div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Profit Factor</div>
-                        <div class="stat-value {% if account.profit_factor >= 1.0 %}profit{% else %}loss{% endif %}">
+                        <div class="stat-value {% if account.profit_factor >= 1.0 %}profit{% else %}loss{% endif %}" id="profitFactor-{{ loop.index }}">
                             {{ "%.2f"|format(account.profit_factor) if account.profit_factor < 999 else '∞' }}
                         </div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Durchschn. Trade</div>
-                        <div class="stat-value {% if account.avg_trade >= 0 %}profit{% else %}loss{% endif %}">
+                        <div class="stat-value {% if account.avg_trade >= 0 %}profit{% else %}loss{% endif %}" id="avgTrade-{{ loop.index }}">
                             ${{ "%.2f"|format(account.avg_trade) }}
                         </div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-label">Max Drawdown</div>
-                        <div class="stat-value loss">
+                        <div class="stat-value loss" id="maxDrawdown-{{ loop.index }}">
                             ${{ "%.2f"|format(account.max_drawdown) }}
+                        </div>
+                        <div class="stat-secondary" id="maxDrawdownPercent-{{ loop.index }}">
+                            {% set dd_percent = (account.max_drawdown / start_capital * 100) if start_capital > 0 else 0 %}
+                            {{ "%.2f"|format(dd_percent) }}%
                         </div>
                     </div>
                 </div>
 
-                <!-- Recent Trades Table -->
-                <div class="table-container">
-                    <h5 class="table-title">
-                        <i class="fas fa-history icon-blue"></i>
-                        Letzte 10 Trades
+                <!-- Coin Performance Section -->
+                <div class="coin-performance">
+                    <h5 class="section-title">
+                        <i class="fas fa-coins icon-blue"></i>
+                        Performance nach Coins
                     </h5>
-                    <div class="table-responsive">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Datum</th>
-                                    <th>Side</th>
-                                    <th>Größe</th>
-                                    <th>Einstieg</th>
-                                    <th>Ausstieg</th>
-                                    <th>PnL</th>
-                                    <th>Ergebnis</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for trade in account.recent_trades %}
-                                <tr>
-                                    <td><strong>{{ trade.symbol }}</strong></td>
-                                    <td>{{ trade.date }}</td>
-                                    <td>
-                                        {% if trade.side == 'Buy' %}
-                                            <span class="trade-badge profit" style="background-color: rgba(40, 167, 69, 0.2);">Long</span>
-                                        {% else %}
-                                            <span class="trade-badge loss" style="background-color: rgba(220, 53, 69, 0.2);">Short</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="neutral">{{ trade.size }}</td>
-                                    <td class="neutral">${{ "%.4f"|format(trade.entry_price) }}</td>
-                                    <td class="neutral">${{ "%.4f"|format(trade.exit_price) }}</td>
-                                    <td class="{% if trade.pnl >= 0 %}profit{% else %}loss{% endif %}">
-                                        ${{ "%.2f"|format(trade.pnl) }}
-                                    </td>
-                                    <td>
-                                        {% if trade.pnl >= 0 %}
-                                            <span class="trade-badge trade-win">Gewinn</span>
-                                        {% else %}
-                                            <span class="trade-badge trade-loss">Verlust</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="coin-grid" id="coinGrid-{{ loop.index }}">
+                        <!-- Coin performance will be generated by JavaScript -->
                     </div>
                 </div>
+
                 {% else %}
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
@@ -434,9 +419,20 @@
                 </div>
                 {% endif %}
             </div>
+
+            <!-- Store account data for JavaScript -->
+            <script type="application/json" id="accountData-{{ loop.index }}">
+                {{ account | tojson }}
+            </script>
             {% endfor %}
+
+            <!-- Store startkapital data for JavaScript -->
+            <script type="application/json" id="startkapitalData">
+                {{ startkapital | tojson }}
+            </script>
+
         {% else %}
-        <div class="loading-spinner">
+        <div class="text-center py-5">
             <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
             <p>Lade Subaccount-Daten...</p>
         </div>
@@ -448,6 +444,339 @@
         <i class="fas fa-clock me-2"></i>
         Letztes Update: {{ now }}
     </div>
+
+    <script>
+        // Global variables
+        let accountCharts = {};
+        let accountData = {};
+        let startkapitalData = {};
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load startkapital data
+            const startkapitalElement = document.getElementById('startkapitalData');
+            if (startkapitalElement) {
+                startkapitalData = JSON.parse(startkapitalElement.textContent);
+            }
+
+            // Load each account's data and create charts
+            {% for account in account_details %}
+            {% if account.has_data %}
+            loadAccountData({{ loop.index }});
+            {% endif %}
+            {% endfor %}
+        });
+
+        function loadAccountData(accountIndex) {
+            const dataElement = document.getElementById(`accountData-${accountIndex}`);
+            if (!dataElement) return;
+
+            const data = JSON.parse(dataElement.textContent);
+            accountData[accountIndex] = data;
+
+            // Create equity curve chart
+            createEquityChart(accountIndex, data);
+            
+            // Generate coin performance
+            generateCoinPerformance(accountIndex, data);
+        }
+
+        function createEquityChart(accountIndex, data) {
+            const ctx = document.getElementById(`equityChart-${accountIndex}`);
+            if (!ctx) return;
+
+            // Generate equity curve data from trades
+            const equityData = generateEquityData(data.recent_trades);
+            
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: equityData.labels,
+                    datasets: [{
+                        label: 'Equity Curve',
+                        data: equityData.values,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1
+                    }, {
+                        label: 'Peak',
+                        data: equityData.peaks,
+                        borderColor: '#28a745',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Equity Curve & Drawdown',
+                            color: '#ffffff',
+                            font: { size: 16 }
+                        },
+                        legend: {
+                            labels: { color: '#ffffff' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#bdc3c7' },
+                            grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                        },
+                        y: {
+                            ticks: { 
+                                color: '#bdc3c7',
+                                callback: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                        }
+                    }
+                }
+            });
+
+            accountCharts[accountIndex] = chart;
+        }
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (assuming most recent first, so reverse)
+            const sortedTrades = [...trades].reverse();
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                labels.push(`Trade ${index + 1}`);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container || !data.recent_trades) return;
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            data.recent_trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            Object.entries(coinStats).forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                stats.trades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">$${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">$${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">$${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Filter trades based on timeframe
+            let filteredTrades = data.recent_trades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = data.recent_trades.filter(trade => {
+                    // Simple date filtering - you may need to adjust based on your date format
+                    const tradeDate = new Date(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            trades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '$' + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '$' + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '$' + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+    </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
