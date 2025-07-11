@@ -478,42 +478,615 @@
         let accountData = {};
         let startkapitalData = {};
 
-        // Load data on page load
+        // Load data on page load - ONLY load startkapital, NOT account data
         document.addEventListener('DOMContentLoaded', function() {
-            // Load startkapital data
+            console.log('Page loaded - NO automatic data loading');
+            
+            // Load startkapital data only
             const startkapitalElement = document.getElementById('startkapitalData');
             if (startkapitalElement) {
-                startkapitalData = JSON.parse(startkapitalElement.textContent);
+                try {
+                    startkapitalData = JSON.parse(startkapitalElement.textContent);
+                    console.log('Startkapital data loaded:', startkapitalData);
+                } catch (e) {
+                    console.error('Error parsing startkapital data:', e);
+                    startkapitalData = {};
+                }
+            } else {
+                console.warn('No startkapital data found');
+                startkapitalData = {};
             }
 
-            // Load each account's data and create charts
-            {% for account in account_details %}
-            {% if account.has_data %}
-            loadAccountData({{ loop.index }});
-            {% endif %}
-            {% endfor %}
+            // NO automatic account data loading!
+            console.log('Ready for manual data refresh via button');
         });
 
         function loadAccountData(accountIndex) {
+            console.log(`Loading data for account ${accountIndex}`);
             const dataElement = document.getElementById(`accountData-${accountIndex}`);
-            if (!dataElement) return;
+            if (!dataElement) {
+                console.error(`No data element found for account ${accountIndex}`);
+                return;
+            }
 
-            const data = JSON.parse(dataElement.textContent);
-            accountData[accountIndex] = data;
+            try {
+                const data = JSON.parse(dataElement.textContent);
+                console.log(`Account ${accountIndex} data:`, data);
+                accountData[accountIndex] = data;
 
-            // Create equity curve chart
-            createEquityChart(accountIndex, data);
-            
-            // Generate coin performance
-            generateCoinPerformance(accountIndex, data);
+                // Ensure we have trades data
+                if (!data.all_trades && !data.recent_trades) {
+                    console.warn(`No trades data for account ${accountIndex}`);
+                    return;
+                }
+
+                // Create equity curve chart
+                createEquityChart(accountIndex, data);
+                
+                // Generate coin performance
+                generateCoinPerformance(accountIndex, data);
+                
+                console.log(`Successfully loaded account ${accountIndex}`);
+            } catch (e) {
+                console.error(`Error loading account ${accountIndex}:`, e);
+            }
         }
 
         function createEquityChart(accountIndex, data) {
+            console.log(`Creating equity chart for account ${accountIndex}`);
             const ctx = document.getElementById(`equityChart-${accountIndex}`);
-            if (!ctx) return;
+            if (!ctx) {
+                console.error(`No chart canvas found for account ${accountIndex}`);
+                return;
+            }
 
             // Generate equity curve data from trades
-            const equityData = generateEquityData(data.recent_trades);
+            const trades = data.all_trades || data.recent_trades || [];
+            console.log(`Account ${accountIndex} has ${trades.length} trades`);
+            
+            if (trades.length === 0) {
+                console.warn(`No trades to chart for account ${accountIndex}`);
+                // Create empty chart
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['No Data'],
+                        datasets: [{
+                            label: 'Equity Curve',
+                            data: [0],
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Keine Daten verfügbar',
+                                color: '#ffffff',
+                                font: { size: 16 }
+                            },
+                            legend: {
+                                labels: { color: '#ffffff' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#bdc3c7' },
+                                grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                            },
+                            y: {
+                                ticks: { 
+                                    color: '#bdc3c7',
+                                    callback: function(value) {
+                                        return '
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (convert date strings to comparable format)
+            const sortedTrades = [...trades].sort((a, b) => {
+                // Parse dates - adjust format based on your date format
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                // Use actual date or trade number for label
+                const label = trade.date && trade.date !== 'N/A' ? 
+                    formatDateForChart(trade.date) : `Trade ${index + 1}`;
+                
+                labels.push(label);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function parseDateString(dateStr) {
+            if (!dateStr || dateStr === 'N/A') {
+                return new Date(0); // Fallback date
+            }
+            
+            // Handle different date formats
+            // Format: "20:40 2025-07-09" or similar
+            if (dateStr.includes(' ')) {
+                const parts = dateStr.split(' ');
+                if (parts.length >= 2) {
+                    const datePart = parts[1]; // "2025-07-09"
+                    return new Date(datePart);
+                }
+            }
+            
+            // Try direct parsing
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function formatDateForChart(dateStr) {
+            const date = parseDateString(dateStr);
+            if (date.getTime() === 0) return dateStr;
+            
+            return date.toLocaleDateString('de-DE', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container) return;
+
+            // Use all trades or filtered trades
+            const trades = data.all_trades || data.recent_trades || [];
+            if (trades.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">Keine Trades im gewählten Zeitraum</div>';
+                return;
+            }
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            // Sort coins by total PnL (descending)
+            const sortedCoins = Object.entries(coinStats).sort((a, b) => b[1].totalPnL - a[1].totalPnL);
+            
+            sortedCoins.forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                // Sort trades by date for proper drawdown calculation
+                const sortedTrades = [...stats.trades].sort((a, b) => {
+                    const dateA = parseDateString(a.date);
+                    const dateB = parseDateString(b.date);
+                    return dateA - dateB;
+                });
+                
+                sortedTrades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Get ALL trades for this account (not just recent_trades limited to 10)
+            let allTrades = data.all_trades || data.recent_trades; // Use all_trades if available
+            let filteredTrades = allTrades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = allTrades.filter(trade => {
+                    const tradeDate = parseDateString(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades,
+                all_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.all_trades || data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown with proper date sorting
+            const sortedTrades = [...trades].sort((a, b) => {
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            sortedTrades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+
+        // New function for refreshing data
+        async function refreshAccountData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            const initialState = document.getElementById('initialState');
+            const accountsContainer = document.getElementById('accountsContainer');
+            
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aktualisiere...';
+            
+            try {
+                // Force refresh by adding timestamp parameter
+                console.log('Fetching fresh data from API...');
+                const response = await fetch(`/account-details-data?t=${Date.now()}`);
+                
+                if (response.ok) {
+                    const accountData = await response.json();
+                    console.log('Fresh data received:', accountData);
+                    
+                    // Hide initial state, show accounts container
+                    if (initialState) initialState.style.display = 'none';
+                    if (accountsContainer) accountsContainer.style.display = 'block';
+                    
+                    // Clear existing content
+                    accountsContainer.innerHTML = '';
+                    
+                    // Generate HTML for each account
+                    accountData.forEach((account, index) => {
+                        const accountIndex = index + 1;
+                        
+                        if (account.has_data) {
+                            // Create account card HTML
+                            const accountHTML = createAccountHTML(account, accountIndex);
+                            accountsContainer.insertAdjacentHTML('beforeend', accountHTML);
+                            
+                            // Store data for JavaScript
+                            const dataScript = document.createElement('script');
+                            dataScript.type = 'application/json';
+                            dataScript.id = `accountData-${accountIndex}`;
+                            dataScript.textContent = JSON.stringify({
+                                name: account.name,
+                                has_data: account.has_data,
+                                total_trades: account.total_trades,
+                                win_rate: account.win_rate,
+                                total_pnl: account.total_pnl,
+                                profit_factor: account.profit_factor,
+                                avg_trade: account.avg_trade,
+                                max_drawdown: account.max_drawdown,
+                                recent_trades: account.recent_trades,
+                                all_trades: account.all_trades || account.recent_trades
+                            });
+                            document.head.appendChild(dataScript);
+                            
+                            // Load account data and create charts
+                            setTimeout(() => {
+                                loadAccountData(accountIndex);
+                            }, 100 * index); // Stagger loading to avoid overwhelming
+                        }
+                    });
+                    
+                    // Show success message
+                    refreshBtn.innerHTML = '<i class="fas fa-check me-2"></i>Aktualisiert!';
+                    refreshBtn.className = 'btn btn-success';
+                    
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalText;
+                        refreshBtn.className = 'btn btn-success';
+                        refreshBtn.disabled = false;
+                    }, 2000);
+                    
+                } else {
+                    throw new Error('Failed to fetch data');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                
+                // Show error state
+                refreshBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Fehler';
+                refreshBtn.className = 'btn btn-danger';
+                
+                setTimeout(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.className = 'btn btn-success';
+                    refreshBtn.disabled = false;
+                }, 3000);
+            }
+        }
+
+        function createAccountHTML(account, accountIndex) {
+            const startCapital = startkapitalData[account.name] || 1000;
+            const pnlPercent = (account.total_pnl / startCapital * 100);
+            const ddPercent = (account.max_drawdown / startCapital * 100);
+            
+            return `
+                <div class="account-card" id="account-${accountIndex}">
+                    <div class="account-header">
+                        <h3 class="account-name">
+                            <i class="fas fa-chart-line me-2 icon-blue"></i>${account.name}
+                        </h3>
+                    </div>
+
+                    <div class="time-filter">
+                        <button class="filter-btn active" onclick="filterTimeframe(${accountIndex}, 'all')">
+                            <i class="fas fa-infinity me-1"></i>Gesamt
+                        </button>
+                        <button class="filter-btn" onclick="filterTimeframe(${accountIndex}, '30')">
+                            <i class="fas fa-calendar-alt me-1"></i>30 Tage
+                        </button>
+                        <button class="filter-btn" onclick="filterTimeframe(${accountIndex}, '7')">
+                            <i class="fas fa-calendar-week me-1"></i>7 Tage
+                        </button>
+                    </div>
+
+                    <div class="chart-container">
+                        <canvas id="equityChart-${accountIndex}"></canvas>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-label">Gesamte Trades</div>
+                            <div class="stat-value neutral" id="totalTrades-${accountIndex}">${account.total_trades}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Win Rate</div>
+                            <div class="stat-value ${account.win_rate >= 50 ? 'profit' : 'loss'}" id="winRate-${accountIndex}">
+                                ${account.win_rate.toFixed(1)}%
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Gesamter PnL</div>
+                            <div class="stat-value ${account.total_pnl >= 0 ? 'profit' : 'loss'}" id="totalPnl-${accountIndex}">
+                                ${account.total_pnl.toFixed(2)}
+                            </div>
+                            <div class="stat-secondary" id="totalPnlPercent-${accountIndex}">
+                                ${pnlPercent.toFixed(2)}%
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Profit Factor</div>
+                            <div class="stat-value ${account.profit_factor >= 1.0 ? 'profit' : 'loss'}" id="profitFactor-${accountIndex}">
+                                ${account.profit_factor < 999 ? account.profit_factor.toFixed(2) : '∞'}
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Durchschn. Trade</div>
+                            <div class="stat-value ${account.avg_trade >= 0 ? 'profit' : 'loss'}" id="avgTrade-${accountIndex}">
+                                ${account.avg_trade.toFixed(2)}
+                            </div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Max Drawdown</div>
+                            <div class="stat-value loss" id="maxDrawdown-${accountIndex}">
+                                ${account.max_drawdown.toFixed(2)}
+                            </div>
+                            <div class="stat-secondary" id="maxDrawdownPercent-${accountIndex}">
+                                ${ddPercent.toFixed(2)}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="coin-performance">
+                        <h5 class="section-title">
+                            <i class="fas fa-coins icon-blue"></i>
+                            Performance nach Coins
+                        </h5>
+                        <div class="coin-grid" id="coinGrid-${accountIndex}">
+                            <!-- Coin performance will be generated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + value.toFixed(2);
+                                    }
+                                },
+                                grid: { color: 'rgba(189, 195, 199, 0.1)' }
+                            }
+                        }
+                    }
+                });
+                accountCharts[accountIndex] = chart;
+                return;
+            }
+            
+            const equityData = generateEquityData(trades);
+            console.log(`Generated equity data for account ${accountIndex}:`, equityData);
             
             const chart = new Chart(ctx, {
                 type: 'line',
@@ -561,7 +1134,388 @@
                             ticks: { 
                                 color: '#bdc3c7',
                                 callback: function(value) {
-                                    return '$' + value.toFixed(2);
+                                    return '
+
+        function generateEquityData(trades) {
+            if (!trades || trades.length === 0) {
+                return { labels: [], values: [], peaks: [] };
+            }
+
+            // Sort trades by date (convert date strings to comparable format)
+            const sortedTrades = [...trades].sort((a, b) => {
+                // Parse dates - adjust format based on your date format
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+            
+            const labels = [];
+            const values = [];
+            const peaks = [];
+            
+            let runningPnL = 0;
+            let peak = 0;
+            
+            // Add starting point
+            labels.push('Start');
+            values.push(0);
+            peaks.push(0);
+            
+            sortedTrades.forEach((trade, index) => {
+                runningPnL += trade.pnl;
+                
+                if (runningPnL > peak) {
+                    peak = runningPnL;
+                }
+                
+                // Use actual date or trade number for label
+                const label = trade.date && trade.date !== 'N/A' ? 
+                    formatDateForChart(trade.date) : `Trade ${index + 1}`;
+                
+                labels.push(label);
+                values.push(runningPnL);
+                peaks.push(peak);
+            });
+            
+            return { labels, values, peaks };
+        }
+
+        function parseDateString(dateStr) {
+            if (!dateStr || dateStr === 'N/A') {
+                return new Date(0); // Fallback date
+            }
+            
+            // Handle different date formats
+            // Format: "20:40 2025-07-09" or similar
+            if (dateStr.includes(' ')) {
+                const parts = dateStr.split(' ');
+                if (parts.length >= 2) {
+                    const datePart = parts[1]; // "2025-07-09"
+                    return new Date(datePart);
+                }
+            }
+            
+            // Try direct parsing
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function formatDateForChart(dateStr) {
+            const date = parseDateString(dateStr);
+            if (date.getTime() === 0) return dateStr;
+            
+            return date.toLocaleDateString('de-DE', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function generateCoinPerformance(accountIndex, data) {
+            const container = document.getElementById(`coinGrid-${accountIndex}`);
+            if (!container) return;
+
+            // Use all trades or filtered trades
+            const trades = data.all_trades || data.recent_trades || [];
+            if (trades.length === 0) {
+                container.innerHTML = '<div class="text-center text-muted">Keine Trades im gewählten Zeitraum</div>';
+                return;
+            }
+
+            // Group trades by symbol
+            const coinStats = {};
+            
+            trades.forEach(trade => {
+                const symbol = trade.symbol;
+                if (!coinStats[symbol]) {
+                    coinStats[symbol] = {
+                        trades: [],
+                        totalPnL: 0,
+                        wins: 0,
+                        losses: 0,
+                        totalProfit: 0,
+                        totalLoss: 0
+                    };
+                }
+                
+                coinStats[symbol].trades.push(trade);
+                coinStats[symbol].totalPnL += trade.pnl;
+                
+                if (trade.pnl > 0) {
+                    coinStats[symbol].wins++;
+                    coinStats[symbol].totalProfit += trade.pnl;
+                } else {
+                    coinStats[symbol].losses++;
+                    coinStats[symbol].totalLoss += Math.abs(trade.pnl);
+                }
+            });
+
+            // Generate HTML for each coin
+            container.innerHTML = '';
+            
+            // Sort coins by total PnL (descending)
+            const sortedCoins = Object.entries(coinStats).sort((a, b) => b[1].totalPnL - a[1].totalPnL);
+            
+            sortedCoins.forEach(([symbol, stats]) => {
+                const totalTrades = stats.trades.length;
+                const winRate = (stats.wins / totalTrades * 100).toFixed(1);
+                const profitFactor = stats.totalLoss > 0 ? (stats.totalProfit / stats.totalLoss).toFixed(2) : '∞';
+                const avgTrade = (stats.totalPnL / totalTrades).toFixed(2);
+                
+                // Calculate drawdown for this coin
+                let runningPnL = 0;
+                let peak = 0;
+                let maxDrawdown = 0;
+                
+                // Sort trades by date for proper drawdown calculation
+                const sortedTrades = [...stats.trades].sort((a, b) => {
+                    const dateA = parseDateString(a.date);
+                    const dateB = parseDateString(b.date);
+                    return dateA - dateB;
+                });
+                
+                sortedTrades.forEach(trade => {
+                    runningPnL += trade.pnl;
+                    if (runningPnL > peak) peak = runningPnL;
+                    const drawdown = peak - runningPnL;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                });
+
+                const startCapital = startkapitalData[data.name] || 1000;
+                const pnlPercent = (stats.totalPnL / startCapital * 100).toFixed(2);
+                const drawdownPercent = (maxDrawdown / startCapital * 100).toFixed(2);
+
+                const coinElement = document.createElement('div');
+                coinElement.className = 'coin-item';
+                coinElement.innerHTML = `
+                    <div class="coin-header">
+                        <div class="coin-symbol">${symbol}</div>
+                        <div class="coin-trades">${totalTrades} Trades</div>
+                    </div>
+                    <div class="coin-stats">
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Win Rate</div>
+                            <div class="coin-stat-value ${winRate >= 50 ? 'profit' : 'loss'}">${winRate}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">PnL</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}">${stats.totalPnL.toFixed(2)}</div>
+                            <div class="coin-stat-value ${stats.totalPnL >= 0 ? 'profit' : 'loss'}" style="font-size: 0.8rem;">${pnlPercent}%</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Profit Factor</div>
+                            <div class="coin-stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}">${profitFactor}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Avg Trade</div>
+                            <div class="coin-stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}">${avgTrade}</div>
+                        </div>
+                        <div class="coin-stat">
+                            <div class="coin-stat-label">Max DD</div>
+                            <div class="coin-stat-value loss">${maxDrawdown.toFixed(2)}</div>
+                            <div class="coin-stat-value loss" style="font-size: 0.8rem;">${drawdownPercent}%</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(coinElement);
+            });
+        }
+
+        function filterTimeframe(accountIndex, timeframe) {
+            // Update active button
+            const accountCard = document.getElementById(`account-${accountIndex}`);
+            const buttons = accountCard.querySelectorAll('.filter-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Get account data
+            const data = accountData[accountIndex];
+            if (!data) return;
+
+            // Get ALL trades for this account (not just recent_trades limited to 10)
+            let allTrades = data.all_trades || data.recent_trades; // Use all_trades if available
+            let filteredTrades = allTrades;
+            
+            if (timeframe !== 'all') {
+                const days = parseInt(timeframe);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                
+                filteredTrades = allTrades.filter(trade => {
+                    const tradeDate = parseDateString(trade.date);
+                    return tradeDate >= cutoffDate;
+                });
+            }
+
+            // Recalculate stats for filtered timeframe
+            const filteredData = {
+                ...data,
+                recent_trades: filteredTrades,
+                all_trades: filteredTrades
+            };
+
+            // Update chart
+            if (accountCharts[accountIndex]) {
+                const equityData = generateEquityData(filteredTrades);
+                accountCharts[accountIndex].data.labels = equityData.labels;
+                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                accountCharts[accountIndex].update();
+            }
+
+            // Update stats
+            updateAccountStats(accountIndex, filteredData);
+            
+            // Update coin performance
+            generateCoinPerformance(accountIndex, filteredData);
+        }
+
+        function updateAccountStats(accountIndex, data) {
+            const trades = data.all_trades || data.recent_trades;
+            if (!trades || trades.length === 0) return;
+
+            const totalTrades = trades.length;
+            const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+            const wins = trades.filter(trade => trade.pnl > 0).length;
+            const winRate = (wins / totalTrades * 100);
+            
+            const profits = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
+            const losses = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
+            const profitFactor = losses > 0 ? profits / losses : 999;
+            
+            const avgTrade = totalPnL / totalTrades;
+            
+            // Calculate max drawdown with proper date sorting
+            const sortedTrades = [...trades].sort((a, b) => {
+                const dateA = parseDateString(a.date);
+                const dateB = parseDateString(b.date);
+                return dateA - dateB;
+            });
+
+            let runningPnL = 0;
+            let peak = 0;
+            let maxDrawdown = 0;
+            
+            sortedTrades.forEach(trade => {
+                runningPnL += trade.pnl;
+                if (runningPnL > peak) peak = runningPnL;
+                const drawdown = peak - runningPnL;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            });
+
+            const startCapital = startkapitalData[data.name] || 1000;
+            const pnlPercent = (totalPnL / startCapital * 100);
+            const drawdownPercent = (maxDrawdown / startCapital * 100);
+
+            // Update DOM elements
+            document.getElementById(`totalTrades-${accountIndex}`).textContent = totalTrades;
+            document.getElementById(`winRate-${accountIndex}`).textContent = winRate.toFixed(1) + '%';
+            document.getElementById(`totalPnl-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + totalPnL.toFixed(2);
+            document.getElementById(`totalPnlPercent-${accountIndex}`).textContent = pnlPercent.toFixed(2) + '%';
+            document.getElementById(`profitFactor-${accountIndex}`).textContent = profitFactor < 999 ? profitFactor.toFixed(2) : '∞';
+            document.getElementById(`avgTrade-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + avgTrade.toFixed(2);
+            document.getElementById(`maxDrawdown-${accountIndex}`).textContent = '
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + maxDrawdown.toFixed(2);
+            document.getElementById(`maxDrawdownPercent-${accountIndex}`).textContent = drawdownPercent.toFixed(2) + '%';
+
+            // Update colors
+            const winRateEl = document.getElementById(`winRate-${accountIndex}`);
+            winRateEl.className = `stat-value ${winRate >= 50 ? 'profit' : 'loss'}`;
+            
+            const pnlEl = document.getElementById(`totalPnl-${accountIndex}`);
+            pnlEl.className = `stat-value ${totalPnL >= 0 ? 'profit' : 'loss'}`;
+            
+            const pfEl = document.getElementById(`profitFactor-${accountIndex}`);
+            pfEl.className = `stat-value ${profitFactor >= 1 ? 'profit' : 'loss'}`;
+            
+            const avgEl = document.getElementById(`avgTrade-${accountIndex}`);
+            avgEl.className = `stat-value ${avgTrade >= 0 ? 'profit' : 'loss'}`;
+        }
+
+        // New function for refreshing data
+        async function refreshAccountData() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            const originalText = refreshBtn.innerHTML;
+            
+            // Show loading state
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Aktualisiere...';
+            
+            try {
+                // Force refresh by adding timestamp parameter
+                const response = await fetch(`/account-details-data?t=${Date.now()}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update account data
+                    data.forEach((account, index) => {
+                        const accountIndex = index + 1;
+                        accountData[accountIndex] = account;
+                        
+                        if (account.has_data) {
+                            // Update charts and statistics
+                            if (accountCharts[accountIndex]) {
+                                const equityData = generateEquityData(account.all_trades || account.recent_trades);
+                                accountCharts[accountIndex].data.labels = equityData.labels;
+                                accountCharts[accountIndex].data.datasets[0].data = equityData.values;
+                                accountCharts[accountIndex].data.datasets[1].data = equityData.peaks;
+                                accountCharts[accountIndex].update();
+                            }
+                            
+                            // Update statistics
+                            updateAccountStats(accountIndex, account);
+                            
+                            // Update coin performance
+                            generateCoinPerformance(accountIndex, account);
+                        }
+                    });
+                    
+                    // Show success message
+                    refreshBtn.innerHTML = '<i class="fas fa-check me-2"></i>Aktualisiert!';
+                    refreshBtn.className = 'btn btn-success';
+                    
+                    setTimeout(() => {
+                        refreshBtn.innerHTML = originalText;
+                        refreshBtn.disabled = false;
+                    }, 2000);
+                    
+                } else {
+                    throw new Error('Failed to fetch data');
+                }
+                
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                
+                // Show error state
+                refreshBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Fehler';
+                refreshBtn.className = 'btn btn-danger';
+                
+                setTimeout(() => {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.className = 'btn btn-success';
+                    refreshBtn.disabled = false;
+                }, 3000);
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> + value.toFixed(2);
                                 }
                             },
                             grid: { color: 'rgba(189, 195, 199, 0.1)' }
@@ -571,6 +1525,7 @@
             });
 
             accountCharts[accountIndex] = chart;
+            console.log(`Chart created successfully for account ${accountIndex}`);
         }
 
         function generateEquityData(trades) {
