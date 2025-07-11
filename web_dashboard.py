@@ -264,26 +264,26 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             except (ValueError, TypeError) as e:
                                 logging.debug(f"Fehler beim Parsen von PnL: {e}")
                     else:
-                        # Logik für Blofin-Sheet bleibt gleich
+                        # Logik für Blofin-Sheet - erweiterte PnL-Suche
                         pnl_columns = [
                             'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
                             'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
-                            'Ergebnis', 'ergebnis', 'Result', 'result'
+                            'Ergebnis', 'ergebnis', 'Result', 'result', 'Realized P&L', 'realized_pnl'
                         ]
                         
                         for col in pnl_columns:
-                            if col in record and record[col] != '' and record[col] is not None:
+                            if col in record and record[col] != '' and record[col] is not None and record[col] != '--':
                                 try:
                                     clean_value = clean_numeric_value(record[col])
                                     if clean_value and clean_value != '0':
                                         pnl_value = float(clean_value)
-                                        logging.debug(f"PnL gefunden in Spalte '{col}': {pnl_value}")
+                                        logging.debug(f"Blofin PnL gefunden in Spalte '{col}': {pnl_value}")
                                         break
                                 except (ValueError, TypeError) as e:
-                                    logging.debug(f"Fehler beim Parsen von PnL in Spalte '{col}': {e}")
+                                    logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
                                     continue
                     
-                    # Symbol extrahieren - KORRIGIERT FÜR BYBIT SHEETS
+                    # Symbol extrahieren - KORRIGIERT FÜR BYBIT UND BLOFIN SHEETS
                     symbol = 'N/A'
                     
                     if sheet_name != "Blofin-7-Tage":
@@ -296,13 +296,21 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 if symbol:
                                     logging.debug(f"Symbol aus 'Contracts' extrahiert: {symbol}")
                     else:
-                        # Für Blofin-Sheet: Verwende "Underlying Asset"
-                        if 'Underlying Asset' in record and record['Underlying Asset'] is not None:
-                            asset_value = str(record['Underlying Asset']).strip()
-                            if asset_value:
-                                symbol = asset_value.replace('USDT', '').strip()
-                                if symbol:
-                                    logging.debug(f"Symbol aus 'Underlying Asset' extrahiert: {symbol}")
+                        # Für Blofin-Sheet: Verwende "Underlying Asset" oder andere Spalten
+                        symbol_columns = [
+                            'Underlying Asset', 'Symbol', 'symbol', 'Asset', 'asset', 'Coin', 'coin',
+                            'Instrument', 'instrument', 'Pair', 'pair', 'Currency', 'currency'
+                        ]
+                        
+                        for col in symbol_columns:
+                            if col in record and record[col] is not None and record[col] != '':
+                                asset_value = str(record[col]).strip()
+                                if asset_value:
+                                    # Bereinige verschiedene Formate
+                                    symbol = asset_value.replace('USDT', '').replace('-USDT', '').replace('PERP', '').strip()
+                                    if symbol:
+                                        logging.debug(f"Blofin Symbol aus '{col}' extrahiert: {symbol}")
+                                        break
                     
                     # Datum extrahieren
                     trade_date = 'N/A'
@@ -397,8 +405,15 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 continue
                     
                     # Trade-Objekt erstellen - KORRIGIERTE BEDINGUNG
-                    # Nur hinzufügen wenn Symbol gefunden wurde UND PnL != 0
-                    if symbol != 'N/A' and pnl_value != 0:
+                    # Für Blofin: Auch Trades ohne PnL berücksichtigen (nur Positionen)
+                    if sheet_name == "Blofin-7-Tage":
+                        # Für Blofin: Symbol muss vorhanden sein, PnL kann 0 sein (offene Positionen)
+                        should_add = symbol != 'N/A'
+                    else:
+                        # Für Bybit: Symbol und PnL müssen vorhanden sein
+                        should_add = (symbol != 'N/A' and pnl_value != 0)
+                    
+                    if should_add:
                         trade = {
                             'symbol': symbol,
                             'date': trade_date,
@@ -415,12 +430,12 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                         if pnl_value > 0:
                             winning_trades += 1
                             total_profit += pnl_value
-                        else:
+                        elif pnl_value < 0:
                             total_loss += abs(pnl_value)
                         
                         logging.debug(f"Trade hinzugefügt: {trade}")
                     else:
-                        logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}")
+                        logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}, Sheet: {sheet_name}")
                     
                 except Exception as e:
                     logging.warning(f"Fehler beim Verarbeiten einer Zeile in {sheet_name}: {e}")
@@ -543,7 +558,7 @@ def save_daily_data(total_balance, total_pnl, gc, spreadsheet):
             for i, record in enumerate(records, start=2):
                 if record.get('Datum') == today:
                     try:
-                        sheet.update(f'B{i}:C{i}', [[total_balance, total_pnl]])
+                        sheet.update(values=[[total_balance, total_pnl]], range_name=f'B{i}:C{i}')
                         logging.info(f"Daten für {today} aktualisiert")
                         return True
                     except gspread.exceptions.APIError as e:
