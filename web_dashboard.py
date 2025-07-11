@@ -156,7 +156,6 @@ def clean_numeric_value(value_str):
     return clean_val if clean_val else "0"
 
 def get_trading_data_from_sheets(gc, spreadsheet):
-    # KORRIGIERTES SHEET MAPPING - Exakte Namen aus Debug-Info
     sheet_mapping = {
         "Incubator": "Incubatorzone",
         "Meme": "Memestrategies", 
@@ -165,8 +164,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
         "Sol": "Solstrategies",
         "Btc": "Btcstrategies",
         "Core": "Corestrategies",
-        "2k-10k": "2k->10k Projekt",    # KORRIGIERT: Sheet heißt "2k-10k"
-        "1k-5k": "1k->5k Projekt",      # KORRIGIERT: Sheet heißt "1k-5k"
+        "2k-10k": "2k->10k Projekt",
+        "1k-5k": "1k->5k Projekt",
         "Claude": "Claude Projekt",
         "Blofin-7-Tage": "7 Tage Performer"
     }
@@ -191,17 +190,14 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'avg_trade': 0,
                     'max_drawdown': 0,
                     'recent_trades': [],
-                    'all_trades': []  # Hinzugefügt für alle Trades
+                    'all_trades': []
                 })
                 continue
             
             try:
                 all_records = worksheet.get_all_records()
                 logging.info(f"Gefunden: {len(all_records)} Datensätze in {sheet_name}")
-                
-                # Rate Limiting - kleine Pause zwischen API-Calls
                 time.sleep(0.5)
-                
             except Exception as e:
                 logging.error(f"Fehler beim Lesen der Daten: {e}")
                 account_details.append({
@@ -214,7 +210,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'avg_trade': 0,
                     'max_drawdown': 0,
                     'recent_trades': [],
-                    'all_trades': []  # Hinzugefügt für alle Trades
+                    'all_trades': []
                 })
                 continue
             
@@ -230,16 +226,14 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     'avg_trade': 0,
                     'max_drawdown': 0,
                     'recent_trades': [],
-                    'all_trades': []  # Hinzugefügt für alle Trades
+                    'all_trades': []
                 })
                 continue
             
-            # Debug: Zeige verfügbare Spalten
             if all_records:
                 available_columns = list(all_records[0].keys())
                 logging.info(f"Verfügbare Spalten in {sheet_name}: {available_columns}")
             
-            # Verarbeite Trading-Daten
             trades = []
             total_pnl = 0
             winning_trades = 0
@@ -250,10 +244,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 try:
                     logging.debug(f"Verarbeite Zeile: {record}")
                     
-                    # PnL-Wert extrahieren - KORRIGIERT FÜR BYBIT SHEETS
                     pnl_value = 0
                     
-                    # Spezifische Logik für Bybit-Sheets (alle außer Blofin)
                     if sheet_name != "Blofin-7-Tage":
                         if 'Realized P&L' in record and record['Realized P&L'] is not None:
                             try:
@@ -264,7 +256,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             except (ValueError, TypeError) as e:
                                 logging.debug(f"Fehler beim Parsen von PnL: {e}")
                     else:
-                        # Logik für Blofin-Sheet - erweiterte PnL-Suche
                         pnl_columns = [
                             'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
                             'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
@@ -283,20 +274,16 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                     logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
                                     continue
                     
-                    # Symbol extrahieren - KORRIGIERT FÜR BYBIT UND BLOFIN SHEETS
                     symbol = 'N/A'
                     
                     if sheet_name != "Blofin-7-Tage":
-                        # Für Bybit-Sheets: Verwende "Contracts" Spalte
                         if 'Contracts' in record and record['Contracts'] is not None:
                             contracts_value = str(record['Contracts']).strip()
                             if contracts_value:
-                                # Entferne USDT und andere Suffixe
                                 symbol = contracts_value.replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
                                 if symbol:
                                     logging.debug(f"Symbol aus 'Contracts' extrahiert: {symbol}")
                     else:
-                        # Für Blofin-Sheet: Verwende "Underlying Asset" oder andere Spalten
                         symbol_columns = [
                             'Underlying Asset', 'Symbol', 'symbol', 'Asset', 'asset', 'Coin', 'coin',
                             'Instrument', 'instrument', 'Pair', 'pair', 'Currency', 'currency'
@@ -306,13 +293,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             if col in record and record[col] is not None and record[col] != '':
                                 asset_value = str(record[col]).strip()
                                 if asset_value:
-                                    # Bereinige verschiedene Formate
                                     symbol = asset_value.replace('USDT', '').replace('-USDT', '').replace('PERP', '').strip()
                                     if symbol:
                                         logging.debug(f"Blofin Symbol aus '{col}' extrahiert: {symbol}")
                                         break
                     
-                    # Datum extrahieren
                     trade_date = 'N/A'
                     date_columns = [
                         'Filled/Settlement Time(UTC+0)', 'Create Time', 'Order Time',
@@ -326,7 +311,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             logging.debug(f"Datum gefunden in Spalte '{col}': {trade_date}")
                             break
                     
-                    # Side extrahieren
                     side = 'N/A'
                     side_columns = [
                         'Trade Type', 'Side', 'side', 'Direction', 'direction', 'Type', 'type',
@@ -345,7 +329,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             logging.debug(f"Side gefunden in Spalte '{col}': {side}")
                             break
                     
-                    # Size extrahieren
                     size = 0
                     size_columns = [
                         'Qty', 'Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'qty',
@@ -364,7 +347,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Size in Spalte '{col}': {e}")
                                 continue
                     
-                    # Entry Price extrahieren
                     entry_price = 0
                     entry_columns = [
                         'Entry Price', 'Avg Fill', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 
@@ -384,7 +366,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Entry Price in Spalte '{col}': {e}")
                                 continue
                     
-                    # Exit Price extrahieren
                     exit_price = 0
                     exit_columns = [
                         'Filled Price', 'Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 
@@ -404,13 +385,9 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Exit Price in Spalte '{col}': {e}")
                                 continue
                     
-                    # Trade-Objekt erstellen - KORRIGIERTE BEDINGUNG
-                    # Für Blofin: Auch Trades ohne PnL berücksichtigen (nur Positionen)
                     if sheet_name == "Blofin-7-Tage":
-                        # Für Blofin: Symbol muss vorhanden sein, PnL kann 0 sein (offene Positionen)
                         should_add = symbol != 'N/A'
                     else:
-                        # Für Bybit: Symbol und PnL müssen vorhanden sein
                         should_add = (symbol != 'N/A' and pnl_value != 0)
                     
                     if should_add:
@@ -442,19 +419,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     logging.debug(f"Problematische Zeile: {record}")
                     continue
             
-            # Statistiken berechnen
             total_trades = len(trades)
             win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
             profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
             avg_trade = total_pnl / total_trades if total_trades > 0 else 0
             
-            # Statistiken berechnen
-            total_trades = len(trades)
-            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-            profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
-            avg_trade = total_pnl / total_trades if total_trades > 0 else 0
-            
-            # Max Drawdown berechnen
             running_pnl = 0
             peak = 0
             max_drawdown = 0
@@ -467,7 +436,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 if drawdown > max_drawdown:
                     max_drawdown = drawdown
             
-            # Letzte 10 Trades für Display
             recent_trades = trades[-10:] if len(trades) >= 10 else trades
             recent_trades.reverse()
             
@@ -499,38 +467,6 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                 'max_drawdown': 0,
                 'recent_trades': [],
                 'all_trades': []
-            })
-    
-    return account_details
-            
-            account_details.append({
-                'name': account_name,
-                'has_data': total_trades > 0,
-                'total_trades': total_trades,
-                'win_rate': win_rate,
-                'total_pnl': total_pnl,
-                'profit_factor': profit_factor,
-                'avg_trade': avg_trade,
-                'max_drawdown': max_drawdown,
-                'recent_trades': recent_trades,
-                'all_trades': trades  # HINZUGEFÜGT: Alle Trades für Charts und Analyse
-            })
-            
-            logging.info(f"Account {account_name}: {total_trades} Trades, Win Rate: {win_rate:.1f}%, PnL: ${total_pnl:.2f}")
-            
-        except Exception as e:
-            logging.error(f"Fehler beim Verarbeiten von {account_name}: {e}")
-            account_details.append({
-                'name': account_name,
-                'has_data': False,
-                'total_trades': 0,
-                'win_rate': 0,
-                'total_pnl': 0,
-                'profit_factor': 0,
-                'avg_trade': 0,
-                'max_drawdown': 0,
-                'recent_trades': [],
-                'all_trades': []  # Hinzugefügt für alle Trades
             })
     
     return account_details
@@ -848,7 +784,6 @@ def create_cached_charts(account_data):
     try:
         plt.style.use('dark_background')
         
-        # Chart Strategien erstellen
         fig, ax = plt.subplots(figsize=(14, 8))
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
@@ -907,7 +842,6 @@ def create_cached_charts(account_data):
         fig.savefig(chart_path_strategien, facecolor='#2c3e50', dpi=300, bbox_inches='tight')
         plt.close(fig)
 
-        # Chart Projekte erstellen
         projekte = {
             "10k→1Mio Projekt\n07.05.2025": ["Incubatorzone", "Memestrategies", "Ethapestrategies", "Altsstrategies", "Solstrategies", "Btcstrategies", "Corestrategies"],
             "2k→10k Projekt\n13.05.2025": ["2k->10k Projekt"],
@@ -1065,7 +999,7 @@ def get_cached_account_data():
 def get_cached_historical_performance(total_pnl, gc, spreadsheet):
     return get_historical_performance(total_pnl, gc, spreadsheet)
 
-@cached_function(cache_duration=1800)  # Erhöht von 600 auf 1800 (30 Minuten)
+@cached_function(cache_duration=1800)
 def get_cached_trading_details(gc, spreadsheet):
     return get_trading_data_from_sheets(gc, spreadsheet)
 
@@ -1168,7 +1102,6 @@ def logout():
 
 @app.route('/simple-debug')
 def simple_debug():
-    """Einfache Debug Route um zu sehen was genau passiert"""
     if 'user' not in session:
         return redirect(url_for('login'))
     
@@ -1181,7 +1114,6 @@ def simple_debug():
         
         gc, spreadsheet = sheets_data
         
-        # Teste nur Incubator Sheet mit EXAKT der gleichen Logik wie die Hauptfunktion
         worksheet = spreadsheet.worksheet("Incubator")
         all_records = worksheet.get_all_records()
         
@@ -1191,17 +1123,15 @@ def simple_debug():
         trades_found = 0
         total_pnl = 0
         
-        for i, record in enumerate(all_records[:5]):  # Nur erste 5 Trades
+        for i, record in enumerate(all_records[:5]):
             debug_output.append(f"\n--- Trade {i+1} ---")
             debug_output.append(f"Raw Record: {record}")
             
-            # Symbol (EXAKT wie Hauptfunktion)
             symbol = 'N/A'
             if 'Contracts' in record and record['Contracts']:
                 symbol = str(record['Contracts']).replace('USDT', '').replace('1000PEPE', 'PEPE').strip()
                 debug_output.append(f"Symbol: {symbol}")
             
-            # PnL (EXAKT wie Hauptfunktion)
             pnl_value = 0
             if 'Realized P&L' in record and record['Realized P&L'] is not None:
                 try:
@@ -1211,7 +1141,6 @@ def simple_debug():
                 except (ValueError, TypeError) as e:
                     debug_output.append(f"❌ Fehler beim Parsen von PnL: {e}")
             
-            # Trade-Bedingung (EXAKT wie Hauptfunktion)
             should_add_trade = (symbol != 'N/A' and pnl_value != 0)
             debug_output.append(f"Should add trade? Symbol!=N/A: {symbol != 'N/A'}, PnL!=0: {pnl_value != 0}, Result: {should_add_trade}")
             
@@ -1226,7 +1155,6 @@ def simple_debug():
         debug_output.append(f"Trades found: {trades_found}")
         debug_output.append(f"Total PnL: {total_pnl}")
         
-        # Teste auch die get_trading_data_from_sheets Funktion
         debug_output.append(f"\n=== TESTING MAIN FUNCTION ===")
         account_details = get_trading_data_from_sheets(gc, spreadsheet)
         
@@ -1271,8 +1199,8 @@ def debug_sheets():
             "Sol": "Solstrategies",
             "Btc": "Btcstrategies",
             "Core": "Corestrategies",
-            "2k-10k": "2k->10k Projekt",    # KORRIGIERT
-            "1k-5k": "1k->5k Projekt",      # KORRIGIERT
+            "2k-10k": "2k->10k Projekt",
+            "1k-5k": "1k->5k Projekt",
             "Claude": "Claude Projekt",
             "Blofin-7-Tage": "7 Tage Performer"
         }
@@ -1339,19 +1267,18 @@ def account_details():
         
         return render_template('account_details.html', 
                                account_details=account_details_data,
-                               startkapital=startkapital,  # HINZUGEFÜGT für JavaScript
+                               startkapital=startkapital,
                                now=now)
                                
     except Exception as e:
         logging.error(f"Fehler beim Laden der Account Details: {e}")
         return render_template('account_details.html', 
                                account_details=[],
-                               startkapital=startkapital,  # HINZUGEFÜGT für JavaScript
+                               startkapital=startkapital,
                                now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
 
 @app.route('/account-details-data')
 def account_details_data():
-    """API-Endpoint für das Aktualisieren der Account-Details ohne Cache"""
     if 'user' not in session:
         return redirect(url_for('login'))
     
@@ -1360,7 +1287,6 @@ def account_details_data():
         
         if sheets_data:
             gc, spreadsheet = sheets_data
-            # Erzwinge eine neue Abfrage ohne Cache
             account_details_data = get_trading_data_from_sheets(gc, spreadsheet)
         else:
             logging.warning("Google Sheets nicht verfügbar")
