@@ -1277,6 +1277,7 @@ def account_details():
         
         return render_template('account_details.html', 
                                account_details=account_details_data,
+                               startkapital=startkapital,
                                now=now)
                                
     except Exception as e:
