@@ -155,6 +155,9 @@ def clean_numeric_value(value_str):
     
     return clean_val if clean_val else "0"
 
+# Ersetze die Funktion get_trading_data_from_sheets ab Zeile ~150
+# Der Hauptfehler liegt in der PnL-Extraktion für Blofin
+
 def get_trading_data_from_sheets(gc, spreadsheet):
     sheet_mapping = {
         "Incubator": "Incubatorzone",
@@ -246,7 +249,88 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     
                     pnl_value = 0
                     
-                    if sheet_name != "Blofin-7-Tage":
+                    # VERBESSERTE PNL EXTRAKTION FÜR BLOFIN
+                    if sheet_name == "Blofin-7-Tage":
+                        # Erweiterte PnL-Suche für Blofin
+                        pnl_columns = [
+                            'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
+                            'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
+                            'Ergebnis', 'ergebnis', 'Result', 'result', 'Realized P&L', 'realized_pnl',
+                            'Unrealized P&L', 'unrealized_pnl', 'Total P&L', 'total_pnl',
+                            'Net Profit', 'net_profit', 'Trading Result', 'trading_result',
+                            'Position PnL', 'position_pnl', 'Final PnL', 'final_pnl'
+                        ]
+                        
+                        for col in pnl_columns:
+                            if col in record and record[col] != '' and record[col] is not None and record[col] != '--' and record[col] != 'N/A':
+                                try:
+                                    clean_value = clean_numeric_value(record[col])
+                                    if clean_value and clean_value != '0':
+                                        pnl_value = float(clean_value)
+                                        logging.info(f"Blofin PnL gefunden in Spalte '{col}': {pnl_value} (Original: {record[col]})")
+                                        break
+                                except (ValueError, TypeError) as e:
+                                    logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
+                                    continue
+                        
+                        # Falls kein PnL gefunden wurde, prüfe auf implizite Berechnung
+                        if pnl_value == 0:
+                            # Versuche PnL aus Entry/Exit Price zu berechnen
+                            entry_price = 0
+                            exit_price = 0
+                            size = 0
+                            side = ''
+                            
+                            # Entry Price suchen
+                            entry_columns = ['Entry Price', 'entry', 'Entry_Price', 'Open_Price', 'open_price']
+                            for col in entry_columns:
+                                if col in record and record[col] != '' and record[col] is not None:
+                                    try:
+                                        entry_price = float(clean_numeric_value(record[col]))
+                                        break
+                                    except:
+                                        continue
+                            
+                            # Exit Price suchen
+                            exit_columns = ['Exit Price', 'exit', 'Exit_Price', 'Close_Price', 'close_price', 'Filled Price']
+                            for col in exit_columns:
+                                if col in record and record[col] != '' and record[col] is not None:
+                                    try:
+                                        exit_price = float(clean_numeric_value(record[col]))
+                                        break
+                                    except:
+                                        continue
+                            
+                            # Size suchen
+                            size_columns = ['Size', 'Qty', 'Quantity', 'amount', 'Volume', 'sz']
+                            for col in size_columns:
+                                if col in record and record[col] != '' and record[col] is not None:
+                                    try:
+                                        size = float(clean_numeric_value(record[col]))
+                                        break
+                                    except:
+                                        continue
+                            
+                            # Side suchen
+                            side_columns = ['Side', 'direction', 'Type', 'posSide']
+                            for col in side_columns:
+                                if col in record and record[col] != '' and record[col] is not None:
+                                    side_val = str(record[col]).lower().strip()
+                                    if any(keyword in side_val for keyword in ['buy', 'long', 'call']):
+                                        side = 'buy'
+                                    elif any(keyword in side_val for keyword in ['sell', 'short', 'put']):
+                                        side = 'sell'
+                                    break
+                            
+                            # PnL berechnen falls möglich
+                            if entry_price > 0 and exit_price > 0 and size > 0:
+                                if side == 'buy':
+                                    pnl_value = (exit_price - entry_price) * size
+                                elif side == 'sell':
+                                    pnl_value = (entry_price - exit_price) * size
+                                logging.info(f"Blofin PnL berechnet: {pnl_value} (Entry: {entry_price}, Exit: {exit_price}, Size: {size}, Side: {side})")
+                    else:
+                        # Standard PnL Extraktion für Bybit
                         if 'Realized P&L' in record and record['Realized P&L'] is not None:
                             try:
                                 clean_value = clean_numeric_value(record['Realized P&L'])
@@ -255,25 +339,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                     logging.debug(f"PnL gefunden in 'Realized P&L': {pnl_value}")
                             except (ValueError, TypeError) as e:
                                 logging.debug(f"Fehler beim Parsen von PnL: {e}")
-                    else:
-                        pnl_columns = [
-                            'PNL', 'PnL', 'pnl', 'Pnl', 'profit', 'Profit', 'profit_loss', 'net_pnl',
-                            'P&L', 'P/L', 'Gewinn', 'gewinn', 'Verlust', 'verlust',
-                            'Ergebnis', 'ergebnis', 'Result', 'result', 'Realized P&L', 'realized_pnl'
-                        ]
-                        
-                        for col in pnl_columns:
-                            if col in record and record[col] != '' and record[col] is not None and record[col] != '--':
-                                try:
-                                    clean_value = clean_numeric_value(record[col])
-                                    if clean_value and clean_value != '0':
-                                        pnl_value = float(clean_value)
-                                        logging.debug(f"Blofin PnL gefunden in Spalte '{col}': {pnl_value}")
-                                        break
-                                except (ValueError, TypeError) as e:
-                                    logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
-                                    continue
                     
+                    # Symbol Extraktion (unverändert)
                     symbol = 'N/A'
                     
                     if sheet_name != "Blofin-7-Tage":
@@ -286,18 +353,20 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     else:
                         symbol_columns = [
                             'Underlying Asset', 'Symbol', 'symbol', 'Asset', 'asset', 'Coin', 'coin',
-                            'Instrument', 'instrument', 'Pair', 'pair', 'Currency', 'currency'
+                            'Instrument', 'instrument', 'Pair', 'pair', 'Currency', 'currency',
+                            'instId', 'InstId', 'underlying', 'Underlying'
                         ]
                         
                         for col in symbol_columns:
                             if col in record and record[col] is not None and record[col] != '':
                                 asset_value = str(record[col]).strip()
                                 if asset_value:
-                                    symbol = asset_value.replace('USDT', '').replace('-USDT', '').replace('PERP', '').strip()
+                                    symbol = asset_value.replace('USDT', '').replace('-USDT', '').replace('PERP', '').replace('-PERP', '').strip()
                                     if symbol:
                                         logging.debug(f"Blofin Symbol aus '{col}' extrahiert: {symbol}")
                                         break
                     
+                    # Weitere Datenextraktion (Datum, Side, Size, Entry/Exit Price) - unverändert
                     trade_date = 'N/A'
                     date_columns = [
                         'Filled/Settlement Time(UTC+0)', 'Create Time', 'Order Time',
@@ -385,9 +454,12 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Exit Price in Spalte '{col}': {e}")
                                 continue
                     
+                    # KORRIGIERTE BEDINGUNG FÜR TRADE-HINZUFÜGUNG
                     if sheet_name == "Blofin-7-Tage":
-                        should_add = symbol != 'N/A'
+                        # Für Blofin: Trade hinzufügen wenn Symbol vorhanden UND PnL != 0
+                        should_add = (symbol != 'N/A' and pnl_value != 0)
                     else:
+                        # Für Bybit: Trade hinzufügen wenn Symbol vorhanden UND PnL != 0
                         should_add = (symbol != 'N/A' and pnl_value != 0)
                     
                     if should_add:
@@ -410,7 +482,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                         elif pnl_value < 0:
                             total_loss += abs(pnl_value)
                         
-                        logging.debug(f"Trade hinzugefügt: {trade}")
+                        logging.info(f"Trade hinzugefügt für {account_name}: Symbol={symbol}, PnL={pnl_value}")
                     else:
                         logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}, Sheet: {sheet_name}")
                     
@@ -419,6 +491,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     logging.debug(f"Problematische Zeile: {record}")
                     continue
             
+            # Statistiken berechnen (unverändert)
             total_trades = len(trades)
             win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
             profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
