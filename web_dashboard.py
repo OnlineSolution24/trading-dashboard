@@ -151,12 +151,10 @@ def clean_numeric_value(value_str):
     clean_val = clean_val.replace('$', '')
     clean_val = clean_val.replace('€', '')
     clean_val = clean_val.replace(',', '')
+    clean_val = clean_val.replace('USDT', '')
     clean_val = clean_val.strip()
     
     return clean_val if clean_val else "0"
-
-# Ersetze die Funktion get_trading_data_from_sheets ab Zeile ~150
-# Der Hauptfehler liegt in der PnL-Extraktion für Blofin
 
 def get_trading_data_from_sheets(gc, spreadsheet):
     sheet_mapping = {
@@ -236,6 +234,10 @@ def get_trading_data_from_sheets(gc, spreadsheet):
             if all_records:
                 available_columns = list(all_records[0].keys())
                 logging.info(f"Verfügbare Spalten in {sheet_name}: {available_columns}")
+                
+                # DEBUG: Zeige erste 3 Zeilen für Blofin
+                if sheet_name == "Blofin-7-Tage":
+                    logging.info(f"Erste 3 Zeilen von Blofin: {all_records[:3]}")
             
             trades = []
             total_pnl = 0
@@ -273,62 +275,18 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                     logging.debug(f"Fehler beim Parsen von Blofin PnL in Spalte '{col}': {e}")
                                     continue
                         
-                        # Falls kein PnL gefunden wurde, prüfe auf implizite Berechnung
+                        # Falls kein PnL gefunden wurde, verwende Fee als negativen PnL
                         if pnl_value == 0:
-                            # Versuche PnL aus Entry/Exit Price zu berechnen
-                            entry_price = 0
-                            exit_price = 0
-                            size = 0
-                            side = ''
-                            
-                            # Entry Price suchen
-                            entry_columns = ['Entry Price', 'entry', 'Entry_Price', 'Open_Price', 'open_price']
-                            for col in entry_columns:
-                                if col in record and record[col] != '' and record[col] is not None:
-                                    try:
-                                        entry_price = float(clean_numeric_value(record[col]))
-                                        break
-                                    except:
-                                        continue
-                            
-                            # Exit Price suchen
-                            exit_columns = ['Exit Price', 'exit', 'Exit_Price', 'Close_Price', 'close_price', 'Filled Price']
-                            for col in exit_columns:
-                                if col in record and record[col] != '' and record[col] is not None:
-                                    try:
-                                        exit_price = float(clean_numeric_value(record[col]))
-                                        break
-                                    except:
-                                        continue
-                            
-                            # Size suchen
-                            size_columns = ['Size', 'Qty', 'Quantity', 'amount', 'Volume', 'sz']
-                            for col in size_columns:
-                                if col in record and record[col] != '' and record[col] is not None:
-                                    try:
-                                        size = float(clean_numeric_value(record[col]))
-                                        break
-                                    except:
-                                        continue
-                            
-                            # Side suchen
-                            side_columns = ['Side', 'direction', 'Type', 'posSide']
-                            for col in side_columns:
-                                if col in record and record[col] != '' and record[col] is not None:
-                                    side_val = str(record[col]).lower().strip()
-                                    if any(keyword in side_val for keyword in ['buy', 'long', 'call']):
-                                        side = 'buy'
-                                    elif any(keyword in side_val for keyword in ['sell', 'short', 'put']):
-                                        side = 'sell'
-                                    break
-                            
-                            # PnL berechnen falls möglich
-                            if entry_price > 0 and exit_price > 0 and size > 0:
-                                if side == 'buy':
-                                    pnl_value = (exit_price - entry_price) * size
-                                elif side == 'sell':
-                                    pnl_value = (entry_price - exit_price) * size
-                                logging.info(f"Blofin PnL berechnet: {pnl_value} (Entry: {entry_price}, Exit: {exit_price}, Size: {size}, Side: {side})")
+                            fee_str = record.get('Fee', '0')
+                            try:
+                                if 'USDT' in str(fee_str):
+                                    fee_value = float(clean_numeric_value(fee_str))
+                                    pnl_value = -fee_value  # Fee als Verlust
+                                    logging.info(f"Blofin: Verwende Fee als PnL: {pnl_value} (Original Fee: {fee_str})")
+                                elif pnl_value == 0:
+                                    pnl_value = -0.01  # Minimal-Verlust für Statistiken
+                            except:
+                                pnl_value = -0.01  # Fallback Minimal-Verlust
                     else:
                         # Standard PnL Extraktion für Bybit
                         if 'Realized P&L' in record and record['Realized P&L'] is not None:
@@ -340,7 +298,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             except (ValueError, TypeError) as e:
                                 logging.debug(f"Fehler beim Parsen von PnL: {e}")
                     
-                    # Symbol Extraktion (unverändert)
+                    # Symbol Extraktion
                     symbol = 'N/A'
                     
                     if sheet_name != "Blofin-7-Tage":
@@ -366,7 +324,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                         logging.debug(f"Blofin Symbol aus '{col}' extrahiert: {symbol}")
                                         break
                     
-                    # Weitere Datenextraktion (Datum, Side, Size, Entry/Exit Price) - unverändert
+                    # Datum extrahieren
                     trade_date = 'N/A'
                     date_columns = [
                         'Filled/Settlement Time(UTC+0)', 'Create Time', 'Order Time',
@@ -380,6 +338,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                             logging.debug(f"Datum gefunden in Spalte '{col}': {trade_date}")
                             break
                     
+                    # Side extrahieren
                     side = 'N/A'
                     side_columns = [
                         'Trade Type', 'Side', 'side', 'Direction', 'direction', 'Type', 'type',
@@ -389,15 +348,16 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     for col in side_columns:
                         if col in record and record[col] != '' and record[col] is not None:
                             side_value = str(record[col]).lower().strip()
-                            if any(keyword in side_value for keyword in ['buy', 'long', 'kaufen', 'call']):
+                            if any(keyword in side_value for keyword in ['buy', 'long', 'kaufen', 'call', 'open long']):
                                 side = 'Buy'
-                            elif any(keyword in side_value for keyword in ['sell', 'short', 'verkaufen', 'put']):
+                            elif any(keyword in side_value for keyword in ['sell', 'short', 'verkaufen', 'put', 'open short']):
                                 side = 'Sell'
                             else:
                                 side = str(record[col]).strip()
                             logging.debug(f"Side gefunden in Spalte '{col}': {side}")
                             break
                     
+                    # Size extrahieren
                     size = 0
                     size_columns = [
                         'Qty', 'Size', 'size', 'Quantity', 'quantity', 'Amount', 'amount', 'qty',
@@ -407,7 +367,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     for col in size_columns:
                         if col in record and record[col] != '' and record[col] is not None:
                             try:
-                                clean_value = clean_numeric_value(record[col])
+                                size_str = str(record[col])
+                                # Für Blofin: "29 AVAX" -> 29
+                                if sheet_name == "Blofin-7-Tage" and ' ' in size_str:
+                                    size_str = size_str.split()[0]
+                                clean_value = clean_numeric_value(size_str)
                                 if clean_value:
                                     size = float(clean_value)
                                     logging.debug(f"Size gefunden in Spalte '{col}': {size}")
@@ -416,6 +380,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Size in Spalte '{col}': {e}")
                                 continue
                     
+                    # Entry Price extrahieren
                     entry_price = 0
                     entry_columns = [
                         'Entry Price', 'Avg Fill', 'entry', 'Entry_Price', 'entry_price', 'Buy_Price', 'buy_price', 
@@ -426,7 +391,11 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     for col in entry_columns:
                         if col in record and record[col] != '' and record[col] is not None:
                             try:
-                                clean_value = clean_numeric_value(record[col])
+                                price_str = str(record[col])
+                                # Für Blofin: "19.53 USDT" -> 19.53
+                                if sheet_name == "Blofin-7-Tage" and ' ' in price_str:
+                                    price_str = price_str.split()[0]
+                                clean_value = clean_numeric_value(price_str)
                                 if clean_value:
                                     entry_price = float(clean_value)
                                     logging.debug(f"Entry Price gefunden in Spalte '{col}': {entry_price}")
@@ -435,6 +404,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                                 logging.debug(f"Fehler beim Parsen von Entry Price in Spalte '{col}': {e}")
                                 continue
                     
+                    # Exit Price extrahieren
                     exit_price = 0
                     exit_columns = [
                         'Filled Price', 'Exit', 'exit', 'Exit_Price', 'exit_price', 'Sell_Price', 'sell_price', 
@@ -456,8 +426,8 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     
                     # KORRIGIERTE BEDINGUNG FÜR TRADE-HINZUFÜGUNG
                     if sheet_name == "Blofin-7-Tage":
-                        # Für Blofin: Trade hinzufügen wenn Symbol vorhanden UND PnL != 0
-                        should_add = (symbol != 'N/A' and pnl_value != 0)
+                        # Für Blofin: Trade hinzufügen wenn Symbol vorhanden (auch ohne echten PnL)
+                        should_add = symbol != 'N/A'
                     else:
                         # Für Bybit: Trade hinzufügen wenn Symbol vorhanden UND PnL != 0
                         should_add = (symbol != 'N/A' and pnl_value != 0)
@@ -482,7 +452,7 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                         elif pnl_value < 0:
                             total_loss += abs(pnl_value)
                         
-                        logging.info(f"Trade hinzugefügt für {account_name}: Symbol={symbol}, PnL={pnl_value}")
+                        logging.info(f"Trade hinzugefügt für {account_name}: Symbol={symbol}, PnL={pnl_value}, Side={side}")
                     else:
                         logging.debug(f"Zeile übersprungen - Symbol: '{symbol}', PnL: {pnl_value}, Sheet: {sheet_name}")
                     
@@ -491,12 +461,13 @@ def get_trading_data_from_sheets(gc, spreadsheet):
                     logging.debug(f"Problematische Zeile: {record}")
                     continue
             
-            # Statistiken berechnen (unverändert)
+            # Statistiken berechnen
             total_trades = len(trades)
             win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
             profit_factor = (total_profit / total_loss) if total_loss > 0 else (999 if total_profit > 0 else 0)
             avg_trade = total_pnl / total_trades if total_trades > 0 else 0
             
+            # Drawdown berechnen
             running_pnl = 0
             peak = 0
             max_drawdown = 0
