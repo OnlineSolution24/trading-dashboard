@@ -609,23 +609,23 @@ def get_historical_performance(total_pnl, gc, spreadsheet):
     return performance_data
 
 def create_equity_curve_chart(gc, spreadsheet):
-    """Erstellt eine detaillierte Equity Curve für die KPI-Karten"""
+    """Erstellt eine hochauflösende Equity Curve vom ersten Tag an"""
     try:
         if not gc or not spreadsheet:
             # Fallback: Erstelle ein leeres Chart
-            fig, ax = plt.subplots(figsize=(4, 1.5))
+            fig, ax = plt.subplots(figsize=(6, 4))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
             ax.text(0.5, 0.5, 'Keine Daten\nverfügbar', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=8)
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
                 spine.set_visible(False)
             plt.tight_layout(pad=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=200, bbox_inches='tight', 
-                       pad_inches=0.02)
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                       pad_inches=0.05)
             plt.close(fig)
             return chart_path
         
@@ -634,19 +634,19 @@ def create_equity_curve_chart(gc, spreadsheet):
         
         if not records or len(records) < 3:
             # Fallback für leere oder zu wenig Daten
-            fig, ax = plt.subplots(figsize=(4, 1.5))
+            fig, ax = plt.subplots(figsize=(6, 4))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
-            ax.text(0.5, 0.5, 'Zu wenig\nDaten', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=8)
+            ax.text(0.5, 0.5, 'Zu wenig Daten\nfür Equity Curve', ha='center', va='center', 
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
                 spine.set_visible(False)
             plt.tight_layout(pad=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=200, bbox_inches='tight', 
-                       pad_inches=0.02)
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                       pad_inches=0.05)
             plt.close(fig)
             return chart_path
         
@@ -655,29 +655,29 @@ def create_equity_curve_chart(gc, spreadsheet):
         df = df.dropna(subset=['Datum'])
         df = df.sort_values('Datum')
         
-        # Nehme die letzten 60 Tage für mehr Details
-        df = df.tail(60)
+        # VERWENDE ALLE DATEN VOM ERSTEN TAG AN (kein .tail() mehr!)
+        logging.info(f"Equity Curve: Verwende alle {len(df)} Datenpunkte vom ersten Tag an")
         
         if len(df) < 3:
             # Fallback für zu wenig Daten nach Filterung
-            fig, ax = plt.subplots(figsize=(4, 1.5))
+            fig, ax = plt.subplots(figsize=(6, 4))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
-            ax.text(0.5, 0.5, 'Ungenügend\nDaten', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=8)
+            ax.text(0.5, 0.5, 'Ungenügend\nhistorische Daten', ha='center', va='center', 
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
                 spine.set_visible(False)
             plt.tight_layout(pad=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=200, bbox_inches='tight', 
-                       pad_inches=0.02)
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                       pad_inches=0.05)
             plt.close(fig)
             return chart_path
         
-        # Erstelle detaillierte Equity Curve
-        fig, ax = plt.subplots(figsize=(4, 1.5))
+        # Erstelle hochauflösende Equity Curve in gleicher Größe wie andere KPI-Karten
+        fig, ax = plt.subplots(figsize=(6, 4))
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         
@@ -692,37 +692,64 @@ def create_equity_curve_chart(gc, spreadsheet):
         # Erstelle x-Achse (Tage)
         x_values = list(range(len(pnl_values)))
         
-        # Bestimme Farbe basierend auf Performance
+        # Bestimme Farben basierend auf Performance
         start_value = pnl_values[0] if pnl_values else 0
         end_value = pnl_values[-1] if pnl_values else 0
         
         if end_value >= start_value:
             line_color = '#28a745'  # Grün für Gewinn
             fill_color = '#28a745'
-            alpha_fill = 0.2
+            alpha_fill = 0.3
         else:
             line_color = '#dc3545'  # Rot für Verlust
             fill_color = '#dc3545'
-            alpha_fill = 0.2
+            alpha_fill = 0.3
         
-        # Zeichne die Linie mit mehr Details
-        ax.plot(x_values, pnl_values, color=line_color, linewidth=2.5, alpha=0.9)
+        # Zeichne die Hauptlinie mit höherer Qualität
+        ax.plot(x_values, pnl_values, color=line_color, linewidth=3, alpha=0.9, 
+                antialiased=True, solid_capstyle='round', solid_joinstyle='round')
         
         # Fülle den Bereich unter der Kurve
         ax.fill_between(x_values, pnl_values, alpha=alpha_fill, color=fill_color)
         
-        # Füge Höhen- und Tiefpunkte hinzu
-        if len(pnl_values) > 5:
+        # ERWEITERTE PEAK-LINIE (deine gewünschte "Picklinie")
+        # Berechne den kumulativen Peak (höchster Wert bis zu jedem Punkt)
+        peak_values = []
+        current_peak = pnl_values[0] if pnl_values else 0
+        
+        for value in pnl_values:
+            if value > current_peak:
+                current_peak = value
+            peak_values.append(current_peak)
+        
+        # Zeichne die Peak-Linie (Picklinie)
+        ax.plot(x_values, peak_values, color='#f39c12', linewidth=2, alpha=0.8, 
+                linestyle='--', label='All-Time High')
+        
+        # Füge detaillierte Höhen- und Tiefpunkte hinzu
+        if len(pnl_values) > 10:
             max_idx = pnl_values.index(max(pnl_values))
             min_idx = pnl_values.index(min(pnl_values))
             
-            # Markiere Höchstpunkt
-            ax.scatter(max_idx, pnl_values[max_idx], color='#f39c12', s=25, alpha=0.8, zorder=5)
+            # Markiere absoluten Höchstpunkt
+            ax.scatter(max_idx, pnl_values[max_idx], color='#f39c12', s=60, alpha=0.9, 
+                      zorder=5, edgecolors='white', linewidth=1)
             
-            # Markiere Tiefstpunkt
-            ax.scatter(min_idx, pnl_values[min_idx], color='#e74c3c', s=25, alpha=0.8, zorder=5)
+            # Markiere absoluten Tiefstpunkt
+            ax.scatter(min_idx, pnl_values[min_idx], color='#e74c3c', s=60, alpha=0.9, 
+                      zorder=5, edgecolors='white', linewidth=1)
+            
+            # Markiere Start- und Endpunkt
+            ax.scatter(0, pnl_values[0], color='#3498db', s=50, alpha=0.8, 
+                      zorder=5, edgecolors='white', linewidth=1)
+            ax.scatter(len(pnl_values)-1, pnl_values[-1], color='#9b59b6', s=50, alpha=0.8, 
+                      zorder=5, edgecolors='white', linewidth=1)
         
-        # Entferne alle Achsen für cleanen Look
+        # Füge ein subtiles Gitter hinzu für bessere Lesbarkeit
+        ax.grid(True, alpha=0.1, color='white', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
+        
+        # Entferne sichtbare Achsen aber behalte das Gitter
         ax.set_xticks([])
         ax.set_yticks([])
         
@@ -730,36 +757,36 @@ def create_equity_curve_chart(gc, spreadsheet):
         for spine in ax.spines.values():
             spine.set_visible(False)
         
-        # Setze Margins auf Minimum
-        ax.margins(x=0.02, y=0.1)
+        # Setze minimale Margins für maximale Nutzung des Platzes
+        ax.margins(x=0.01, y=0.05)
         
-        # Speichere ohne Padding
+        # Speichere mit höchster Qualität
         plt.tight_layout(pad=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=200, bbox_inches='tight', 
-                   pad_inches=0.02)
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                   pad_inches=0.02, facecolor='#2c3e50', edgecolor='none')
         plt.close(fig)
         
-        logging.info(f"Equity Curve erstellt: {len(pnl_values)} Datenpunkte, Start: {start_value:.2f}, Ende: {end_value:.2f}")
+        logging.info(f"Hochauflösende Equity Curve erstellt: {len(pnl_values)} Datenpunkte (komplette Historie), Start: {start_value:.2f}, Ende: {end_value:.2f}, Peak: {max(pnl_values):.2f}")
         
         return chart_path
         
     except Exception as e:
         logging.error(f"Fehler beim Erstellen der Equity Curve: {e}")
         # Fallback Chart bei Fehler
-        fig, ax = plt.subplots(figsize=(4, 1.5))
+        fig, ax = plt.subplots(figsize=(6, 4))
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         ax.text(0.5, 0.5, 'Chart\nFehler', ha='center', va='center', 
-               color='#e74c3c', transform=ax.transAxes, fontsize=8)
+               color='#e74c3c', transform=ax.transAxes, fontsize=12, fontweight='bold')
         ax.set_xticks([])
         ax.set_yticks([])
         for spine in ax.spines.values():
             spine.set_visible(False)
         plt.tight_layout(pad=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=200, bbox_inches='tight', 
-                   pad_inches=0.02)
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                   pad_inches=0.05)
         plt.close(fig)
         return chart_path
 
