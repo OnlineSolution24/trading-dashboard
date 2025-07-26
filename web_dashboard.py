@@ -764,7 +764,7 @@ def create_equity_curve_chart(gc, spreadsheet):
         plt.tight_layout(pad=0)
         chart_path = "static/equity_curve_small.png"
         fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
-                   pad_inches=0.02, facecolor='#2c3e50', edgecolor='none')
+                   pad_inches=0.02, edgecolor='none')
         plt.close(fig)
         
         logging.info(f"Hochauflösende Equity Curve erstellt: {len(pnl_values)} Datenpunkte (komplette Historie), Start: {start_value:.2f}, Ende: {end_value:.2f}, Peak: {max(pnl_values):.2f}")
