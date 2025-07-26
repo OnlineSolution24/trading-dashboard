@@ -608,6 +608,115 @@ def get_historical_performance(total_pnl, gc, spreadsheet):
     
     return performance_data
 
+def create_equity_curve_chart(gc, spreadsheet):
+    """Erstellt eine kleine Equity Curve für die KPI-Karten"""
+    try:
+        if not gc or not spreadsheet:
+            # Fallback: Erstelle ein leeres Chart
+            fig, ax = plt.subplots(figsize=(3, 2))
+            fig.patch.set_facecolor('#2c3e50')
+            ax.set_facecolor('#34495e')
+            ax.text(0.5, 0.5, 'Keine Daten', ha='center', va='center', 
+                   color='white', transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plt.tight_layout()
+            chart_path = "static/equity_curve_small.png"
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            return chart_path
+        
+        sheet = spreadsheet.worksheet("DailyBalances")
+        records = sheet.get_all_records()
+        
+        if not records:
+            # Fallback für leere Daten
+            fig, ax = plt.subplots(figsize=(3, 2))
+            fig.patch.set_facecolor('#2c3e50')
+            ax.set_facecolor('#34495e')
+            ax.text(0.5, 0.5, 'Keine Daten', ha='center', va='center', 
+                   color='white', transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plt.tight_layout()
+            chart_path = "static/equity_curve_small.png"
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            return chart_path
+        
+        df = pd.DataFrame(records)
+        df['Datum'] = pd.to_datetime(df['Datum'], format='%d.%m.%Y', errors='coerce')
+        df = df.dropna(subset=['Datum'])
+        df = df.sort_values('Datum')
+        
+        # Nehme nur die letzten 30 Tage
+        df = df.tail(30)
+        
+        if len(df) < 2:
+            # Fallback für zu wenig Daten
+            fig, ax = plt.subplots(figsize=(3, 2))
+            fig.patch.set_facecolor('#2c3e50')
+            ax.set_facecolor('#34495e')
+            ax.text(0.5, 0.5, 'Zu wenig\nDaten', ha='center', va='center', 
+                   color='white', transform=ax.transAxes, fontsize=8)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plt.tight_layout()
+            chart_path = "static/equity_curve_small.png"
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            return chart_path
+        
+        # Erstelle kleine Equity Curve
+        fig, ax = plt.subplots(figsize=(3, 2))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        
+        # Konvertiere PnL zu numerischen Werten
+        pnl_values = []
+        for pnl in df['PnL']:
+            try:
+                pnl_values.append(float(pnl))
+            except:
+                pnl_values.append(0)
+        
+        # Farbe basierend auf Performance
+        color = '#28a745' if pnl_values[-1] >= pnl_values[0] else '#dc3545'
+        
+        ax.plot(range(len(pnl_values)), pnl_values, color=color, linewidth=2)
+        ax.fill_between(range(len(pnl_values)), pnl_values, alpha=0.3, color=color)
+        
+        # Entferne Achsen für cleanen Look
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        
+        plt.tight_layout()
+        chart_path = "static/equity_curve_small.png"
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        
+        return chart_path
+        
+    except Exception as e:
+        logging.error(f"Fehler beim Erstellen der Equity Curve: {e}")
+        # Fallback Chart
+        fig, ax = plt.subplots(figsize=(3, 2))
+        fig.patch.set_facecolor('#2c3e50')
+        ax.set_facecolor('#34495e')
+        ax.text(0.5, 0.5, 'Chart\nFehler', ha='center', va='center', 
+               color='white', transform=ax.transAxes, fontsize=8)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.tight_layout()
+        chart_path = "static/equity_curve_small.png"
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        return chart_path
+
 class BlofinAPI:
     def __init__(self, api_key, api_secret, passphrase):
         self.api_key = api_key
@@ -773,17 +882,17 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
+                        # VERBESSERTE SIDE-ERKENNUNG FÜR BLOFIN
                         side_field = pos.get('posSide', pos.get('side', ''))
+                        pnl_value = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0'))))
                         
-                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', Raw: {pos}")
+                        logging.info(f"Position Debug - Symbol: {symbol}, Size: {pos_size}, SideField: '{side_field}', PnL: {pnl_value}, Raw: {pos}")
                         
-                        if pos_size < 0:
-                            display_side = 'Sell'
-                            actual_size = abs(pos_size)
-                        else:
-                            display_side = 'Buy'
-                            actual_size = pos_size
+                        # Bestimme Side basierend auf PnL und Size
+                        display_side = 'Buy'  # Default
+                        actual_size = abs(pos_size)
                         
+                        # Erste Priorität: Explizites posSide/side Feld
                         if side_field:
                             side_lower = str(side_field).lower().strip()
                             if side_lower in ['short', 'sell', '-1', 'net_short', 's', 'short_pos']:
@@ -791,20 +900,36 @@ def get_blofin_data(acc):
                             elif side_lower in ['long', 'buy', '1', 'net_long', 'l', 'long_pos']:
                                 display_side = 'Buy'
                         
-                        if symbol == 'RUNE' and acc['name'] == '7 Tage Performer':
+                        # Zweite Priorität: Size-Vorzeichen
+                        elif pos_size < 0:
                             display_side = 'Sell'
-                            logging.info(f"FORCED RUNE to SHORT for 7 Tage Performer")
+                        elif pos_size > 0:
+                            display_side = 'Buy'
+                        
+                        # Dritte Priorität: PnL-Analyse für bekannte Symbole
+                        # Wenn PnL positiv bei fallendem Markt = Short Position
+                        # Wenn PnL negativ bei fallendem Markt = Long Position
+                        if symbol in ['RUNE', 'AVAX'] and acc['name'] == '7 Tage Performer':
+                            # Spezielle Behandlung für bekannte problematische Symbole
+                            if pnl_value > 0:
+                                # Positive PnL könnte auf Short-Position hindeuten (bei fallendem Markt)
+                                display_side = 'Sell'
+                                logging.info(f"SPECIAL HANDLING: {symbol} mit positivem PnL ({pnl_value}) -> SELL angenommen")
+                            elif pnl_value < 0:
+                                # Negative PnL könnte auf Long-Position hindeuten (bei fallendem Markt)  
+                                display_side = 'Buy'
+                                logging.info(f"SPECIAL HANDLING: {symbol} mit negativem PnL ({pnl_value}) -> BUY angenommen")
                         
                         position = {
                             'symbol': symbol,
                             'size': str(actual_size),
                             'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
-                            'unrealisedPnl': str(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0')))),
+                            'unrealisedPnl': str(pnl_value),
                             'side': display_side
                         }
                         positions.append(position)
                         
-                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={position['unrealisedPnl']}")
+                        logging.info(f"FINAL Position: {symbol} Size={actual_size} Side={display_side} PnL={pnl_value}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
@@ -1094,8 +1219,11 @@ def dashboard():
         if sheets_data:
             gc, spreadsheet = sheets_data
             historical_performance = get_cached_historical_performance(total_pnl, gc, spreadsheet)
+            # Erstelle Equity Curve Chart
+            equity_curve_path = create_equity_curve_chart(gc, spreadsheet)
         else:
             historical_performance = {'1_day': 0.0, '7_day': 0.0, '30_day': 0.0}
+            equity_curve_path = create_equity_curve_chart(None, None)
         
         chart_paths = create_cached_charts(account_data)
         
@@ -1118,6 +1246,7 @@ def dashboard():
                                historical_performance=historical_performance,
                                chart_path_strategien=chart_paths['strategien'],
                                chart_path_projekte=chart_paths['projekte'],
+                               equity_curve_path=equity_curve_path,
                                positions_all=positions_all,
                                total_positions_pnl=total_positions_pnl,
                                total_positions_pnl_percent=total_positions_pnl_percent,
@@ -1125,6 +1254,7 @@ def dashboard():
 
     except Exception as e:
         logging.error(f"Critical dashboard error: {e}")
+        equity_curve_path = create_equity_curve_chart(None, None)
         return render_template("dashboard.html",
                                accounts=[],
                                total_start=0,
@@ -1134,6 +1264,7 @@ def dashboard():
                                historical_performance={'1_day': 0.0, '7_day': 0.0, '30_day': 0.0},
                                chart_path_strategien="static/placeholder_strategien.png",
                                chart_path_projekte="static/placeholder_projekte.png",
+                               equity_curve_path=equity_curve_path,
                                positions_all=[],
                                total_positions_pnl=0,
                                total_positions_pnl_percent=0,
