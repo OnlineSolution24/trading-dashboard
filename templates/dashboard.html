@@ -46,11 +46,23 @@
             border: 1px solid var(--border-color);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             margin-bottom: 20px;
+            height: 220px; /* Feste Höhe für alle KPI-Karten */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .kpi-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 15px 35px rgba(52, 152, 219, 0.3);
+        }
+
+        .kpi-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
         .kpi-title {
@@ -301,28 +313,28 @@
             display: block;
         }
 
-        /* Equity Curve Chart in gleicher Größe wie andere KPI-Karten */
+        /* Equity Curve Chart angepasst für gleiche Kartenhöhe */
         .equity-chart-container {
             background: transparent;
-            border-radius: 10px;
+            border-radius: 8px;
             padding: 0;
-            height: auto;
+            height: 120px; /* Feste Höhe für den Chart-Bereich */
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-top: 15px;
             overflow: hidden;
+            margin-top: 10px;
         }
 
         .equity-chart-img {
             width: 100%;
-            height: auto;
-            border-radius: 8px;
-            max-width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 6px;
         }
 
-        /* Equity Curve KPI-Karte gleiche Größe wie andere */
+        /* Equity Curve KPI-Karte - identisch zu anderen */
         .equity-kpi-card {
             background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
             border-radius: 15px;
@@ -332,6 +344,10 @@
             border: 1px solid var(--border-color);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             margin-bottom: 20px;
+            height: 220px; /* Gleiche feste Höhe wie andere KPI-Karten */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .equity-kpi-card:hover {
@@ -344,7 +360,7 @@
             color: var(--gray-light);
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             font-weight: 600;
         }
 
@@ -399,50 +415,56 @@
         <div class="row mb-4">
             <div class="col-lg-3 col-md-6">
                 <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-chart-line icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">Gesamtperformance</div>
-                    <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
-                    <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
-                        ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-day icon-gray"></i>
-                    </div>
-                    <div class="kpi-title">1-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['1_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
-                        {% endif %}
+                    <div class="kpi-content">
+                        <div class="kpi-icon">
+                            <i class="fas fa-chart-line icon-blue"></i>
+                        </div>
+                        <div class="kpi-title">Gesamtperformance</div>
+                        <div class="kpi-value neutral">${{ "%.0f"|format(total_start) }} → ${{ "%.0f"|format(total_balance) }}</div>
+                        <div class="pnl-value {% if total_pnl >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1.2rem; margin-top: 8px;">
+                            ${{ "%.2f"|format(total_pnl) }} ({{ "%.2f"|format(total_pnl_percent) }}%)
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
                 <div class="kpi-card">
-                    <div class="kpi-icon">
-                        <i class="fas fa-calendar-alt icon-blue"></i>
-                    </div>
-                    <div class="kpi-title">30-Tages Performance</div>
-                    <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
-                        ${{ "%.2f"|format(historical_performance['30_day']) }}
-                    </div>
-                    <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
-                        {% if total_start > 0 %}
-                            ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
-                        {% endif %}
+                    <div class="kpi-content">
+                        <div class="kpi-icon">
+                            <i class="fas fa-calendar-day icon-gray"></i>
+                        </div>
+                        <div class="kpi-title">1-Tages Performance</div>
+                        <div class="kpi-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                            ${{ "%.2f"|format(historical_performance['1_day']) }}
+                        </div>
+                        <div class="pnl-value {% if historical_performance['1_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                            {% if total_start > 0 %}
+                                ({{ "%.2f"|format((historical_performance['1_day'] / total_start) * 100) }}%)
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="kpi-card equity-kpi-card">
+                <div class="kpi-card">
+                    <div class="kpi-content">
+                        <div class="kpi-icon">
+                            <i class="fas fa-calendar-alt icon-blue"></i>
+                        </div>
+                        <div class="kpi-title">30-Tages Performance</div>
+                        <div class="kpi-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}">
+                            ${{ "%.2f"|format(historical_performance['30_day']) }}
+                        </div>
+                        <div class="pnl-value {% if historical_performance['30_day'] >= 0 %}profit{% else %}loss{% endif %}" style="font-size: 1rem; margin-top: 8px;">
+                            {% if total_start > 0 %}
+                                ({{ "%.2f"|format((historical_performance['30_day'] / total_start) * 100) }}%)
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="equity-kpi-card">
                     <div class="equity-kpi-title">Equity Curve (Gesamtverlauf)</div>
                     <div class="equity-chart-container">
                         <img src="{{ equity_curve_path }}" class="equity-chart-img" alt="Equity Curve">
