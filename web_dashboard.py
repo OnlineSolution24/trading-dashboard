@@ -613,11 +613,11 @@ def create_equity_curve_chart(gc, spreadsheet):
     try:
         if not gc or not spreadsheet:
             # Fallback: Erstelle ein leeres Chart
-            fig, ax = plt.subplots(figsize=(5, 3.5))
+            fig, ax = plt.subplots(figsize=(8, 5))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
             ax.text(0.5, 0.5, 'Keine Daten\nverfügbar', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=14, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
@@ -625,7 +625,7 @@ def create_equity_curve_chart(gc, spreadsheet):
             plt.tight_layout(pad=0)
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
                        pad_inches=0)
             plt.close(fig)
             return chart_path
@@ -635,11 +635,11 @@ def create_equity_curve_chart(gc, spreadsheet):
         
         if not records or len(records) < 3:
             # Fallback für leere oder zu wenig Daten
-            fig, ax = plt.subplots(figsize=(5, 3.5))
+            fig, ax = plt.subplots(figsize=(8, 5))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
             ax.text(0.5, 0.5, 'Zu wenig Daten\nfür Equity Curve', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=14, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
@@ -647,7 +647,7 @@ def create_equity_curve_chart(gc, spreadsheet):
             plt.tight_layout(pad=0)
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
                        pad_inches=0)
             plt.close(fig)
             return chart_path
@@ -781,11 +781,11 @@ def create_equity_curve_chart(gc, spreadsheet):
     except Exception as e:
         logging.error(f"Fehler beim Erstellen der Equity Curve: {e}")
         # Fallback Chart bei Fehler
-        fig, ax = plt.subplots(figsize=(5, 3.5))
+        fig, ax = plt.subplots(figsize=(8, 5))
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         ax.text(0.5, 0.5, 'Chart\nFehler', ha='center', va='center', 
-               color='#e74c3c', transform=ax.transAxes, fontsize=12, fontweight='bold')
+               color='#e74c3c', transform=ax.transAxes, fontsize=14, fontweight='bold')
         ax.set_xticks([])
         ax.set_yticks([])
         for spine in ax.spines.values():
@@ -793,7 +793,7 @@ def create_equity_curve_chart(gc, spreadsheet):
         plt.tight_layout(pad=0)
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
                    pad_inches=0)
         plt.close(fig)
         return chart_path
