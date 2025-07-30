@@ -679,8 +679,8 @@ def create_equity_curve_chart(gc, spreadsheet):
             plt.close(fig)
             return chart_path
         
-        # Erstelle hochauflösende Equity Curve, die das komplette KPI-Feld ausfüllt
-        fig, ax = plt.subplots(figsize=(5, 3.5))  # Angepasste Größe für maximale Füllung
+        # Erstelle MAXIMALE Equity Curve für das komplette KPI-Feld
+        fig, ax = plt.subplots(figsize=(6, 4))  # Größere Figur für maximale Füllung
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         
@@ -760,18 +760,16 @@ def create_equity_curve_chart(gc, spreadsheet):
         for spine in ax.spines.values():
             spine.set_visible(False)
         
-        # Setze minimale Margins für maximale Nutzung des Platzes
-        ax.margins(x=0.005, y=0.02)  # Noch kleinere Margins für maximale Chart-Größe
+        # Setze KEINE Margins für maximale Nutzung des Platzes
+        ax.margins(x=0, y=0)  # Komplett keine Margins
         
-        # Speichere mit höchster Qualität und minimalen Rändern
+        # Speichere mit maximaler Größe und OHNE jegliche Ränder
         plt.tight_layout(pad=0)
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Entferne alle Subplot-Abstände
         
-        # Speichere mit höchster Qualität
-        plt.tight_layout(pad=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
-                   pad_inches=0, edgecolor='none')  # pad_inches=0 für keine Ränder
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
+                   pad_inches=0, edgecolor='none')  # Maximale Qualität, keine Ränder
         plt.close(fig)
         
         logging.info(f"Hochauflösende Equity Curve erstellt: {len(pnl_values)} Datenpunkte (komplette Historie), Start: {start_value:.2f}, Ende: {end_value:.2f}, Peak: {max(pnl_values):.2f}")
@@ -957,60 +955,71 @@ def get_blofin_data(acc):
 
             if pos_response.get('code') == '0' and pos_response.get('data'):
                 for pos in pos_response['data']:
-                    pos_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
+                    # Verwende das korrekte Größenfeld aus der Debug-Ausgabe
+                    pos_size = float(pos.get('positions', 0))  # 'positions' ist das Größenfeld
                     
                     if pos_size != 0:
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
-                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN
-                        # Prüfe verschiedene Felder für die Richtung
-                        side_indicators = [
-                            pos.get('side', ''),
-                            pos.get('posSide', ''),
-                            pos.get('position_side', ''),
-                            pos.get('direction', ''),
-                            pos.get('type', '')
-                        ]
-                        
-                        # Bestimme die Seite basierend auf verfügbaren Daten
+                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN BASIEREND AUF DEBUG-DATEN
+                        # Die Blofin API verwendet das Feld 'positionSide' mit Werten "short" oder "long"
                         display_side = 'Buy'  # Default
                         
-                        # 1. Prüfe explizite Side-Felder
-                        for side_field in side_indicators:
-                            if side_field:
-                                side_str = str(side_field).lower().strip()
-                                if any(keyword in side_str for keyword in ['short', 'sell', 'bear', 'down', 'put']):
-                                    display_side = 'Sell'
-                                    logging.info(f"Blofin: Short erkannt durch Feld-Wert: {side_field}")
-                                    break
-                                elif any(keyword in side_str for keyword in ['long', 'buy', 'bull', 'up', 'call']):
-                                    display_side = 'Buy'
-                                    logging.info(f"Blofin: Long erkannt durch Feld-Wert: {side_field}")
-                                    break
+                        # 1. Primäre Prüfung: 'positionSide' Feld (aus Debug-Daten identifiziert)
+                        position_side = pos.get('positionSide', '')
+                        if position_side:
+                            side_str = str(position_side).lower().strip()
+                            if side_str == 'short':
+                                display_side = 'Sell'
+                                logging.info(f"Blofin: Short erkannt durch positionSide: {position_side}")
+                            elif side_str == 'long':
+                                display_side = 'Buy'
+                                logging.info(f"Blofin: Long erkannt durch positionSide: {position_side}")
                         
-                        # 2. Fallback: Prüfe Größe (negative Größe = Short)
-                        original_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
-                        if original_size < 0:
-                            display_side = 'Sell'
-                            logging.info(f"Blofin: Short erkannt durch negative Größe: {original_size}")
-                        elif original_size > 0:
-                            display_side = 'Buy'
-                            logging.info(f"Blofin: Long erkannt durch positive Größe: {original_size}")
+                        # 2. Fallback: Prüfe andere mögliche Side-Felder
+                        if display_side == 'Buy' and not position_side:  # Nur wenn positionSide nicht gefunden
+                            side_indicators = [
+                                pos.get('side', ''),
+                                pos.get('posSide', ''),
+                                pos.get('position_side', ''),
+                                pos.get('direction', ''),
+                                pos.get('type', '')
+                            ]
+                            
+                            for side_field in side_indicators:
+                                if side_field:
+                                    side_str = str(side_field).lower().strip()
+                                    if any(keyword in side_str for keyword in ['short', 'sell', 'bear', 'down', 'put']):
+                                        display_side = 'Sell'
+                                        logging.info(f"Blofin: Short erkannt durch Fallback-Feld {side_field}")
+                                        break
+                                    elif any(keyword in side_str for keyword in ['long', 'buy', 'bull', 'up', 'call']):
+                                        display_side = 'Buy'
+                                        logging.info(f"Blofin: Long erkannt durch Fallback-Feld {side_field}")
+                                        break
                         
-                        # 3. Zusätzliche Prüfung: PnL-Verhalten bei Preisänderungen
-                        # (Optional: Kann basierend auf Mark Price vs Entry Price implementiert werden)
+                        # 3. Größe als letzter Fallback (sollte bei Blofin nicht nötig sein)
+                        if display_side == 'Buy' and not position_side:
+                            original_size = float(pos.get('positions', pos.get('size', pos.get('sz', 0))))
+                            if original_size < 0:
+                                display_side = 'Sell'
+                                logging.info(f"Blofin: Short erkannt durch negative Größe: {original_size}")
+                            elif original_size > 0:
+                                display_side = 'Buy'
+                                logging.info(f"Blofin: Long erkannt durch positive Größe: {original_size}")
                         
-                        actual_size = abs(pos_size)
-                        pnl_value = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0'))))
+                        # Verwende die korrekten Feldnamen aus der Debug-Ausgabe
+                        actual_size = abs(float(pos.get('positions', 0)))  # 'positions' ist das Größenfeld
+                        pnl_value = float(pos.get('unrealizedPnl', '0'))  # 'unrealizedPnl' ist das PnL-Feld
                         
-                        logging.info(f"Blofin Position Debug - Symbol: {symbol}, Original Size: {original_size}, Absolute Size: {actual_size}, Side: {display_side}, PnL: {pnl_value}")
-                        logging.info(f"Blofin Full Position Data: {pos}")
+                        logging.info(f"Blofin Position Debug - Symbol: {symbol}, Position Size: {actual_size}, Side: {display_side}, PnL: {pnl_value}")
+                        logging.info(f"Blofin positionSide field: {pos.get('positionSide', 'NOT FOUND')}")
                         
                         position = {
                             'symbol': symbol,
                             'size': str(actual_size),
-                            'avgPrice': str(pos.get('avgPx', pos.get('averagePrice', pos.get('avgCost', '0')))),
+                            'avgPrice': str(pos.get('averagePrice', '0')),  # 'averagePrice' aus Debug-Daten
                             'unrealisedPnl': str(pnl_value),
                             'side': display_side
                         }
