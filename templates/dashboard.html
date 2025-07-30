@@ -597,62 +597,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Recent Trades Section -->
-        <div class="row">
-            <div class="col-12">
-                <div class="data-table">
-                    <h5 class="table-title">
-                        <i class="fas fa-history icon-blue"></i>
-                        Letzte Trades (Alle Accounts)
-                    </h5>
-                    <div class="table-container">
-                        <table class="table custom-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Symbol</th>
-                                    <th>Seite</th>
-                                    <th>Größe</th>
-                                    <th>Preis</th>
-                                    <th>Fee</th>
-                                    <th>Zeit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for trade in recent_trades %}
-                                <tr>
-                                    <td class="account-name">{{ trade.account }}</td>
-                                    <td>
-                                        <span class="symbol-badge">{{ trade.symbol }}</span>
-                                    </td>
-                                    <td>
-                                        {% if trade.side and trade.side.lower() in ['buy', 'long'] %}
-                                            <span class="side-long">{{ trade.side }}</span>
-                                        {% elif trade.side and trade.side.lower() in ['sell', 'short'] %}
-                                            <span class="side-short">{{ trade.side }}</span>
-                                        {% else %}
-                                            <span class="neutral">{{ trade.side or 'N/A' }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="neutral">{{ "%.4f"|format(trade.size) }}</td>
-                                    <td class="neutral">${{ "%.4f"|format(trade.price) }}</td>
-                                    <td class="pnl-value loss">-${{ "%.4f"|format(trade.fee) }}</td>
-                                    <td class="neutral">{{ trade.time }}</td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="7" class="text-center neutral">
-                                        Keine aktuellen Trades verfügbar
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Footer Timestamp -->
