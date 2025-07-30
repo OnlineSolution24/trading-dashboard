@@ -865,8 +865,121 @@ class BlofinAPI:
     
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
+    
+    def get_trade_history(self, limit=15):
+        """Holt die letzten abgeschlossenen Trades"""
+        params = {'limit': limit}
+        return self._make_request('GET', '/api/v1/trade/fills', params)
 
-def get_bybit_data(acc):
+def format_trade_time(timestamp):
+    """Formatiert Zeitstempel für bessere Lesbarkeit"""
+    try:
+        if not timestamp:
+            return "N/A"
+        
+        # Konvertiere zu int
+        ts = int(timestamp)
+        
+        # Wenn Millisekunden, konvertiere zu Sekunden
+        if ts > 1000000000000:
+            ts = ts // 1000
+        
+        # Erstelle datetime object
+        dt = datetime.fromtimestamp(ts, tz=timezone("Europe/Berlin"))
+        return dt.strftime("%d.%m.%y %H:%M")
+    except:
+        return str(timestamp)[:16] if timestamp else "N/A"
+
+def get_bybit_trades(acc, limit=10):
+    """Holt die letzten Trades von Bybit"""
+    try:
+        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
+        # Bybit API für Trade History
+        trades_response = client.get_executions(
+            category="linear",
+            limit=limit
+        )
+        
+        if trades_response.get("result") and trades_response["result"].get("list"):
+            trades = []
+            for trade in trades_response["result"]["list"]:
+                trade_data = {
+                    'symbol': trade.get('symbol', '').replace('USDT', ''),
+                    'side': trade.get('side', ''),
+                    'size': float(trade.get('execQty', 0)),
+                    'price': float(trade.get('execPrice', 0)),
+                    'fee': float(trade.get('execFee', 0)),
+                    'time': format_trade_time(trade.get('execTime', '')),
+                    'raw_time': trade.get('execTime', ''),
+                    'orderId': trade.get('orderId', '')
+                }
+                trades.append(trade_data)
+            return trades
+        return []
+    except Exception as e:
+        logging.error(f"Fehler beim Holen der Bybit Trades für {acc['name']}: {e}")
+        return []
+
+def get_blofin_trades(acc, limit=15):
+    """Holt die letzten Trades von Blofin"""
+    try:
+        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
+        trades_response = client.get_trade_history(limit)
+        
+        if trades_response.get('code') == '0' and trades_response.get('data'):
+            trades = []
+            for trade in trades_response['data']:
+                # Berechne PnL wenn möglich
+                size = float(trade.get('sz', trade.get('fillSz', 0)))
+                price = float(trade.get('px', trade.get('fillPx', 0)))
+                fee = float(trade.get('fee', 0))
+                raw_time = trade.get('ts', trade.get('fillTime', ''))
+                
+                trade_data = {
+                    'symbol': trade.get('instId', '').replace('-USDT', '').replace('-SWAP', ''),
+                    'side': trade.get('side', ''),
+                    'size': abs(size),
+                    'price': price,
+                    'fee': abs(fee),
+                    'time': format_trade_time(raw_time),
+                    'raw_time': raw_time,
+                    'orderId': trade.get('ordId', trade.get('tradeId', ''))
+                }
+                trades.append(trade_data)
+            return trades
+        return []
+    except Exception as e:
+        logging.error(f"Fehler beim Holen der Blofin Trades für {acc['name']}: {e}")
+        return []
+
+@cached_function(cache_duration=300)
+def get_recent_trades_all_accounts():
+    """Holt die letzten Trades von allen Accounts"""
+    all_trades = []
+    
+    for acc in subaccounts:
+        try:
+            if acc["exchange"] == "blofin":
+                trades = get_blofin_trades(acc, limit=15)
+            else:
+                trades = get_bybit_trades(acc, limit=10)
+            
+            # Füge Account-Name zu jedem Trade hinzu
+            for trade in trades:
+                trade['account'] = acc['name']
+                all_trades.append(trade)
+                
+        except Exception as e:
+            logging.error(f"Fehler beim Holen der Trades für {acc['name']}: {e}")
+    
+    # Sortiere nach Zeit (neueste zuerst)
+    try:
+        all_trades.sort(key=lambda x: int(x.get('raw_time', 0)), reverse=True)
+    except:
+        pass
+    
+    # Nimm nur die letzten 20 Trades insgesamt
+    return all_trades[:20]
     try:
         client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
         wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
@@ -963,23 +1076,31 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
-                        # DRASTISCH VEREINFACHTE SIDE-ERKENNUNG FÜR BLOFIN
-                        # Da Blofin offenbar keine zuverlässigen Side-Informationen liefert,
-                        # setzen wir für "7 Tage Performer" alle Positionen auf LONG
-                        
+                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN
                         actual_size = abs(pos_size)
                         pnl_value = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0'))))
                         
                         logging.info(f"Blofin Position Debug - Symbol: {symbol}, Original Size: {pos_size}, Absolute Size: {actual_size}, PnL: {pnl_value}")
                         logging.info(f"Blofin Full Position Data: {pos}")
                         
-                        # FORCE ALL POSITIONS TO LONG für 7 Tage Performer
-                        if acc['name'] == '7 Tage Performer':
-                            display_side = 'Buy'
-                            logging.info(f"FORCED LONG für 7 Tage Performer: {symbol} -> BUY")
+                        # BASIERE SIDE AUF POS_SIZE VORZEICHEN
+                        if pos_size < 0:
+                            display_side = 'Sell'  # Negative Size = Short Position
+                            logging.info(f"Blofin Position {symbol}: Negative size ({pos_size}) -> SHORT")
                         else:
-                            # Für andere Blofin Accounts (falls vorhanden)
-                            display_side = 'Buy' if pos_size > 0 else 'Sell'
+                            display_side = 'Buy'   # Positive Size = Long Position
+                            logging.info(f"Blofin Position {symbol}: Positive size ({pos_size}) -> LONG")
+                        
+                        # Zusätzliche Validierung über posSide falls verfügbar
+                        side_field = pos.get('posSide', pos.get('side', ''))
+                        if side_field:
+                            side_lower = str(side_field).lower().strip()
+                            if side_lower in ['short', 'sell', '-1', 'net_short', 's']:
+                                display_side = 'Sell'
+                                logging.info(f"Blofin Position {symbol}: Side field '{side_field}' -> SHORT (override)")
+                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l']:
+                                display_side = 'Buy'
+                                logging.info(f"Blofin Position {symbol}: Side field '{side_field}' -> LONG (override)")
                         
                         position = {
                             'symbol': symbol,
@@ -1295,6 +1416,9 @@ def dashboard():
             except Exception as sheets_error:
                 logging.warning(f"Sheets operations failed: {sheets_error}")
 
+        # Lade auch die letzten Trades
+        recent_trades = get_recent_trades_all_accounts()
+
         tz = timezone("Europe/Berlin")
         now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
@@ -1311,6 +1435,7 @@ def dashboard():
                                positions_all=positions_all,
                                total_positions_pnl=total_positions_pnl,
                                total_positions_pnl_percent=total_positions_pnl_percent,
+                               recent_trades=recent_trades,
                                now=now)
 
     except Exception as e:
@@ -1329,6 +1454,7 @@ def dashboard():
                                positions_all=[],
                                total_positions_pnl=0,
                                total_positions_pnl_percent=0,
+                               recent_trades=[],
                                now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
 
 @app.route('/logout')
