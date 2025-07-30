@@ -313,13 +313,13 @@
             display: block;
         }
 
-        /* Equity Curve Chart - maximale Sichtbarkeit und Schärfe */
+        /* Equity Curve Chart - MAXIMALE Größe ohne Ränder */
         .equity-chart-container {
             background: transparent;
-            border-radius: 12px;
-            padding: 8px; /* Minimales Padding für bessere Sichtbarkeit */
-            height: calc(100% - 16px); /* Berücksichtige das Padding */
-            width: calc(100% - 16px);
+            border-radius: 15px;
+            padding: 0; /* KEIN Padding für maximale Größe */
+            height: 100%; /* Nutze die komplette Höhe */
+            width: 100%; /* Nutze die komplette Breite */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -329,17 +329,17 @@
         .equity-chart-img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Zeige vollständigen Chart */
-            border-radius: 8px;
-            image-rendering: -webkit-optimize-contrast; /* Bessere Schärfe */
+            object-fit: fill; /* Fülle den kompletten Container aus */
+            border-radius: 15px; /* Gleiche Rundung wie die Karte */
+            image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
         }
 
-        /* Equity Curve KPI-Karte - optimiert für Chart-Darstellung */
+        /* Equity Curve KPI-Karte - MAXIMALE Chart-Nutzung */
         .equity-kpi-card {
             background: linear-gradient(145deg, var(--bg-card), #4a5f7a);
             border-radius: 15px;
-            padding: 12px; /* Reduziertes Padding für maximalen Chart-Platz */
+            padding: 0; /* KEIN Padding für maximalen Chart-Platz */
             text-align: center;
             box-shadow: 0 8px 25px rgba(0,0,0,0.2);
             border: 1px solid var(--border-color);
@@ -350,6 +350,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            overflow: hidden; /* Verhindere Überlauf */
         }
 
         .equity-kpi-card:hover {
