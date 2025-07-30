@@ -898,11 +898,6 @@ class BlofinAPI:
     
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
-    
-    def get_trade_history(self, limit=15):
-        """Holt die letzten abgeschlossenen Trades"""
-        params = {'limit': limit}
-        return self._make_request('GET', '/api/v1/trade/fills', params)
 
 def format_trade_time(timestamp):
     """Formatiert Zeitstempel für bessere Lesbarkeit"""
@@ -1013,6 +1008,7 @@ def get_recent_trades_all_accounts():
     
     # Nimm nur die letzten 20 Trades insgesamt
     return all_trades[:20]
+def get_bybit_data(acc):
     try:
         client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
         wallet = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"]
@@ -1025,6 +1021,7 @@ def get_recent_trades_all_accounts():
             logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
         
         positions = [p for p in pos if float(p.get("size", 0)) > 0]
+        logging.info(f"Bybit {acc['name']}: Balance=${usdt:.2f}, Positionen={len(positions)}")
         return usdt, positions, "✅"
     except Exception as e:
         logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
@@ -1109,20 +1106,19 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
-                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN
+                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN - BASIERT AUF SIZE-VORZEICHEN
                         actual_size = abs(pos_size)
                         pnl_value = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0'))))
                         
                         logging.info(f"Blofin Position Debug - Symbol: {symbol}, Original Size: {pos_size}, Absolute Size: {actual_size}, PnL: {pnl_value}")
-                        logging.info(f"Blofin Full Position Data: {pos}")
                         
-                        # BASIERE SIDE AUF POS_SIZE VORZEICHEN
+                        # HAUPTLOGIK: SIZE-VORZEICHEN BESTIMMT RICHTUNG
                         if pos_size < 0:
                             display_side = 'Sell'  # Negative Size = Short Position
-                            logging.info(f"Blofin Position {symbol}: Negative size ({pos_size}) -> SHORT")
+                            logging.info(f"✅ Blofin {symbol}: Negative size ({pos_size}) -> SHORT")
                         else:
-                            display_side = 'Buy'   # Positive Size = Long Position
-                            logging.info(f"Blofin Position {symbol}: Positive size ({pos_size}) -> LONG")
+                            display_side = 'Buy'   # Positive Size = Long Position  
+                            logging.info(f"✅ Blofin {symbol}: Positive size ({pos_size}) -> LONG")
                         
                         # Zusätzliche Validierung über posSide falls verfügbar
                         side_field = pos.get('posSide', pos.get('side', ''))
@@ -1130,10 +1126,10 @@ def get_blofin_data(acc):
                             side_lower = str(side_field).lower().strip()
                             if side_lower in ['short', 'sell', '-1', 'net_short', 's']:
                                 display_side = 'Sell'
-                                logging.info(f"Blofin Position {symbol}: Side field '{side_field}' -> SHORT (override)")
+                                logging.info(f"🔄 Blofin {symbol}: Side field '{side_field}' -> SHORT (override)")
                             elif side_lower in ['long', 'buy', '1', 'net_long', 'l']:
                                 display_side = 'Buy'
-                                logging.info(f"Blofin Position {symbol}: Side field '{side_field}' -> LONG (override)")
+                                logging.info(f"🔄 Blofin {symbol}: Side field '{side_field}' -> LONG (override)")
                         
                         position = {
                             'symbol': symbol,
@@ -1144,7 +1140,7 @@ def get_blofin_data(acc):
                         }
                         positions.append(position)
                         
-                        logging.info(f"FINAL Blofin Position: {symbol} Size={actual_size} Side={display_side} PnL={pnl_value}")
+                        logging.info(f"🎯 FINAL Blofin Position: {symbol} Size={actual_size} Side={display_side} PnL={pnl_value}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
@@ -1328,6 +1324,8 @@ def get_cached_account_data():
         name = acc["name"]
         
         try:
+            logging.info(f"Lade Daten für Account: {name} (Exchange: {acc.get('exchange', 'bybit')})")
+            
             if acc["exchange"] == "blofin":
                 usdt, positions, status = get_blofin_data(acc)
             else:
@@ -1372,6 +1370,8 @@ def get_cached_account_data():
             })
             total_balance += start
 
+    logging.info(f"Gesamt-Balance: ${total_balance:.2f}, Accounts verarbeitet: {len(account_data)}")
+    
     return {
         'account_data': account_data,
         'total_balance': total_balance,
@@ -1449,14 +1449,6 @@ def dashboard():
             except Exception as sheets_error:
                 logging.warning(f"Sheets operations failed: {sheets_error}")
 
-        # Lade auch die letzten Trades (temporär deaktiviert)
-        try:
-            # recent_trades = get_recent_trades_all_accounts()
-            recent_trades = []  # Temporär leer für Debugging
-        except Exception as e:
-            logging.error(f"Fehler beim Laden der Trade-Historie: {e}")
-            recent_trades = []
-
         tz = timezone("Europe/Berlin")
         now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
 
@@ -1473,7 +1465,6 @@ def dashboard():
                                positions_all=positions_all,
                                total_positions_pnl=total_positions_pnl,
                                total_positions_pnl_percent=total_positions_pnl_percent,
-                               recent_trades=recent_trades,
                                now=now)
 
     except Exception as e:
@@ -1492,7 +1483,6 @@ def dashboard():
                                positions_all=[],
                                total_positions_pnl=0,
                                total_positions_pnl_percent=0,
-                               recent_trades=[],
                                now=datetime.now().strftime("%d.%m.%Y %H:%M:%S"))
 
 @app.route('/logout')
