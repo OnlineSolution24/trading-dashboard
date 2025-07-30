@@ -662,11 +662,11 @@ def create_equity_curve_chart(gc, spreadsheet):
         
         if len(df) < 3:
             # Fallback für zu wenig Daten nach Filterung
-            fig, ax = plt.subplots(figsize=(8, 5))
+            fig, ax = plt.subplots(figsize=(5, 3.5))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
             ax.text(0.5, 0.5, 'Ungenügend\nhistorische Daten', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=14, fontweight='bold')
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
@@ -674,13 +674,13 @@ def create_equity_curve_chart(gc, spreadsheet):
             plt.tight_layout(pad=0)
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
                        pad_inches=0)
             plt.close(fig)
             return chart_path
         
-        # Erstelle ultra-detaillierte Equity Curve für maximale KPI-Karten-Nutzung
-        fig, ax = plt.subplots(figsize=(8, 5))  # Größere Figsize für bessere Auflösung
+        # Erstelle hochauflösende Equity Curve, die das komplette KPI-Feld ausfüllt
+        fig, ax = plt.subplots(figsize=(5, 3.5))  # Angepasste Größe für maximale Füllung
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         
@@ -692,100 +692,64 @@ def create_equity_curve_chart(gc, spreadsheet):
             except:
                 pnl_values.append(0)
         
-        # Berechne Balance-Werte (PnL + Startkapital für bessere Visualisierung)
-        total_start = sum([400.00, 800.00, 1200.00, 1200.00, 1713.81, 1923.00, 2000.56, 2000.00, 1000.00, 1000.00, 1492.00])  # Summe aller Startkapitalien
-        balance_values = [total_start + pnl for pnl in pnl_values]
-        
         # Erstelle x-Achse (Tage)
-        x_values = list(range(len(balance_values)))
-        
-        # Bestimme Statistiken
-        start_value = balance_values[0] if balance_values else 0
-        end_value = balance_values[-1] if balance_values else 0
-        max_value = max(balance_values) if balance_values else 0
-        min_value = min(balance_values) if balance_values else 0
-        
-        # Berechne Performance-Prozent
-        performance_percent = ((end_value - start_value) / start_value * 100) if start_value > 0 else 0
+        x_values = list(range(len(pnl_values)))
         
         # Bestimme Farben basierend auf Performance
+        start_value = pnl_values[0] if pnl_values else 0
+        end_value = pnl_values[-1] if pnl_values else 0
+        
         if end_value >= start_value:
             line_color = '#28a745'  # Grün für Gewinn
             fill_color = '#28a745'
-            alpha_fill = 0.25
+            alpha_fill = 0.3
         else:
             line_color = '#dc3545'  # Rot für Verlust
             fill_color = '#dc3545'
-            alpha_fill = 0.25
+            alpha_fill = 0.3
         
-        # Zeichne die Hauptlinie mit maximaler Qualität
-        ax.plot(x_values, balance_values, color=line_color, linewidth=4, alpha=0.98, 
+        # Zeichne die Hauptlinie mit höherer Qualität
+        ax.plot(x_values, pnl_values, color=line_color, linewidth=3, alpha=0.9, 
                 antialiased=True, solid_capstyle='round', solid_joinstyle='round')
         
         # Fülle den Bereich unter der Kurve
-        ax.fill_between(x_values, balance_values, alpha=alpha_fill, color=fill_color)
+        ax.fill_between(x_values, pnl_values, alpha=alpha_fill, color=fill_color)
         
-        # ERWEITERTE PEAK-LINIE mit höherer Sichtbarkeit
+        # ERWEITERTE PEAK-LINIE (deine gewünschte "Picklinie")
+        # Berechne den kumulativen Peak (höchster Wert bis zu jedem Punkt)
         peak_values = []
-        current_peak = balance_values[0] if balance_values else 0
+        current_peak = pnl_values[0] if pnl_values else 0
         
-        for value in balance_values:
+        for value in pnl_values:
             if value > current_peak:
                 current_peak = value
             peak_values.append(current_peak)
         
-        # Zeichne die Peak-Linie mit mehr Sichtbarkeit
-        ax.plot(x_values, peak_values, color='#f39c12', linewidth=3, alpha=0.95, 
-                linestyle='--', dashes=(10, 5))
+        # Zeichne die Peak-Linie (Picklinie)
+        ax.plot(x_values, peak_values, color='#f39c12', linewidth=2, alpha=0.8, 
+                linestyle='--', label='All-Time High')
         
-        # DETAILLIERTE MARKIERUNGEN UND LABELS
-        if len(balance_values) > 10:
-            max_idx = balance_values.index(max_value)
-            min_idx = balance_values.index(min_value)
-            
-            # Markiere und beschrifte Startpunkt mit größerer Sichtbarkeit
-            ax.scatter(0, start_value, color='#3498db', s=120, alpha=0.95, 
-                      zorder=10, edgecolors='white', linewidth=2.5)
-            ax.annotate(f'Start\n${start_value:,.0f}', 
-                       xy=(0, start_value), xytext=(15, 25), 
-                       textcoords='offset points', fontsize=9, fontweight='bold',
-                       color='#3498db', ha='left',
-                       bbox=dict(boxstyle='round,pad=0.4', facecolor='#34495e', 
-                                edgecolor='#3498db', alpha=0.9, linewidth=1.5))
-            
-            # Markiere und beschrifte Endpunkt mit Performance
-            ax.scatter(len(balance_values)-1, end_value, color='#9b59b6', s=120, alpha=0.95, 
-                      zorder=10, edgecolors='white', linewidth=2.5)
-            performance_color = '#28a745' if performance_percent >= 0 else '#dc3545'
-            ax.annotate(f'Ende\n${end_value:,.0f}\n({performance_percent:+.1f}%)', 
-                       xy=(len(balance_values)-1, end_value), xytext=(-65, 25), 
-                       textcoords='offset points', fontsize=9, fontweight='bold',
-                       color=performance_color, ha='center',
-                       bbox=dict(boxstyle='round,pad=0.4', facecolor='#34495e', 
-                                edgecolor=performance_color, alpha=0.9, linewidth=1.5))
+        # Füge detaillierte Höhen- und Tiefpunkte hinzu
+        if len(pnl_values) > 10:
+            max_idx = pnl_values.index(max(pnl_values))
+            min_idx = pnl_values.index(min(pnl_values))
             
             # Markiere absoluten Höchstpunkt
-            ax.scatter(max_idx, max_value, color='#f39c12', s=100, alpha=0.95, 
-                      zorder=8, edgecolors='white', linewidth=2)
-            ax.annotate(f'Peak\n${max_value:,.0f}', 
-                       xy=(max_idx, max_value), xytext=(0, 30), 
-                       textcoords='offset points', fontsize=8, fontweight='bold',
-                       color='#f39c12', ha='center',
-                       bbox=dict(boxstyle='round,pad=0.3', facecolor='#34495e', 
-                                edgecolor='#f39c12', alpha=0.8, linewidth=1.2))
+            ax.scatter(max_idx, pnl_values[max_idx], color='#f39c12', s=60, alpha=0.9, 
+                      zorder=5, edgecolors='white', linewidth=1)
             
             # Markiere absoluten Tiefstpunkt
-            ax.scatter(min_idx, min_value, color='#e74c3c', s=100, alpha=0.95, 
-                      zorder=8, edgecolors='white', linewidth=2)
-            ax.annotate(f'Tief\n${min_value:,.0f}', 
-                       xy=(min_idx, min_value), xytext=(0, -30), 
-                       textcoords='offset points', fontsize=8, fontweight='bold',
-                       color='#e74c3c', ha='center',
-                       bbox=dict(boxstyle='round,pad=0.3', facecolor='#34495e', 
-                                edgecolor='#e74c3c', alpha=0.8, linewidth=1.2))
+            ax.scatter(min_idx, pnl_values[min_idx], color='#e74c3c', s=60, alpha=0.9, 
+                      zorder=5, edgecolors='white', linewidth=1)
+            
+            # Markiere Start- und Endpunkt
+            ax.scatter(0, pnl_values[0], color='#3498db', s=50, alpha=0.8, 
+                      zorder=5, edgecolors='white', linewidth=1)
+            ax.scatter(len(pnl_values)-1, pnl_values[-1], color='#9b59b6', s=50, alpha=0.8, 
+                      zorder=5, edgecolors='white', linewidth=1)
         
-        # Füge ein sehr subtiles Gitter hinzu für bessere Lesbarkeit
-        ax.grid(True, alpha=0.08, color='white', linestyle='-', linewidth=0.5)
+        # Füge ein subtiles Gitter hinzu für bessere Lesbarkeit
+        ax.grid(True, alpha=0.1, color='white', linestyle='-', linewidth=0.5)
         ax.set_axisbelow(True)
         
         # Entferne sichtbare Achsen aber behalte das Gitter
@@ -796,18 +760,21 @@ def create_equity_curve_chart(gc, spreadsheet):
         for spine in ax.spines.values():
             spine.set_visible(False)
         
-        # Setze minimale Margins für maximale Chart-Nutzung
-        ax.margins(x=0.002, y=0.01)  # Absolute minimale Margins
+        # Setze minimale Margins für maximale Nutzung des Platzes
+        ax.margins(x=0.005, y=0.02)  # Noch kleinere Margins für maximale Chart-Größe
         
-        # Speichere mit Ultra-High-Quality
+        # Speichere mit höchster Qualität und minimalen Rändern
         plt.tight_layout(pad=0)
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Entferne alle Subplot-Abstände
+        
+        # Speichere mit höchster Qualität
+        plt.tight_layout(pad=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
-                   pad_inches=0, edgecolor='none')  # Erhöhte DPI auf 400
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+                   pad_inches=0, edgecolor='none')  # pad_inches=0 für keine Ränder
         plt.close(fig)
         
-        logging.info(f"Ultra-detaillierte Equity Curve erstellt: {len(balance_values)} Datenpunkte, Start: ${start_value:,.0f}, Ende: ${end_value:,.0f} ({performance_percent:+.1f}%), Peak: ${max_value:,.0f}")
+        logging.info(f"Hochauflösende Equity Curve erstellt: {len(pnl_values)} Datenpunkte (komplette Historie), Start: {start_value:.2f}, Ende: {end_value:.2f}, Peak: {max(pnl_values):.2f}")
         
         return chart_path
         
@@ -899,115 +866,6 @@ class BlofinAPI:
     def get_positions(self):
         return self._make_request('GET', '/api/v1/account/positions')
 
-def format_trade_time(timestamp):
-    """Formatiert Zeitstempel für bessere Lesbarkeit"""
-    try:
-        if not timestamp:
-            return "N/A"
-        
-        # Konvertiere zu int
-        ts = int(timestamp)
-        
-        # Wenn Millisekunden, konvertiere zu Sekunden
-        if ts > 1000000000000:
-            ts = ts // 1000
-        
-        # Erstelle datetime object
-        dt = datetime.fromtimestamp(ts, tz=timezone("Europe/Berlin"))
-        return dt.strftime("%d.%m.%y %H:%M")
-    except:
-        return str(timestamp)[:16] if timestamp else "N/A"
-
-def get_bybit_trades(acc, limit=10):
-    """Holt die letzten Trades von Bybit"""
-    try:
-        client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
-        # Bybit API für Trade History
-        trades_response = client.get_executions(
-            category="linear",
-            limit=limit
-        )
-        
-        if trades_response.get("result") and trades_response["result"].get("list"):
-            trades = []
-            for trade in trades_response["result"]["list"]:
-                trade_data = {
-                    'symbol': trade.get('symbol', '').replace('USDT', ''),
-                    'side': trade.get('side', ''),
-                    'size': float(trade.get('execQty', 0)),
-                    'price': float(trade.get('execPrice', 0)),
-                    'fee': float(trade.get('execFee', 0)),
-                    'time': format_trade_time(trade.get('execTime', '')),
-                    'raw_time': trade.get('execTime', ''),
-                    'orderId': trade.get('orderId', '')
-                }
-                trades.append(trade_data)
-            return trades
-        return []
-    except Exception as e:
-        logging.error(f"Fehler beim Holen der Bybit Trades für {acc['name']}: {e}")
-        return []
-
-def get_blofin_trades(acc, limit=15):
-    """Holt die letzten Trades von Blofin"""
-    try:
-        client = BlofinAPI(acc["key"], acc["secret"], acc["passphrase"])
-        trades_response = client.get_trade_history(limit)
-        
-        if trades_response.get('code') == '0' and trades_response.get('data'):
-            trades = []
-            for trade in trades_response['data']:
-                # Berechne PnL wenn möglich
-                size = float(trade.get('sz', trade.get('fillSz', 0)))
-                price = float(trade.get('px', trade.get('fillPx', 0)))
-                fee = float(trade.get('fee', 0))
-                raw_time = trade.get('ts', trade.get('fillTime', ''))
-                
-                trade_data = {
-                    'symbol': trade.get('instId', '').replace('-USDT', '').replace('-SWAP', ''),
-                    'side': trade.get('side', ''),
-                    'size': abs(size),
-                    'price': price,
-                    'fee': abs(fee),
-                    'time': format_trade_time(raw_time),
-                    'raw_time': raw_time,
-                    'orderId': trade.get('ordId', trade.get('tradeId', ''))
-                }
-                trades.append(trade_data)
-            return trades
-        return []
-    except Exception as e:
-        logging.error(f"Fehler beim Holen der Blofin Trades für {acc['name']}: {e}")
-        return []
-
-@cached_function(cache_duration=300)
-def get_recent_trades_all_accounts():
-    """Holt die letzten Trades von allen Accounts"""
-    all_trades = []
-    
-    for acc in subaccounts:
-        try:
-            if acc["exchange"] == "blofin":
-                trades = get_blofin_trades(acc, limit=15)
-            else:
-                trades = get_bybit_trades(acc, limit=10)
-            
-            # Füge Account-Name zu jedem Trade hinzu
-            for trade in trades:
-                trade['account'] = acc['name']
-                all_trades.append(trade)
-                
-        except Exception as e:
-            logging.error(f"Fehler beim Holen der Trades für {acc['name']}: {e}")
-    
-    # Sortiere nach Zeit (neueste zuerst)
-    try:
-        all_trades.sort(key=lambda x: int(x.get('raw_time', 0)), reverse=True)
-    except:
-        pass
-    
-    # Nimm nur die letzten 20 Trades insgesamt
-    return all_trades[:20]
 def get_bybit_data(acc):
     try:
         client = HTTP(api_key=acc["key"], api_secret=acc["secret"])
@@ -1021,7 +879,6 @@ def get_bybit_data(acc):
             logging.error(f"Fehler bei Bybit Positionen {acc['name']}: {e}")
         
         positions = [p for p in pos if float(p.get("size", 0)) > 0]
-        logging.info(f"Bybit {acc['name']}: Balance=${usdt:.2f}, Positionen={len(positions)}")
         return usdt, positions, "✅"
     except Exception as e:
         logging.error(f"Fehler bei Bybit {acc['name']}: {e}")
@@ -1106,30 +963,49 @@ def get_blofin_data(acc):
                         symbol = pos.get('instId', pos.get('instrument_id', pos.get('symbol', '')))
                         symbol = symbol.replace('-USDT', '').replace('-SWAP', '').replace('USDT', '').replace('-PERP', '')
                         
-                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN - BASIERT AUF SIZE-VORZEICHEN
+                        # KORRIGIERTE SIDE-ERKENNUNG FÜR BLOFIN
+                        # Prüfe verschiedene Felder für die Richtung
+                        side_indicators = [
+                            pos.get('side', ''),
+                            pos.get('posSide', ''),
+                            pos.get('position_side', ''),
+                            pos.get('direction', ''),
+                            pos.get('type', '')
+                        ]
+                        
+                        # Bestimme die Seite basierend auf verfügbaren Daten
+                        display_side = 'Buy'  # Default
+                        
+                        # 1. Prüfe explizite Side-Felder
+                        for side_field in side_indicators:
+                            if side_field:
+                                side_str = str(side_field).lower().strip()
+                                if any(keyword in side_str for keyword in ['short', 'sell', 'bear', 'down', 'put']):
+                                    display_side = 'Sell'
+                                    logging.info(f"Blofin: Short erkannt durch Feld-Wert: {side_field}")
+                                    break
+                                elif any(keyword in side_str for keyword in ['long', 'buy', 'bull', 'up', 'call']):
+                                    display_side = 'Buy'
+                                    logging.info(f"Blofin: Long erkannt durch Feld-Wert: {side_field}")
+                                    break
+                        
+                        # 2. Fallback: Prüfe Größe (negative Größe = Short)
+                        original_size = float(pos.get('pos', pos.get('positions', pos.get('size', pos.get('sz', 0)))))
+                        if original_size < 0:
+                            display_side = 'Sell'
+                            logging.info(f"Blofin: Short erkannt durch negative Größe: {original_size}")
+                        elif original_size > 0:
+                            display_side = 'Buy'
+                            logging.info(f"Blofin: Long erkannt durch positive Größe: {original_size}")
+                        
+                        # 3. Zusätzliche Prüfung: PnL-Verhalten bei Preisänderungen
+                        # (Optional: Kann basierend auf Mark Price vs Entry Price implementiert werden)
+                        
                         actual_size = abs(pos_size)
                         pnl_value = float(pos.get('upl', pos.get('unrealizedPnl', pos.get('unrealized_pnl', '0'))))
                         
-                        logging.info(f"Blofin Position Debug - Symbol: {symbol}, Original Size: {pos_size}, Absolute Size: {actual_size}, PnL: {pnl_value}")
-                        
-                        # HAUPTLOGIK: SIZE-VORZEICHEN BESTIMMT RICHTUNG
-                        if pos_size < 0:
-                            display_side = 'Sell'  # Negative Size = Short Position
-                            logging.info(f"✅ Blofin {symbol}: Negative size ({pos_size}) -> SHORT")
-                        else:
-                            display_side = 'Buy'   # Positive Size = Long Position  
-                            logging.info(f"✅ Blofin {symbol}: Positive size ({pos_size}) -> LONG")
-                        
-                        # Zusätzliche Validierung über posSide falls verfügbar
-                        side_field = pos.get('posSide', pos.get('side', ''))
-                        if side_field:
-                            side_lower = str(side_field).lower().strip()
-                            if side_lower in ['short', 'sell', '-1', 'net_short', 's']:
-                                display_side = 'Sell'
-                                logging.info(f"🔄 Blofin {symbol}: Side field '{side_field}' -> SHORT (override)")
-                            elif side_lower in ['long', 'buy', '1', 'net_long', 'l']:
-                                display_side = 'Buy'
-                                logging.info(f"🔄 Blofin {symbol}: Side field '{side_field}' -> LONG (override)")
+                        logging.info(f"Blofin Position Debug - Symbol: {symbol}, Original Size: {original_size}, Absolute Size: {actual_size}, Side: {display_side}, PnL: {pnl_value}")
+                        logging.info(f"Blofin Full Position Data: {pos}")
                         
                         position = {
                             'symbol': symbol,
@@ -1140,7 +1016,7 @@ def get_blofin_data(acc):
                         }
                         positions.append(position)
                         
-                        logging.info(f"🎯 FINAL Blofin Position: {symbol} Size={actual_size} Side={display_side} PnL={pnl_value}")
+                        logging.info(f"FINAL Blofin Position: {symbol} Size={actual_size} Side={display_side} PnL={pnl_value}")
                         
         except Exception as e:
             logging.error(f"Blofin positions error for {acc['name']}: {e}")
@@ -1324,8 +1200,6 @@ def get_cached_account_data():
         name = acc["name"]
         
         try:
-            logging.info(f"Lade Daten für Account: {name} (Exchange: {acc.get('exchange', 'bybit')})")
-            
             if acc["exchange"] == "blofin":
                 usdt, positions, status = get_blofin_data(acc)
             else:
@@ -1370,8 +1244,6 @@ def get_cached_account_data():
             })
             total_balance += start
 
-    logging.info(f"Gesamt-Balance: ${total_balance:.2f}, Accounts verarbeitet: {len(account_data)}")
-    
     return {
         'account_data': account_data,
         'total_balance': total_balance,
@@ -1636,6 +1508,75 @@ def debug_sheets():
         debug_info.append(f"❌ Allgemeiner Fehler: {e}")
     
     return f"<h1>Google Sheets Debug Info</h1><pre>{'<br>'.join(debug_info)}</pre><br><a href='/dashboard'>Zurück zum Dashboard</a>"
+
+# Neue Debug-Route für Blofin
+@app.route('/debug-blofin')
+def debug_blofin():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    debug_info = []
+    
+    # Finde Blofin Account
+    blofin_acc = None
+    for acc in subaccounts:
+        if acc["exchange"] == "blofin" and acc["name"] == "7 Tage Performer":
+            blofin_acc = acc
+            break
+    
+    if not blofin_acc:
+        return "Blofin Account nicht gefunden"
+    
+    try:
+        client = BlofinAPI(blofin_acc["key"], blofin_acc["secret"], blofin_acc["passphrase"])
+        
+        # Rohe Positions-Daten abrufen
+        pos_response = client.get_positions()
+        debug_info.append(f"=== RAW BLOFIN POSITIONS RESPONSE ===")
+        debug_info.append(f"Status Code: {pos_response.get('code')}")
+        debug_info.append(f"Message: {pos_response.get('msg', 'No message')}")
+        debug_info.append(f"Data: {json.dumps(pos_response.get('data', []), indent=2)}")
+        
+        if pos_response.get('code') == '0' and pos_response.get('data'):
+            debug_info.append(f"\n=== POSITION ANALYSIS ===")
+            
+            for i, pos in enumerate(pos_response['data']):
+                debug_info.append(f"\n--- Position {i+1} ---")
+                debug_info.append(f"Full Position Object: {json.dumps(pos, indent=2)}")
+                
+                # Alle verfügbaren Felder anzeigen
+                debug_info.append(f"Available Fields: {list(pos.keys())}")
+                
+                # Position Size Analysis
+                possible_size_fields = ['pos', 'positions', 'size', 'sz', 'qty', 'quantity']
+                for field in possible_size_fields:
+                    if field in pos:
+                        debug_info.append(f"Size Field '{field}': {pos[field]} (Type: {type(pos[field])})")
+                
+                # Side Analysis
+                possible_side_fields = ['side', 'posSide', 'position_side', 'direction', 'type', 'positionSide']
+                for field in possible_side_fields:
+                    if field in pos:
+                        debug_info.append(f"Side Field '{field}': {pos[field]} (Type: {type(pos[field])})")
+                
+                # Symbol Analysis
+                possible_symbol_fields = ['instId', 'instrument_id', 'symbol', 'underlying', 'asset']
+                for field in possible_symbol_fields:
+                    if field in pos:
+                        debug_info.append(f"Symbol Field '{field}': {pos[field]}")
+                
+                # PnL Analysis
+                possible_pnl_fields = ['upl', 'unrealizedPnl', 'unrealized_pnl', 'pnl', 'profit', 'loss']
+                for field in possible_pnl_fields:
+                    if field in pos:
+                        debug_info.append(f"PnL Field '{field}': {pos[field]} (Type: {type(pos[field])})")
+        
+    except Exception as e:
+        debug_info.append(f"ERROR: {e}")
+        import traceback
+        debug_info.append(f"Traceback: {traceback.format_exc()}")
+    
+    return f"<h1>Blofin Debug Info</h1><pre>{'<br>'.join(debug_info)}</pre><br><a href='/dashboard'>Zurück zum Dashboard</a>"
 
 @app.route('/account-details')
 def account_details():
