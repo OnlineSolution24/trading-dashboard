@@ -401,6 +401,9 @@
                 <a href="/account-details" class="btn btn-outline-light">
                     <i class="fas fa-info-circle me-2"></i>Subaccount Details
                 </a>
+                <a href="/debug-blofin" class="btn btn-outline-light">
+                    <i class="fas fa-bug me-2"></i>Blofin Debug
+                </a>
             </div>
         </div>
         
@@ -572,8 +575,10 @@
                                     <td>
                                         {% if pos.side == "Buy" %}
                                             <span class="side-long">Long</span>
-                                        {% else %}
+                                        {% elif pos.side == "Sell" %}
                                             <span class="side-short">Short</span>
+                                        {% else %}
+                                            <span class="side-long">{{ pos.side }}</span>
                                         {% endif %}
                                     </td>
                                 </tr>
