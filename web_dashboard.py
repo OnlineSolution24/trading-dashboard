@@ -662,11 +662,11 @@ def create_equity_curve_chart(gc, spreadsheet):
         
         if len(df) < 3:
             # Fallback für zu wenig Daten nach Filterung
-            fig, ax = plt.subplots(figsize=(5, 3.5))
+            fig, ax = plt.subplots(figsize=(8, 5))
             fig.patch.set_facecolor('#2c3e50')
             ax.set_facecolor('#34495e')
             ax.text(0.5, 0.5, 'Ungenügend\nhistorische Daten', ha='center', va='center', 
-                   color='#bdc3c7', transform=ax.transAxes, fontsize=12, fontweight='bold')
+                   color='#bdc3c7', transform=ax.transAxes, fontsize=14, fontweight='bold')
             ax.set_xticks([])
             ax.set_yticks([])
             for spine in ax.spines.values():
@@ -674,13 +674,13 @@ def create_equity_curve_chart(gc, spreadsheet):
             plt.tight_layout(pad=0)
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
             chart_path = "static/equity_curve_small.png"
-            fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
+            fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
                        pad_inches=0)
             plt.close(fig)
             return chart_path
         
-        # Erstelle hochauflösende Equity Curve, die das komplette KPI-Feld ausfüllt
-        fig, ax = plt.subplots(figsize=(5, 3.5))  # Angepasste Größe für maximale Füllung
+        # Erstelle ultra-detaillierte Equity Curve für maximale KPI-Karten-Nutzung
+        fig, ax = plt.subplots(figsize=(8, 5))  # Größere Figsize für bessere Auflösung
         fig.patch.set_facecolor('#2c3e50')
         ax.set_facecolor('#34495e')
         
@@ -692,64 +692,100 @@ def create_equity_curve_chart(gc, spreadsheet):
             except:
                 pnl_values.append(0)
         
+        # Berechne Balance-Werte (PnL + Startkapital für bessere Visualisierung)
+        total_start = sum([400.00, 800.00, 1200.00, 1200.00, 1713.81, 1923.00, 2000.56, 2000.00, 1000.00, 1000.00, 1492.00])  # Summe aller Startkapitalien
+        balance_values = [total_start + pnl for pnl in pnl_values]
+        
         # Erstelle x-Achse (Tage)
-        x_values = list(range(len(pnl_values)))
+        x_values = list(range(len(balance_values)))
+        
+        # Bestimme Statistiken
+        start_value = balance_values[0] if balance_values else 0
+        end_value = balance_values[-1] if balance_values else 0
+        max_value = max(balance_values) if balance_values else 0
+        min_value = min(balance_values) if balance_values else 0
+        
+        # Berechne Performance-Prozent
+        performance_percent = ((end_value - start_value) / start_value * 100) if start_value > 0 else 0
         
         # Bestimme Farben basierend auf Performance
-        start_value = pnl_values[0] if pnl_values else 0
-        end_value = pnl_values[-1] if pnl_values else 0
-        
         if end_value >= start_value:
             line_color = '#28a745'  # Grün für Gewinn
             fill_color = '#28a745'
-            alpha_fill = 0.3
+            alpha_fill = 0.25
         else:
             line_color = '#dc3545'  # Rot für Verlust
             fill_color = '#dc3545'
-            alpha_fill = 0.3
+            alpha_fill = 0.25
         
-        # Zeichne die Hauptlinie mit höherer Qualität
-        ax.plot(x_values, pnl_values, color=line_color, linewidth=3, alpha=0.9, 
+        # Zeichne die Hauptlinie mit maximaler Qualität
+        ax.plot(x_values, balance_values, color=line_color, linewidth=4, alpha=0.98, 
                 antialiased=True, solid_capstyle='round', solid_joinstyle='round')
         
         # Fülle den Bereich unter der Kurve
-        ax.fill_between(x_values, pnl_values, alpha=alpha_fill, color=fill_color)
+        ax.fill_between(x_values, balance_values, alpha=alpha_fill, color=fill_color)
         
-        # ERWEITERTE PEAK-LINIE (deine gewünschte "Picklinie")
-        # Berechne den kumulativen Peak (höchster Wert bis zu jedem Punkt)
+        # ERWEITERTE PEAK-LINIE mit höherer Sichtbarkeit
         peak_values = []
-        current_peak = pnl_values[0] if pnl_values else 0
+        current_peak = balance_values[0] if balance_values else 0
         
-        for value in pnl_values:
+        for value in balance_values:
             if value > current_peak:
                 current_peak = value
             peak_values.append(current_peak)
         
-        # Zeichne die Peak-Linie (Picklinie)
-        ax.plot(x_values, peak_values, color='#f39c12', linewidth=2, alpha=0.8, 
-                linestyle='--', label='All-Time High')
+        # Zeichne die Peak-Linie mit mehr Sichtbarkeit
+        ax.plot(x_values, peak_values, color='#f39c12', linewidth=3, alpha=0.95, 
+                linestyle='--', dashes=(10, 5))
         
-        # Füge detaillierte Höhen- und Tiefpunkte hinzu
-        if len(pnl_values) > 10:
-            max_idx = pnl_values.index(max(pnl_values))
-            min_idx = pnl_values.index(min(pnl_values))
+        # DETAILLIERTE MARKIERUNGEN UND LABELS
+        if len(balance_values) > 10:
+            max_idx = balance_values.index(max_value)
+            min_idx = balance_values.index(min_value)
+            
+            # Markiere und beschrifte Startpunkt mit größerer Sichtbarkeit
+            ax.scatter(0, start_value, color='#3498db', s=120, alpha=0.95, 
+                      zorder=10, edgecolors='white', linewidth=2.5)
+            ax.annotate(f'Start\n${start_value:,.0f}', 
+                       xy=(0, start_value), xytext=(15, 25), 
+                       textcoords='offset points', fontsize=9, fontweight='bold',
+                       color='#3498db', ha='left',
+                       bbox=dict(boxstyle='round,pad=0.4', facecolor='#34495e', 
+                                edgecolor='#3498db', alpha=0.9, linewidth=1.5))
+            
+            # Markiere und beschrifte Endpunkt mit Performance
+            ax.scatter(len(balance_values)-1, end_value, color='#9b59b6', s=120, alpha=0.95, 
+                      zorder=10, edgecolors='white', linewidth=2.5)
+            performance_color = '#28a745' if performance_percent >= 0 else '#dc3545'
+            ax.annotate(f'Ende\n${end_value:,.0f}\n({performance_percent:+.1f}%)', 
+                       xy=(len(balance_values)-1, end_value), xytext=(-65, 25), 
+                       textcoords='offset points', fontsize=9, fontweight='bold',
+                       color=performance_color, ha='center',
+                       bbox=dict(boxstyle='round,pad=0.4', facecolor='#34495e', 
+                                edgecolor=performance_color, alpha=0.9, linewidth=1.5))
             
             # Markiere absoluten Höchstpunkt
-            ax.scatter(max_idx, pnl_values[max_idx], color='#f39c12', s=60, alpha=0.9, 
-                      zorder=5, edgecolors='white', linewidth=1)
+            ax.scatter(max_idx, max_value, color='#f39c12', s=100, alpha=0.95, 
+                      zorder=8, edgecolors='white', linewidth=2)
+            ax.annotate(f'Peak\n${max_value:,.0f}', 
+                       xy=(max_idx, max_value), xytext=(0, 30), 
+                       textcoords='offset points', fontsize=8, fontweight='bold',
+                       color='#f39c12', ha='center',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='#34495e', 
+                                edgecolor='#f39c12', alpha=0.8, linewidth=1.2))
             
             # Markiere absoluten Tiefstpunkt
-            ax.scatter(min_idx, pnl_values[min_idx], color='#e74c3c', s=60, alpha=0.9, 
-                      zorder=5, edgecolors='white', linewidth=1)
-            
-            # Markiere Start- und Endpunkt
-            ax.scatter(0, pnl_values[0], color='#3498db', s=50, alpha=0.8, 
-                      zorder=5, edgecolors='white', linewidth=1)
-            ax.scatter(len(pnl_values)-1, pnl_values[-1], color='#9b59b6', s=50, alpha=0.8, 
-                      zorder=5, edgecolors='white', linewidth=1)
+            ax.scatter(min_idx, min_value, color='#e74c3c', s=100, alpha=0.95, 
+                      zorder=8, edgecolors='white', linewidth=2)
+            ax.annotate(f'Tief\n${min_value:,.0f}', 
+                       xy=(min_idx, min_value), xytext=(0, -30), 
+                       textcoords='offset points', fontsize=8, fontweight='bold',
+                       color='#e74c3c', ha='center',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='#34495e', 
+                                edgecolor='#e74c3c', alpha=0.8, linewidth=1.2))
         
-        # Füge ein subtiles Gitter hinzu für bessere Lesbarkeit
-        ax.grid(True, alpha=0.1, color='white', linestyle='-', linewidth=0.5)
+        # Füge ein sehr subtiles Gitter hinzu für bessere Lesbarkeit
+        ax.grid(True, alpha=0.08, color='white', linestyle='-', linewidth=0.5)
         ax.set_axisbelow(True)
         
         # Entferne sichtbare Achsen aber behalte das Gitter
@@ -760,21 +796,18 @@ def create_equity_curve_chart(gc, spreadsheet):
         for spine in ax.spines.values():
             spine.set_visible(False)
         
-        # Setze minimale Margins für maximale Nutzung des Platzes
-        ax.margins(x=0.005, y=0.02)  # Noch kleinere Margins für maximale Chart-Größe
+        # Setze minimale Margins für maximale Chart-Nutzung
+        ax.margins(x=0.002, y=0.01)  # Absolute minimale Margins
         
-        # Speichere mit höchster Qualität und minimalen Rändern
+        # Speichere mit Ultra-High-Quality
         plt.tight_layout(pad=0)
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Entferne alle Subplot-Abstände
-        
-        # Speichere mit höchster Qualität
-        plt.tight_layout(pad=0)
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         chart_path = "static/equity_curve_small.png"
-        fig.savefig(chart_path, facecolor='#2c3e50', dpi=300, bbox_inches='tight', 
-                   pad_inches=0, edgecolor='none')  # pad_inches=0 für keine Ränder
+        fig.savefig(chart_path, facecolor='#2c3e50', dpi=400, bbox_inches='tight', 
+                   pad_inches=0, edgecolor='none')  # Erhöhte DPI auf 400
         plt.close(fig)
         
-        logging.info(f"Hochauflösende Equity Curve erstellt: {len(pnl_values)} Datenpunkte (komplette Historie), Start: {start_value:.2f}, Ende: {end_value:.2f}, Peak: {max(pnl_values):.2f}")
+        logging.info(f"Ultra-detaillierte Equity Curve erstellt: {len(balance_values)} Datenpunkte, Start: ${start_value:,.0f}, Ende: ${end_value:,.0f} ({performance_percent:+.1f}%), Peak: ${max_value:,.0f}")
         
         return chart_path
         
@@ -1416,8 +1449,13 @@ def dashboard():
             except Exception as sheets_error:
                 logging.warning(f"Sheets operations failed: {sheets_error}")
 
-        # Lade auch die letzten Trades
-        recent_trades = get_recent_trades_all_accounts()
+        # Lade auch die letzten Trades (temporär deaktiviert)
+        try:
+            # recent_trades = get_recent_trades_all_accounts()
+            recent_trades = []  # Temporär leer für Debugging
+        except Exception as e:
+            logging.error(f"Fehler beim Laden der Trade-Historie: {e}")
+            recent_trades = []
 
         tz = timezone("Europe/Berlin")
         now = datetime.now(tz).strftime("%d.%m.%Y %H:%M:%S")
