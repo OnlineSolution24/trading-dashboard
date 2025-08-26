@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.py",
+      "src": "web_dashboard.py",
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb"
@@ -12,15 +12,14 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "api/index.py"
+      "dest": "web_dashboard.py"
     }
   ],
   "env": {
-    "PYTHON_VERSION": "3.9",
-    "VERCEL": "1"
+    "PYTHON_VERSION": "3.9"
   },
   "functions": {
-    "api/index.py": {
+    "web_dashboard.py": {
       "maxDuration": 30
     }
   }
