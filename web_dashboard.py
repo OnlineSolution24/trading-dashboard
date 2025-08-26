@@ -1,3 +1,25 @@
+# FÜGE DIESE ZEILEN GANZ AM ANFANG DEINER web_dashboard.py HINZU:
+
+import os
+import sys
+
+# Vercel Handler - KRITISCH für Deployment!
+def handler(event, context):
+    return app
+
+# Vercel Export
+def application(environ, start_response):
+    return app(environ, start_response)
+
+# Am Ende der Datei (ersetze if __name__ == '__main__' Block):
+if __name__ == '__main__':
+    # Nur für lokale Entwicklung
+    if not os.environ.get('VERCEL'):
+        os.makedirs('static', exist_ok=True)
+        app.run(debug=True, host='0.0.0.0', port=10000)
+
+# Für Vercel Export (außerhalb des if __name__ Blocks)
+app = app
 import os
 import logging
 import matplotlib
@@ -1638,4 +1660,5 @@ def account_details_data():
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
     app.run(debug=True, host='0.0.0.0', port=10000)
+
 
