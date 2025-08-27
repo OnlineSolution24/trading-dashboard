@@ -1,37 +1,7 @@
-# FÜGE DIESE ZEILEN GANZ AM ANFANG DEINER web_dashboard.py HINZU:
-
-import os
-import sys
-
-# Vercel Handler - KRITISCH für Deployment!
-def handler(event, context):
-    return app
-
-# Vercel Export
-def application(environ, start_response):
-    return app(environ, start_response)
-
-# Am Ende der Datei (ersetze if __name__ == '__main__' Block):
-if __name__ == '__main__':
-    # Nur für lokale Entwicklung
-    if not os.environ.get('VERCEL'):
-        os.makedirs('static', exist_ok=True)
-        app.run(debug=True, host='0.0.0.0', port=10000)
-
-# Für Vercel Export (außerhalb des if __name__ Blocks)
-app = app
 import os
 import logging
 import matplotlib
-
-# Vercel/Serverless Konfiguration
-if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
-    matplotlib.use('Agg')  # Headless backend für Serverless
-    # Setze temporäres Verzeichnis für matplotlib
-    os.environ['MPLCONFIGDIR'] = '/tmp'
-else:
-    matplotlib.use('Agg')
-
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify
@@ -51,8 +21,6 @@ import random
 from google.oauth2.service_account import Credentials
 from functools import wraps
 from threading import Lock
-
-# Rest deines Codes bleibt gleich...
 
 # Globale Cache-Variablen
 cache_lock = Lock()
@@ -1660,5 +1628,3 @@ def account_details_data():
 if __name__ == '__main__':
     os.makedirs('static', exist_ok=True)
     app.run(debug=True, host='0.0.0.0', port=10000)
-
-
